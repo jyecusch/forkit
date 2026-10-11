@@ -57,7 +57,7 @@ func New(ctx context.Context, binary string, tracer trace.Tracer) (*Git, error) 
 		return nil, fmt.Errorf("%w: %s", ErrGitNotFound, binary)
 	}
 	g := &Git{binary: path, tracer: tracer, writeLocks: map[string]*sync.Mutex{}}
-	out, err := g.run(ctx, "", []string{"version"}, nil)
+	out, err := g.Run(ctx, "", "version")
 	if err != nil {
 		return nil, err
 	}
@@ -73,6 +73,14 @@ func New(ctx context.Context, binary string, tracer trace.Tracer) (*Git, error) 
 
 // Version returns the git version found by New.
 func (g *Git) Version() Version { return g.version }
+
+// Run executes a read-only command in dir, which need not be inside a known
+// repository, and returns its stdout.
+func (g *Git) Run(ctx context.Context, dir string, args ...string) ([]byte, error) {
+	ctx, cancel := withDefaultTimeout(ctx)
+	defer cancel()
+	return g.run(ctx, dir, args, nil)
+}
 
 // Repo returns a handle that runs commands in dir. Writes are serialized per
 // commonDir, so worktrees of one repository never contend for its locks.
@@ -99,9 +107,7 @@ func (r *Repo) Dir() string { return r.dir }
 
 // Run executes a read-only command and returns its stdout.
 func (r *Repo) Run(ctx context.Context, args ...string) ([]byte, error) {
-	ctx, cancel := withDefaultTimeout(ctx)
-	defer cancel()
-	return r.git.run(ctx, r.dir, args, nil)
+	return r.git.Run(ctx, r.dir, args...)
 }
 
 // Mutate executes a command that changes the repository. Mutations of the

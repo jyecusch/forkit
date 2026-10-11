@@ -37,8 +37,7 @@ func TestRunReturnsStdout(t *testing.T) {
 }
 
 func TestRunOutsideRepoIsClassified(t *testing.T) {
-	repo := newGit(t).Repo(t.TempDir(), t.TempDir())
-	_, err := repo.Run(context.Background(), "rev-parse", "HEAD")
+	_, err := newGit(t).Run(context.Background(), t.TempDir(), "rev-parse", "HEAD")
 	if !gitexec.IsNotARepo(err) {
 		t.Fatalf("expected not-a-repo error, got %v", err)
 	}

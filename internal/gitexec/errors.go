@@ -74,3 +74,13 @@ func redactArg(arg string) string {
 	}
 	return arg
 }
+
+// ExitCode returns the exit status of a failed git process, or -1 when err is
+// nil or did not come from git exiting.
+func ExitCode(err error) int {
+	var gitErr *Error
+	if errors.As(err, &gitErr) {
+		return gitErr.ExitCode
+	}
+	return -1
+}
