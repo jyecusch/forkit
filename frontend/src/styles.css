@@ -1,0 +1,102 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "@fontsource/ibm-plex-sans/400.css";
+@import "@fontsource/ibm-plex-sans/500.css";
+@import "@fontsource/ibm-plex-sans/600.css";
+@import "@fontsource/jetbrains-mono/400.css";
+@import "@fontsource/jetbrains-mono/500.css";
+
+@custom-variant dark (&:is([data-theme="tokyo-night"] *));
+
+:root,
+[data-theme="tokyo-night"] {
+  --background: #1a1b26;
+  --sidebar: #16161e;
+  --card: #24283b;
+  --popover: #24283b;
+  --foreground: #c0caf5;
+  --secondary-foreground: #a9b1d6;
+  --muted-foreground: #565f89;
+  --subtle-foreground: #737aa2;
+  --border: #292e42;
+  --input: #292e42;
+  --ring: #7aa2f7;
+  --selection: #283457;
+  --primary: #7aa2f7;
+  --primary-foreground: #16161e;
+  --destructive: #f7768e;
+  --success: #9ece6a;
+  --warning: #e0af68;
+  --lane-0: #7aa2f7;
+  --lane-1: #bb9af7;
+  --lane-2: #7dcfff;
+  --lane-3: #9ece6a;
+  --lane-4: #e0af68;
+  --lane-5: #ff9e64;
+  --lane-6: #f7768e;
+  --lane-7: #73daca;
+}
+
+[data-theme="tokyo-night-day"] {
+  --background: #e1e2e7;
+  --sidebar: #d0d5e3;
+  --card: #e9e9ed;
+  --popover: #e9e9ed;
+  --foreground: #3760bf;
+  --secondary-foreground: #6172b0;
+  --muted-foreground: #848cb5;
+  --subtle-foreground: #6172b0;
+  --border: #c4c8da;
+  --input: #c4c8da;
+  --ring: #2e7de9;
+  --selection: #b7c1e3;
+  --primary: #2e7de9;
+  --primary-foreground: #e1e2e7;
+  --destructive: #f52a65;
+  --success: #587539;
+  --warning: #8c6c3e;
+  --lane-0: #2e7de9;
+  --lane-1: #9854f1;
+  --lane-2: #007197;
+  --lane-3: #587539;
+  --lane-4: #8c6c3e;
+  --lane-5: #b15c00;
+  --lane-6: #f52a65;
+  --lane-7: #118c74;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-sidebar: var(--sidebar);
+  --color-card: var(--card);
+  --color-popover: var(--popover);
+  --color-foreground: var(--foreground);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-subtle-foreground: var(--subtle-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-selection: var(--selection);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-destructive: var(--destructive);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --font-sans: "IBM Plex Sans", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html,
+  body,
+  #root {
+    @apply h-full;
+  }
+  body {
+    @apply bg-background text-foreground font-sans text-[13px] antialiased select-none overflow-hidden;
+  }
+}
