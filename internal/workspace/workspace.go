@@ -220,3 +220,6 @@ func graphOptions(p model.Preferences) graph.Options {
 func nowMillis() model.UnixMillis {
 	return model.UnixMillis(time.Now().UnixMilli())
 }
+
+// Git is the git binary the workspace runs.
+func (w *Workspace) Git() *gitexec.Git { return w.git }

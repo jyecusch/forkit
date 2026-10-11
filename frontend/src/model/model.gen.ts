@@ -312,6 +312,12 @@ export const CommitDetail = Schema.Struct({
 })
 export type CommitDetail = typeof CommitDetail.Type
 
+/** Sent with every RPC call so the backend continues the caller's trace. */
+export const CallMeta = Schema.Struct({
+  traceparent: Schema.String,
+})
+export type CallMeta = typeof CallMeta.Type
+
 export const SyncOpType = Schema.Literals(["insert", "update", "delete"])
 export type SyncOpType = typeof SyncOpType.Type
 

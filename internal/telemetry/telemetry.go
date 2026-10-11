@@ -77,9 +77,9 @@ func rotatingFile(path string) *lumberjack.Logger {
 	return &lumberjack.Logger{Filename: path, MaxSize: 20, MaxBackups: 3}
 }
 
-// Tracer returns a named tracer from the backend's provider.
-func (t *Telemetry) Tracer(name string) trace.Tracer {
-	return t.provider.Tracer(name)
+// Provider is the backend's tracer provider.
+func (t *Telemetry) Provider() trace.TracerProvider {
+	return t.provider
 }
 
 // Ingest forwards spans the frontend encoded as an OTLP protobuf TracesData

@@ -349,6 +349,15 @@
       }
     },
 
+    "CallMeta": {
+      "type": "object",
+      "description": "Sent with every RPC call so the backend continues the caller's trace.",
+      "required": ["traceparent"],
+      "properties": {
+        "traceparent": { "type": "string" }
+      }
+    },
+
     "SyncOpType": { "enum": ["insert", "update", "delete"] },
     "SyncOp": {
       "type": "object",

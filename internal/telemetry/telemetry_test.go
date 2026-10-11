@@ -30,7 +30,7 @@ func TestIngestedAndBackendSpansShareTheTraceFile(t *testing.T) {
 	if err := tel.Ingest(ctx, payload); err != nil {
 		t.Fatal(err)
 	}
-	_, span := tel.Tracer("test").Start(ctx, "backend.work")
+	_, span := tel.Provider().Tracer("test").Start(ctx, "backend.work")
 	span.End()
 	if err := tel.Shutdown(ctx); err != nil {
 		t.Fatal(err)

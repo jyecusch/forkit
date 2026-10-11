@@ -394,6 +394,11 @@ type RpcError struct {
 	Details map[string]string `json:"details,omitempty"`
 }
 
+// Sent with every RPC call so the backend continues the caller's trace.
+type CallMeta struct {
+	Traceparent string `json:"traceparent"`
+}
+
 type SyncOpType string
 
 const (
