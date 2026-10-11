@@ -303,6 +303,8 @@ type GraphEdge struct {
 	ToLane   int      `json:"toLane"`
 	ThreadID int      `json:"threadId"`
 	Kind     EdgeKind `json:"kind"`
+	// Part of the emphasized ref's first-parent history.
+	OnEmphasized bool `json:"onEmphasized"`
 }
 
 type GraphRow struct {
@@ -311,7 +313,7 @@ type GraphRow struct {
 	Lane         int         `json:"lane"`
 	ThreadID     int         `json:"threadId"`
 	Edges        []GraphEdge `json:"edges,omitempty"`
-	RefIds       []RefID     `json:"refIds,omitempty"`
+	RefIDs       []RefID     `json:"refIds,omitempty"`
 	OnEmphasized bool        `json:"onEmphasized"`
 }
 

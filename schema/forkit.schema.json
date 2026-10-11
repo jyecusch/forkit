@@ -246,12 +246,13 @@
     "GraphEdge": {
       "type": "object",
       "description": "A line from a lane in this row to a lane in the next row.",
-      "required": ["fromLane", "toLane", "threadId", "kind"],
+      "required": ["fromLane", "toLane", "threadId", "kind", "onEmphasized"],
       "properties": {
         "fromLane": { "type": "integer" },
         "toLane": { "type": "integer" },
         "threadId": { "type": "integer" },
-        "kind": { "$ref": "#/$defs/EdgeKind" }
+        "kind": { "$ref": "#/$defs/EdgeKind" },
+        "onEmphasized": { "type": "boolean", "description": "Part of the emphasized ref's first-parent history." }
       }
     },
     "GraphRow": {

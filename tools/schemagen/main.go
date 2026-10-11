@@ -283,7 +283,7 @@ func writeGoDoc(b *strings.Builder, indent, description string) {
 	}
 }
 
-var goInitialisms = map[string]string{"Id": "ID", "Oid": "OID", "Url": "URL", "Otlp": "OTLP", "Ff": "FF"}
+var goInitialisms = map[string]string{"Id": "ID", "Ids": "IDs", "Oid": "OID", "Url": "URL", "Otlp": "OTLP", "Ff": "FF"}
 
 // goName converts a camelCase or kebab-case identifier into an exported Go
 // name, upper-casing common initialisms.

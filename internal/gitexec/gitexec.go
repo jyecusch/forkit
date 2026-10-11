@@ -3,6 +3,7 @@
 package gitexec
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"errors"
@@ -79,7 +80,7 @@ func (g *Git) Version() Version { return g.version }
 func (g *Git) Run(ctx context.Context, dir string, args ...string) ([]byte, error) {
 	ctx, cancel := withDefaultTimeout(ctx)
 	defer cancel()
-	return g.run(ctx, dir, args, nil)
+	return g.run(ctx, dir, args, nil, nil)
 }
 
 // Repo returns a handle that runs commands in dir. Writes are serialized per
@@ -118,14 +119,49 @@ func (r *Repo) Mutate(ctx context.Context, args ...string) ([]byte, error) {
 	defer cancel()
 	r.writeLock.Lock()
 	defer r.writeLock.Unlock()
-	return r.git.run(ctx, r.dir, args, nil)
+	return r.git.run(ctx, r.dir, args, nil, nil)
 }
 
-// Stream executes a read-only command and hands its stdout to consume as it
-// is produced. The process is killed if consume returns early or ctx ends.
-func (r *Repo) Stream(ctx context.Context, consume func(io.Reader) error, args ...string) error {
-	_, err := r.git.run(ctx, r.dir, args, consume)
+// Stream executes a read-only command, feeding it stdin (which may be nil),
+// and hands its stdout to consume as it is produced. The process is killed if
+// consume returns early or ctx ends.
+func (r *Repo) Stream(ctx context.Context, stdin io.Reader, consume func(io.Reader) error, args ...string) error {
+	_, err := r.git.run(ctx, r.dir, args, stdin, consume)
 	return err
+}
+
+// Process is a long-running git command driven through its stdin and stdout,
+// such as "cat-file --batch".
+type Process struct {
+	cmd    *exec.Cmd
+	Stdin  io.WriteCloser
+	Stdout *bufio.Reader
+}
+
+// Start launches a long-running read-only command that lives until Close or
+// until ctx ends.
+func (r *Repo) Start(ctx context.Context, args ...string) (*Process, error) {
+	cmd := exec.CommandContext(ctx, r.git.binary, args...)
+	cmd.Dir = r.dir
+	cmd.Env = append(os.Environ(), commandEnv...)
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		return nil, err
+	}
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return nil, err
+	}
+	if err := cmd.Start(); err != nil {
+		return nil, err
+	}
+	return &Process{cmd: cmd, Stdin: stdin, Stdout: bufio.NewReaderSize(stdout, 64*1024)}, nil
+}
+
+// Close ends the process by closing its stdin and waits for it to exit.
+func (p *Process) Close() error {
+	_ = p.Stdin.Close()
+	return p.cmd.Wait()
 }
 
 func withDefaultTimeout(ctx context.Context) (context.Context, context.CancelFunc) {
@@ -135,7 +171,7 @@ func withDefaultTimeout(ctx context.Context) (context.Context, context.CancelFun
 	return context.WithTimeout(ctx, DefaultTimeout)
 }
 
-func (g *Git) run(ctx context.Context, dir string, args []string, consume func(io.Reader) error) ([]byte, error) {
+func (g *Git) run(ctx context.Context, dir string, args []string, stdin io.Reader, consume func(io.Reader) error) ([]byte, error) {
 	ctx, span := g.tracer.Start(ctx, "git "+subcommand(args), trace.WithAttributes(
 		attribute.String("git.subcommand", subcommand(args)),
 		attribute.StringSlice("git.args", RedactArgs(args)),
@@ -146,6 +182,7 @@ func (g *Git) run(ctx context.Context, dir string, args []string, consume func(i
 	cmd.Dir = dir
 	cmd.Env = append(os.Environ(), commandEnv...)
 	cmd.WaitDelay = 2 * time.Second
+	cmd.Stdin = stdin
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 

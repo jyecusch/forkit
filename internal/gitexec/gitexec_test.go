@@ -52,7 +52,7 @@ func TestStreamStopsEarlyWithoutError(t *testing.T) {
 
 	var first string
 	errStop := errors.New("stop")
-	err := repo.Stream(context.Background(), func(r io.Reader) error {
+	err := repo.Stream(context.Background(), nil, func(r io.Reader) error {
 		first, _ = bufio.NewReader(r).ReadString('\n')
 		return errStop
 	}, "log", "--format=%H")
