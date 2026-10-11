@@ -1,0 +1,380 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/jyecusch/forkit/schema/forkit.schema.json",
+  "title": "Forkit shared data model",
+  "$defs": {
+    "RepoId": { "type": "string", "description": "Hash of the repository's canonical common git dir." },
+    "WorktreeId": { "type": "string", "description": "Hash of the worktree's absolute path." },
+    "RefId": { "type": "string", "description": "repoId:fullName, e.g. r1:refs/heads/main." },
+    "RemoteId": { "type": "string", "description": "repoId:name, e.g. r1:origin." },
+    "Oid": { "type": "string", "description": "Full commit hash." },
+    "UnixMillis": { "type": "integer", "format": "int64" },
+
+    "LoadState": { "enum": ["loading", "ready", "error"] },
+    "Repo": {
+      "type": "object",
+      "required": ["id", "name", "commonDir", "isBare", "defaultBranch", "mainWorktreeId", "lastOpenedAt", "state"],
+      "properties": {
+        "id": { "$ref": "#/$defs/RepoId" },
+        "name": { "type": "string" },
+        "commonDir": { "type": "string" },
+        "isBare": { "type": "boolean" },
+        "defaultBranch": { "type": "string" },
+        "mainWorktreeId": { "$ref": "#/$defs/WorktreeId" },
+        "lastOpenedAt": { "$ref": "#/$defs/UnixMillis" },
+        "state": { "$ref": "#/$defs/LoadState" },
+        "error": { "type": "string" }
+      }
+    },
+
+    "HeadKind": { "enum": ["branch", "detached", "unborn"] },
+    "WorktreeHead": {
+      "type": "object",
+      "required": ["kind", "oid"],
+      "properties": {
+        "kind": { "$ref": "#/$defs/HeadKind" },
+        "refId": { "$ref": "#/$defs/RefId" },
+        "oid": { "$ref": "#/$defs/Oid" }
+      }
+    },
+    "WorktreeOperation": { "enum": ["none", "merge", "rebase", "cherryPick", "revert", "bisect"] },
+    "StatusSummary": {
+      "type": "object",
+      "required": ["staged", "unstaged", "untracked", "conflicted"],
+      "properties": {
+        "staged": { "type": "integer" },
+        "unstaged": { "type": "integer" },
+        "untracked": { "type": "integer" },
+        "conflicted": { "type": "integer" }
+      }
+    },
+    "Worktree": {
+      "type": "object",
+      "required": ["id", "repoId", "path", "isMain", "locked", "prunable", "head", "operation", "statusSummary"],
+      "properties": {
+        "id": { "$ref": "#/$defs/WorktreeId" },
+        "repoId": { "$ref": "#/$defs/RepoId" },
+        "path": { "type": "string" },
+        "isMain": { "type": "boolean" },
+        "locked": { "type": "boolean" },
+        "prunable": { "type": "boolean" },
+        "head": { "$ref": "#/$defs/WorktreeHead" },
+        "operation": { "$ref": "#/$defs/WorktreeOperation" },
+        "statusSummary": { "$ref": "#/$defs/StatusSummary" }
+      }
+    },
+
+    "RefKind": { "enum": ["localBranch", "remoteBranch", "tag", "stash"] },
+    "Ref": {
+      "type": "object",
+      "required": ["id", "repoId", "fullName", "shortName", "kind", "targetOid"],
+      "properties": {
+        "id": { "$ref": "#/$defs/RefId" },
+        "repoId": { "$ref": "#/$defs/RepoId" },
+        "fullName": { "type": "string" },
+        "shortName": { "type": "string" },
+        "kind": { "$ref": "#/$defs/RefKind" },
+        "targetOid": { "$ref": "#/$defs/Oid" },
+        "peeledOid": { "$ref": "#/$defs/Oid", "description": "Commit an annotated tag points at." },
+        "remoteId": { "$ref": "#/$defs/RemoteId" },
+        "upstreamRefId": { "$ref": "#/$defs/RefId" },
+        "ahead": { "type": "integer" },
+        "behind": { "type": "integer" },
+        "checkedOutInWorktreeId": { "$ref": "#/$defs/WorktreeId" }
+      }
+    },
+
+    "FetchState": { "enum": ["idle", "fetching", "error"] },
+    "Remote": {
+      "type": "object",
+      "required": ["id", "repoId", "name", "fetchUrl", "pushUrl", "fetchState"],
+      "properties": {
+        "id": { "$ref": "#/$defs/RemoteId" },
+        "repoId": { "$ref": "#/$defs/RepoId" },
+        "name": { "type": "string" },
+        "fetchUrl": { "type": "string" },
+        "pushUrl": { "type": "string" },
+        "lastFetchedAt": { "$ref": "#/$defs/UnixMillis" },
+        "fetchState": { "$ref": "#/$defs/FetchState" }
+      }
+    },
+
+    "StatusCode": {
+      "enum": ["unmodified", "modified", "typeChanged", "added", "deleted", "renamed", "copied", "untracked", "ignored", "unmerged"]
+    },
+    "FileStatus": {
+      "type": "object",
+      "required": ["id", "worktreeId", "path", "index", "workTree"],
+      "properties": {
+        "id": { "type": "string", "description": "worktreeId:path." },
+        "worktreeId": { "$ref": "#/$defs/WorktreeId" },
+        "path": { "type": "string" },
+        "oldPath": { "type": "string" },
+        "index": { "$ref": "#/$defs/StatusCode" },
+        "workTree": { "$ref": "#/$defs/StatusCode" },
+        "conflict": { "type": "string", "description": "Two-letter unmerged code from git status, e.g. UU or AA." }
+      }
+    },
+
+    "OperationKind": { "enum": ["checkout", "createWorktree", "removeWorktree", "stash"] },
+    "OperationState": { "enum": ["queued", "running", "done", "failed", "cancelled"] },
+    "OperationProgress": {
+      "type": "object",
+      "required": ["phase", "current", "total"],
+      "properties": {
+        "phase": { "type": "string" },
+        "current": { "type": "integer" },
+        "total": { "type": "integer" }
+      }
+    },
+    "Operation": {
+      "type": "object",
+      "required": ["id", "repoId", "kind", "state", "traceId"],
+      "properties": {
+        "id": { "type": "string" },
+        "repoId": { "$ref": "#/$defs/RepoId" },
+        "worktreeId": { "$ref": "#/$defs/WorktreeId" },
+        "kind": { "$ref": "#/$defs/OperationKind" },
+        "state": { "$ref": "#/$defs/OperationState" },
+        "progress": { "$ref": "#/$defs/OperationProgress" },
+        "error": { "$ref": "#/$defs/RpcError" },
+        "traceId": { "type": "string" }
+      }
+    },
+
+    "Theme": { "enum": ["tokyo-night", "tokyo-night-day"] },
+    "DateFormat": { "enum": ["relative", "absolute", "iso"] },
+    "GraphOrder": { "enum": ["topo", "date"] },
+    "DirtyCheckout": { "enum": ["ask", "stash", "carry"] },
+    "TelemetryMode": { "enum": ["local", "otlp"] },
+    "AppearancePreferences": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["theme", "fontSize", "dateFormat"],
+      "properties": {
+        "theme": { "$ref": "#/$defs/Theme" },
+        "fontSize": { "type": "integer", "minimum": 10, "maximum": 20 },
+        "dateFormat": { "$ref": "#/$defs/DateFormat" }
+      }
+    },
+    "GraphPreferences": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["order", "showRemoteBranches", "showTags", "dimmedOpacity"],
+      "properties": {
+        "order": { "$ref": "#/$defs/GraphOrder" },
+        "showRemoteBranches": { "type": "boolean" },
+        "showTags": { "type": "boolean" },
+        "dimmedOpacity": { "type": "number", "minimum": 0.1, "maximum": 0.8, "description": "Opacity of threads outside the emphasized history." }
+      }
+    },
+    "GitPreferences": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["binaryPath", "maintainCommitGraph"],
+      "properties": {
+        "binaryPath": { "type": "string", "description": "Empty means find git on PATH." },
+        "maintainCommitGraph": { "type": "boolean", "description": "Write git's commit-graph file when it is missing, which speeds up history walks." }
+      }
+    },
+    "BehaviourPreferences": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["dirtyCheckout"],
+      "properties": {
+        "dirtyCheckout": { "$ref": "#/$defs/DirtyCheckout" }
+      }
+    },
+    "TelemetryPreferences": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "otlpEndpoint"],
+      "properties": {
+        "mode": { "$ref": "#/$defs/TelemetryMode" },
+        "otlpEndpoint": { "type": "string" }
+      }
+    },
+    "Preferences": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "version", "appearance", "graph", "git", "behaviour", "telemetry"],
+      "properties": {
+        "id": { "type": "string" },
+        "version": { "type": "integer" },
+        "appearance": { "$ref": "#/$defs/AppearancePreferences" },
+        "graph": { "$ref": "#/$defs/GraphPreferences" },
+        "git": { "$ref": "#/$defs/GitPreferences" },
+        "behaviour": { "$ref": "#/$defs/BehaviourPreferences" },
+        "telemetry": { "$ref": "#/$defs/TelemetryPreferences" }
+      }
+    },
+
+    "OpenRepo": {
+      "type": "object",
+      "required": ["id", "commonDir"],
+      "properties": {
+        "id": { "$ref": "#/$defs/RepoId" },
+        "commonDir": { "type": "string" },
+        "activeWorktreeId": { "$ref": "#/$defs/WorktreeId" },
+        "emphasizedRefId": { "$ref": "#/$defs/RefId" }
+      }
+    },
+    "Session": {
+      "type": "object",
+      "required": ["id", "openRepos"],
+      "properties": {
+        "id": { "type": "string" },
+        "openRepos": { "type": "array", "items": { "$ref": "#/$defs/OpenRepo" } },
+        "activeRepoId": { "$ref": "#/$defs/RepoId" }
+      }
+    },
+
+    "Commit": {
+      "type": "object",
+      "required": ["oid", "parents", "authorName", "authorEmail", "authorTime", "committerTime", "subject"],
+      "properties": {
+        "oid": { "$ref": "#/$defs/Oid" },
+        "parents": { "type": "array", "items": { "$ref": "#/$defs/Oid" } },
+        "authorName": { "type": "string" },
+        "authorEmail": { "type": "string" },
+        "authorTime": { "$ref": "#/$defs/UnixMillis" },
+        "committerTime": { "$ref": "#/$defs/UnixMillis" },
+        "subject": { "type": "string" }
+      }
+    },
+    "EdgeKind": { "enum": ["straight", "merge", "fork"] },
+    "GraphEdge": {
+      "type": "object",
+      "description": "A line from a lane in this row to a lane in the next row.",
+      "required": ["fromLane", "toLane", "threadId", "kind"],
+      "properties": {
+        "fromLane": { "type": "integer" },
+        "toLane": { "type": "integer" },
+        "threadId": { "type": "integer" },
+        "kind": { "$ref": "#/$defs/EdgeKind" }
+      }
+    },
+    "GraphRow": {
+      "type": "object",
+      "required": ["index", "oid", "lane", "threadId", "edges", "refIds", "onEmphasized"],
+      "properties": {
+        "index": { "type": "integer" },
+        "oid": { "$ref": "#/$defs/Oid" },
+        "lane": { "type": "integer" },
+        "threadId": { "type": "integer" },
+        "edges": { "type": "array", "items": { "$ref": "#/$defs/GraphEdge" } },
+        "refIds": { "type": "array", "items": { "$ref": "#/$defs/RefId" } },
+        "onEmphasized": { "type": "boolean" }
+      }
+    },
+    "GraphView": {
+      "type": "object",
+      "required": ["id", "version", "totalRows", "laneCount", "complete", "firstChangedRow"],
+      "properties": {
+        "id": { "$ref": "#/$defs/RepoId" },
+        "version": { "type": "integer" },
+        "totalRows": { "type": "integer" },
+        "laneCount": { "type": "integer" },
+        "complete": { "type": "boolean", "description": "False while history is still streaming in." },
+        "firstChangedRow": { "type": "integer", "description": "Rows before this index are unchanged since the previous version." }
+      }
+    },
+    "GraphWindow": {
+      "type": "object",
+      "required": ["version", "start", "rows", "commits"],
+      "properties": {
+        "version": { "type": "integer" },
+        "start": { "type": "integer" },
+        "rows": { "type": "array", "items": { "$ref": "#/$defs/GraphRow" } },
+        "commits": { "type": "array", "items": { "$ref": "#/$defs/Commit" } }
+      }
+    },
+    "FileChangeStatus": { "enum": ["added", "modified", "deleted", "renamed", "copied", "typeChanged"] },
+    "FileChange": {
+      "type": "object",
+      "required": ["path", "status", "additions", "deletions", "binary"],
+      "properties": {
+        "path": { "type": "string" },
+        "oldPath": { "type": "string" },
+        "status": { "$ref": "#/$defs/FileChangeStatus" },
+        "additions": { "type": "integer" },
+        "deletions": { "type": "integer" },
+        "binary": { "type": "boolean" }
+      }
+    },
+    "CommitDetail": {
+      "type": "object",
+      "required": ["oid", "parents", "authorName", "authorEmail", "authorTime", "committerName", "committerEmail", "committerTime", "body", "files"],
+      "properties": {
+        "oid": { "$ref": "#/$defs/Oid" },
+        "parents": { "type": "array", "items": { "$ref": "#/$defs/Oid" } },
+        "authorName": { "type": "string" },
+        "authorEmail": { "type": "string" },
+        "authorTime": { "$ref": "#/$defs/UnixMillis" },
+        "committerName": { "type": "string" },
+        "committerEmail": { "type": "string" },
+        "committerTime": { "$ref": "#/$defs/UnixMillis" },
+        "body": { "type": "string" },
+        "files": { "type": "array", "items": { "$ref": "#/$defs/FileChange" } }
+      }
+    },
+
+    "ErrorCode": {
+      "enum": [
+        "NotARepo",
+        "RepoNotOpen",
+        "RefNotFound",
+        "WorktreeNotFound",
+        "DirtyWorktree",
+        "BranchCheckedOutElsewhere",
+        "OperationInProgress",
+        "IndexLocked",
+        "AuthFailed",
+        "GitNotFound",
+        "GitTooOld",
+        "GitFailed",
+        "InvalidArgument",
+        "Cancelled",
+        "Internal"
+      ]
+    },
+    "RpcError": {
+      "type": "object",
+      "required": ["code", "message"],
+      "properties": {
+        "code": { "$ref": "#/$defs/ErrorCode" },
+        "message": { "type": "string" },
+        "details": { "type": "object", "additionalProperties": { "type": "string" } }
+      }
+    },
+
+    "SyncOpType": { "enum": ["insert", "update", "delete"] },
+    "SyncOp": {
+      "type": "object",
+      "required": ["type", "key"],
+      "properties": {
+        "type": { "$ref": "#/$defs/SyncOpType" },
+        "key": { "type": "string" },
+        "value": { "description": "The entity, absent for deletes." }
+      }
+    },
+    "SyncDelta": {
+      "type": "object",
+      "required": ["seq", "prevSeq", "traceparent", "ops"],
+      "properties": {
+        "seq": { "type": "integer" },
+        "prevSeq": { "type": "integer" },
+        "traceparent": { "type": "string" },
+        "ops": { "type": "array", "items": { "$ref": "#/$defs/SyncOp" } }
+      }
+    },
+    "SyncSnapshot": {
+      "type": "object",
+      "required": ["seq", "entities"],
+      "properties": {
+        "seq": { "type": "integer" },
+        "entities": { "type": "array", "items": {} }
+      }
+    }
+  }
+}
