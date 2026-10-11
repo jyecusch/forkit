@@ -199,3 +199,11 @@ func TestFirstParentChain(t *testing.T) {
 		t.Errorf("chain rows = %v, want %v", on, want)
 	}
 }
+
+func BenchmarkLayout(b *testing.B) {
+	h := randomHistory(b, 200_000, 3)
+	b.ResetTimer()
+	for range b.N {
+		Layout(h)
+	}
+}

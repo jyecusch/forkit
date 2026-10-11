@@ -67,7 +67,7 @@ func TestStreamStopsEarlyWithoutError(t *testing.T) {
 func TestParseVersion(t *testing.T) {
 	cases := map[string]gitexec.Version{
 		"git version 2.50.1 (Apple Git-155)": {Major: 2, Minor: 50, Patch: 1},
-		"git version 2.45.windows.1":          {Major: 2, Minor: 45},
+		"git version 2.45.windows.1":         {Major: 2, Minor: 45},
 	}
 	for output, want := range cases {
 		got, err := gitexec.ParseVersion(output)
