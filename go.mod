@@ -3,6 +3,7 @@ module github.com/jyecusch/forkit
 go 1.26.0
 
 require (
+	github.com/fsnotify/fsevents v0.2.0
 	github.com/fsnotify/fsnotify v1.10.1
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.3
 	github.com/wailsapp/wails/v2 v2.16.0
