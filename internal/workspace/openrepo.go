@@ -162,6 +162,7 @@ func (r *openRepo) refresh(ctx context.Context, change watch.Change) error {
 		for _, id := range added {
 			change.Status[id] = true
 		}
+		r.refreshIndexes(ctx, added)
 		for _, id := range removed {
 			channels.FileStatus.Drop(ctx, string(id))
 		}
@@ -228,18 +229,46 @@ func (r *openRepo) reloadRefs(ctx context.Context) error {
 	r.mu.Lock()
 	remotes := r.remotes
 	r.mu.Unlock()
-	refs, err := repo.ListRefs(ctx, r.ws.git, r.loc, remotes)
-	if err != nil {
+	var refs []model.Ref
+	var defaultBranch string
+	group, groupCtx := errgroup.WithContext(ctx)
+	group.Go(func() (err error) {
+		refs, err = repo.ListRefs(groupCtx, r.ws.git, r.loc, remotes)
 		return err
-	}
-	defaultBranch, err := repo.DefaultBranch(ctx, r.ws.git, r.loc)
-	if err != nil {
+	})
+	group.Go(func() (err error) {
+		defaultBranch, err = repo.DefaultBranch(groupCtx, r.ws.git, r.loc)
+		return err
+	})
+	if err := group.Wait(); err != nil {
 		return err
 	}
 	r.mu.Lock()
 	r.refs, r.defaultBranch = refs, defaultBranch
 	r.mu.Unlock()
 	return r.ws.channels.Refs.Publish(ctx, string(r.loc.ID), refs)
+}
+
+// refreshIndexes brings newly seen worktrees' index stat caches up to date
+// so their status checks stay fast.
+func (r *openRepo) refreshIndexes(ctx context.Context, ids []model.WorktreeID) {
+	r.mu.Lock()
+	worktrees := slices.Clone(r.worktrees)
+	r.mu.Unlock()
+	group, ctx := errgroup.WithContext(ctx)
+	group.SetLimit(statusConcurrency)
+	for _, wt := range worktrees {
+		if !slices.Contains(ids, wt.ID) || wt.Prunable {
+			continue
+		}
+		group.Go(func() error {
+			if err := repo.RefreshIndex(ctx, r.ws.git, r.loc, wt.Path); err != nil {
+				r.ws.logger.WarnContext(ctx, "refreshing index failed", "error", err)
+			}
+			return nil
+		})
+	}
+	_ = group.Wait()
 }
 
 func (r *openRepo) reloadStatus(ctx context.Context, ids map[model.WorktreeID]bool) error {

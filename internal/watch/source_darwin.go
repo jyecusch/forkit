@@ -17,7 +17,7 @@ type fseventsSource struct {
 func newSource(roots []string) (source, error) {
 	stream := &fsevents.EventStream{
 		Paths:   roots,
-		Latency: 10 * time.Millisecond,
+		Latency: 5 * time.Millisecond,
 		Flags:   fsevents.FileEvents | fsevents.NoDefer,
 	}
 	if err := stream.Start(); err != nil {

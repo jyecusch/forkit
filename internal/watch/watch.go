@@ -17,7 +17,7 @@ import (
 const (
 	// quietPeriod is how long events must stop before a change is reported,
 	// so a rebase touching hundreds of refs causes one refresh.
-	quietPeriod = 50 * time.Millisecond
+	quietPeriod = 25 * time.Millisecond
 	// maxDelay bounds how long a steady stream of events can postpone a
 	// report.
 	maxDelay = 500 * time.Millisecond

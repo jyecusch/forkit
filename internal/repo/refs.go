@@ -6,6 +6,8 @@ import (
 	"strconv"
 	"strings"
 
+	"golang.org/x/sync/errgroup"
+
 	"github.com/jyecusch/forkit/internal/gitexec"
 	"github.com/jyecusch/forkit/internal/model"
 )
@@ -19,10 +21,20 @@ var refFields = []string{
 // ListRefs returns local and remote branches, tags and stashes. remotes is
 // needed to split remote branch names, since remote names may contain "/".
 func ListRefs(ctx context.Context, git *gitexec.Git, loc Location, remotes []model.Remote) ([]model.Ref, error) {
-	out, err := git.Run(ctx, loc.WorkDir, "for-each-ref",
-		"--format="+strings.Join(refFields, "%00"),
-		"refs/heads", "refs/remotes", "refs/tags")
-	if err != nil {
+	var out []byte
+	var stashes []model.Ref
+	group, groupCtx := errgroup.WithContext(ctx)
+	group.Go(func() (err error) {
+		out, err = git.Run(groupCtx, loc.WorkDir, "for-each-ref",
+			"--format="+strings.Join(refFields, "%00"),
+			"refs/heads", "refs/remotes", "refs/tags")
+		return err
+	})
+	group.Go(func() (err error) {
+		stashes, err = listStashes(groupCtx, git, loc)
+		return err
+	})
+	if err := group.Wait(); err != nil {
 		return nil, err
 	}
 	var refs []model.Ref
@@ -37,10 +49,6 @@ func ListRefs(ctx context.Context, git *gitexec.Git, loc Location, remotes []mod
 		if ok {
 			refs = append(refs, ref)
 		}
-	}
-	stashes, err := listStashes(ctx, git, loc)
-	if err != nil {
-		return nil, err
 	}
 	return append(refs, stashes...), nil
 }
