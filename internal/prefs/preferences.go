@@ -57,8 +57,9 @@ type Store struct {
 	validator *jsonschema.Schema
 	logger    *slog.Logger
 
-	mu      sync.Mutex
-	current model.Preferences
+	mu        sync.Mutex
+	current   model.Preferences
+	listeners []func(context.Context, model.Preferences)
 }
 
 // OpenStore loads preferences from dir, falling back to defaults when the
@@ -83,6 +84,15 @@ func compileValidator() (*jsonschema.Schema, error) {
 		return nil, err
 	}
 	return compiler.Compile("forkit.schema.json#/$defs/Preferences")
+}
+
+// OnChange registers listen to be called with the new preferences after
+// every change, including hand edits picked up by Watch. listen runs while
+// the store is locked, so it must return quickly and not call the store.
+func (s *Store) OnChange(listen func(context.Context, model.Preferences)) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.listeners = append(s.listeners, listen)
 }
 
 // Get returns the current preferences.
@@ -129,7 +139,14 @@ func (s *Store) save(ctx context.Context, next model.Preferences) error {
 		return err
 	}
 	s.current = next
-	return s.channel.Publish(ctx, preferencesID, []model.Preferences{next})
+	return s.publish(ctx)
+}
+
+func (s *Store) publish(ctx context.Context) error {
+	for _, listen := range s.listeners {
+		listen(ctx, s.current)
+	}
+	return s.channel.Publish(ctx, preferencesID, []model.Preferences{s.current})
 }
 
 // Watch reloads the file when it is edited by hand until ctx ends.
@@ -167,7 +184,7 @@ func (s *Store) reload(ctx context.Context) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.current = s.load()
-	if err := s.channel.Publish(ctx, preferencesID, []model.Preferences{s.current}); err != nil {
+	if err := s.publish(ctx); err != nil {
 		s.logger.ErrorContext(ctx, "publishing preferences failed", "error", err)
 	}
 }

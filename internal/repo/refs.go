@@ -145,3 +145,20 @@ func listStashes(ctx context.Context, git *gitexec.Git, loc Location) ([]model.R
 	}
 	return stashes, nil
 }
+
+// DefaultBranch names the branch the repository considers primary: the one
+// origin's HEAD points at, otherwise the main worktree's branch.
+func DefaultBranch(ctx context.Context, git *gitexec.Git, loc Location) (string, error) {
+	out, err := git.Run(ctx, loc.WorkDir, "symbolic-ref", "-q", "--short", "refs/remotes/origin/HEAD")
+	if err == nil {
+		return strings.TrimPrefix(strings.TrimSpace(string(out)), "origin/"), nil
+	}
+	if gitexec.ExitCode(err) != 1 {
+		return "", err
+	}
+	out, err = git.Run(ctx, loc.WorkDir, "symbolic-ref", "-q", "--short", "HEAD")
+	if gitexec.ExitCode(err) == 1 {
+		return "", nil // detached HEAD
+	}
+	return strings.TrimSpace(string(out)), err
+}

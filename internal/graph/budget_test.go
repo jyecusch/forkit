@@ -2,6 +2,7 @@ package graph_test
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"runtime"
 	"testing"
@@ -16,12 +17,20 @@ import (
 	"github.com/jyecusch/forkit/internal/synchub"
 )
 
-// firstRowsEmitter signals when a graph view with rows is first published.
-type firstRowsEmitter struct{ shown chan struct{} }
+// firstRowsEmitter signals when a graph view with rows is first published
+// and remembers the latest one.
+type firstRowsEmitter struct {
+	shown  chan struct{}
+	latest json.RawMessage
+}
 
 func (e *firstRowsEmitter) Emit(_ string, payload any) {
 	delta := payload.(model.SyncDelta)
-	if len(delta.Ops) > 0 && e.shown != nil {
+	if len(delta.Ops) == 0 {
+		return
+	}
+	e.latest = delta.Ops[0].Value.(json.RawMessage)
+	if e.shown != nil {
 		close(e.shown)
 		e.shown = nil
 	}
@@ -70,6 +79,9 @@ func TestLargeRepoBudgets(t *testing.T) {
 		t.Fatal(err)
 	}
 	report(t, "full history", time.Since(start), 0)
+	var shape model.GraphView
+	_ = json.Unmarshal(emitter.latest, &shape)
+	t.Logf("rows: %d, lanes: %d, refs: %d", shape.TotalRows, shape.LaneCount, len(refs))
 
 	runtime.GC()
 	var mem runtime.MemStats
@@ -77,7 +89,7 @@ func TestLargeRepoBudgets(t *testing.T) {
 	t.Logf("heap in use: %d MB (budget 150 MB)", mem.HeapInuse>>20)
 
 	deep := time.Now()
-	if _, err := view.Window(ctx, 1_000_000, 500, ""); err != nil {
+	if _, err := view.Window(ctx, shape.TotalRows*3/4, 500, ""); err != nil {
 		t.Fatal(err)
 	}
 	report(t, "deep window", time.Since(deep), 50*time.Millisecond)
