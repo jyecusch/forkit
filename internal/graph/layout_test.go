@@ -5,8 +5,11 @@ import (
 	"fmt"
 	"math/rand/v2"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
+
+	"github.com/jyecusch/forkit/internal/model"
 )
 
 // buildHistory parses a DAG given as one "commit: parent parent" line per row
@@ -113,7 +116,7 @@ a 0/0 |`,
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			h, names := buildHistory(t, tc.spec)
-			got := strings.TrimSpace(render(Layout(h), names))
+			got := strings.TrimSpace(render(Layout(h, ""), names))
 			want := strings.TrimSpace(tc.want)
 			if got != want {
 				t.Errorf("got\n%s\n\nwant\n%s", got, want)
@@ -144,7 +147,7 @@ func randomHistory(t testing.TB, commits int, seed uint64) *History {
 }
 
 func TestWindowEdgesMatchFullReplay(t *testing.T) {
-	g := Layout(randomHistory(t, 3000, 1))
+	g := Layout(randomHistory(t, 3000, 1), "")
 	full := g.edgesBelow(0, g.Len())
 	for _, window := range [][2]int{{0, 10}, {511, 513}, {1000, 1600}, {2990, 3000}, {2047, 2048}} {
 		got := g.edgesBelow(window[0], window[1])
@@ -156,10 +159,10 @@ func TestWindowEdgesMatchFullReplay(t *testing.T) {
 
 func TestExtendMatchesSinglePass(t *testing.T) {
 	h := randomHistory(t, 2000, 2)
-	whole := Layout(h)
+	whole := Layout(h, "")
 
 	partial := newHistory()
-	streamed := Layout(partial)
+	streamed := Layout(partial, "")
 	for row := range h.Len() {
 		parents := h.Parents(row)
 		parentOIDs := make([][]byte, len(parents))
@@ -187,7 +190,7 @@ func TestFirstParentChain(t *testing.T) {
 		x: b
 		b: a
 		a:`)
-	g := Layout(h)
+	g := Layout(h, "")
 	bits := g.firstParentChain(1) // y
 	var on []int32
 	for row := range int32(g.Len()) {
@@ -204,6 +207,37 @@ func BenchmarkLayout(b *testing.B) {
 	h := randomHistory(b, 200_000, 3)
 	b.ResetTimer()
 	for range b.N {
-		Layout(h)
+		Layout(h, "")
+	}
+}
+
+func TestUncommittedChangesKeepALaneToTheirCommit(t *testing.T) {
+	// "feature" and "other" are newer than "head", which the uncommitted
+	// changes build on, so they must stay clear of the changes' lane.
+	h, names := buildHistory(t, `
+		feature: base
+		other: base
+		head: base
+		base:`)
+	headOID := model.OID(fmt.Sprintf("%x", fakeOID("head")))
+	g := Layout(h, headOID)
+
+	edges := g.edgesBelow(0, g.Len())
+	for row, name := range names[:2] {
+		if lane := g.placements[row].lane; lane == 0 {
+			t.Errorf("%s was placed on the uncommitted changes' lane", name)
+		}
+		if !slices.ContainsFunc(edges[row], func(e edge) bool { return e.uncommitted && e.fromLane == 0 && e.toLane == 0 }) {
+			t.Errorf("no uncommitted line passes %s: %+v", name, edges[row])
+		}
+	}
+	head := g.placements[2]
+	if head.lane != 0 || head.thread == uncommittedThread {
+		t.Errorf("head placed at %+v; want lane 0 with a thread of its own", head)
+	}
+
+	// Without uncommitted changes the same history uses lane 0 from the top.
+	if lane := Layout(h, "").placements[0].lane; lane != 0 {
+		t.Errorf("without changes, feature is on lane %d", lane)
 	}
 }

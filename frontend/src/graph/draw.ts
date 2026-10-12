@@ -16,6 +16,13 @@ export const readPalette = (element: Element): GraphPalette => {
 }
 
 const lineWidth = 2
+
+/**
+ * The uncommitted changes' line is lighter than history's: thinner, faded,
+ * and dashed. Its pattern divides the row height, so every row's piece
+ * continues the dashes of the one above.
+ */
+export const uncommittedLine = { width: 1.25, dash: [2, 2] as const, strength: 0.65 }
 const dotRadius = 4
 /** Radius of the bend where a line changes lane. */
 const elbowRadius = 8
@@ -60,12 +67,18 @@ export const drawGraph = (context: CanvasRenderingContext2D, geometry: Geometry,
   context.lineWidth = lineWidth
   context.lineCap = "butt"
   context.lineJoin = "round"
+  // The uncommitted changes' line has no branch colour of its own.
+  const uncommittedColor = mixHex(palette.lanes[0]!, palette.background, uncommittedLine.strength)
   for (const segment of geometry.segments) {
-    context.strokeStyle = colorOf(segment.thread, segment.emphasized)
+    context.strokeStyle = segment.uncommitted ? uncommittedColor : colorOf(segment.thread, segment.emphasized)
+    context.lineWidth = segment.uncommitted ? uncommittedLine.width : lineWidth
+    context.setLineDash(segment.uncommitted ? [...uncommittedLine.dash] : [])
     context.beginPath()
     traceSegment(context, segment)
     context.stroke()
   }
+  context.setLineDash([])
+  context.lineWidth = lineWidth
 
   const clipped: Array<Dot> = []
   for (const dot of geometry.dots) {

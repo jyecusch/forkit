@@ -1,5 +1,7 @@
 package graph
 
+import "github.com/jyecusch/forkit/internal/model"
+
 // checkpointInterval trades memory for the number of rows replayed to
 // produce a window's edges.
 const checkpointInterval = 512
@@ -14,9 +16,11 @@ type Graph struct {
 	laneCount   int
 }
 
-// Layout places every row of history.
-func Layout(history *History) *Graph {
-	g := &Graph{history: history, tail: newLayout()}
+// Layout places every row of history. When uncommitted names a commit, a
+// lane is kept from the top of the graph down to it for uncommitted changes
+// that build on it.
+func Layout(history *History, uncommitted model.OID) *Graph {
+	g := &Graph{history: history, tail: newLayout(history.Intern(uncommitted))}
 	g.Extend()
 	return g
 }

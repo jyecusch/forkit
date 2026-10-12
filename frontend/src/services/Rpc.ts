@@ -5,12 +5,12 @@ import {
   CommitDetail,
   FileDiff,
   GraphWindow,
+  Oid,
   Repo,
   SyncSnapshot,
   Worktree,
   type CheckoutMode,
   type DiffRequest,
-  type Oid,
   type RefId,
   type RepoId,
   type WorktreeId,
@@ -50,6 +50,11 @@ export class Rpc extends Context.Service<
     /** An empty newBranch checks out base itself; an empty path lets the backend choose. */
     readonly createWorktree: (repo: RepoId, base: RefId, newBranch: string, path: string) => Effect.Effect<Worktree, RpcFailure>
     readonly removeWorktree: (worktree: WorktreeId, force: boolean) => Effect.Effect<void, RpcFailure>
+    readonly stage: (worktree: WorktreeId, paths: ReadonlyArray<string>) => Effect.Effect<void, RpcFailure>
+    readonly unstage: (worktree: WorktreeId, paths: ReadonlyArray<string>) => Effect.Effect<void, RpcFailure>
+    /** Commits the staged changes, or amends the last commit, and returns the new commit. */
+    readonly commit: (worktree: WorktreeId, message: string, amend: boolean) => Effect.Effect<Oid, RpcFailure>
+    readonly headMessage: (worktree: WorktreeId) => Effect.Effect<string, RpcFailure>
     /** Resolves to None when the user cancels the folder picker. */
     readonly chooseWorktreeParent: () => Effect.Effect<Option.Option<string>, RpcFailure>
   }
@@ -98,6 +103,14 @@ export class Rpc extends Context.Service<
       }),
     createWorktree: (repo, base, newBranch, path) =>
       invoke("Worktrees.Create", Worktree, (meta) => Worktrees.Create(meta, repo, base, newBranch, path), { "repo.id": repo }),
+    stage: (worktree, paths) =>
+      invoke("Worktrees.Stage", Schema.Void, (meta) => Worktrees.Stage(meta, worktree, [...paths]), { "worktree.id": worktree }),
+    unstage: (worktree, paths) =>
+      invoke("Worktrees.Unstage", Schema.Void, (meta) => Worktrees.Unstage(meta, worktree, [...paths]), { "worktree.id": worktree }),
+    commit: (worktree, message, amend) =>
+      invoke("Worktrees.Commit", Oid, (meta) => Worktrees.Commit(meta, worktree, message, amend), { "worktree.id": worktree }),
+    headMessage: (worktree) =>
+      invoke("Worktrees.HeadMessage", Schema.String, (meta) => Worktrees.HeadMessage(meta, worktree), { "worktree.id": worktree }),
     removeWorktree: (worktree, force) =>
       invoke("Worktrees.Remove", Schema.Void, (meta) => Worktrees.Remove(meta, worktree, force), { "worktree.id": worktree }),
     chooseWorktreeParent: () =>

@@ -281,7 +281,8 @@
         "toLane": { "type": "integer" },
         "threadId": { "type": "integer" },
         "kind": { "$ref": "#/$defs/EdgeKind" },
-        "onEmphasized": { "type": "boolean", "description": "Part of the emphasized ref's first-parent history." }
+        "onEmphasized": { "type": "boolean", "description": "Part of the emphasized ref's first-parent history." },
+        "uncommitted": { "type": "boolean", "description": "Part of the line from the active worktree's uncommitted changes, above the first row, to the commit they build on." }
       }
     },
     "GraphRow": {

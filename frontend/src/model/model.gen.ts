@@ -283,6 +283,7 @@ export const GraphEdge = Schema.Struct({
   threadId: Schema.Int,
   kind: EdgeKind,
   onEmphasized: Schema.Boolean,
+  uncommitted: Schema.optionalKey(Schema.Boolean),
 })
 export type GraphEdge = typeof GraphEdge.Type
 

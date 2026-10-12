@@ -6,6 +6,14 @@ export function Checkout(arg1:model.CallMeta,arg2:model.WorktreeID,arg3:model.Re
 
 export function ChooseParentDirectory(arg1:model.CallMeta):Promise<string>;
 
+export function Commit(arg1:model.CallMeta,arg2:model.WorktreeID,arg3:string,arg4:boolean):Promise<model.OID>;
+
 export function Create(arg1:model.CallMeta,arg2:model.RepoID,arg3:model.RefID,arg4:string,arg5:string):Promise<model.Worktree>;
 
+export function HeadMessage(arg1:model.CallMeta,arg2:model.WorktreeID):Promise<string>;
+
 export function Remove(arg1:model.CallMeta,arg2:model.WorktreeID,arg3:boolean):Promise<void>;
+
+export function Stage(arg1:model.CallMeta,arg2:model.WorktreeID,arg3:Array<string>):Promise<void>;
+
+export function Unstage(arg1:model.CallMeta,arg2:model.WorktreeID,arg3:Array<string>):Promise<void>;

@@ -1,8 +1,8 @@
 import { useLiveQuery } from "@tanstack/react-db"
 import { Effect } from "effect"
-import { Check, Copy } from "lucide-react"
+import { Check, Copy, Minus, Plus } from "lucide-react"
 import { useEffect, useState, type ReactNode } from "react"
-import { useForkedEffect } from "@/app/hooks"
+import { useForkedEffect, useRun } from "@/app/hooks"
 import { useNow } from "@/app/useNow"
 import { fileStatusesCollection } from "@/data/collections"
 import { formatDate, formatFullDate, initials, reflow, shortOid } from "@/lib/format"
@@ -10,77 +10,32 @@ import { cn } from "@/lib/utils"
 import type { CommitDetail, DiffKind, FileChangeStatus, FileStatus, Preferences, RepoId, StatusCode, WorktreeId } from "@/model/model.gen"
 import type { LoadedRow } from "@/services/GraphData"
 import { Rpc } from "@/services/Rpc"
+import { CommitComposer } from "./CommitComposer"
 import { sameDiff, type DiffTarget } from "./DiffView"
 
 interface DetailsPanelProps {
   readonly repo: RepoId
   readonly selected: LoadedRow | undefined
   readonly worktree: WorktreeId | undefined
-  /** Uncommitted changes in the worktree, shown on the Changes tab. */
-  readonly changes: number
+  /** The uncommitted changes row is selected, rather than a commit. */
+  readonly showChanges: boolean
   readonly preferences: Preferences
   /** The file whose diff is open, highlighted in the lists. */
   readonly openDiff: DiffTarget | undefined
   readonly onOpenDiff: (target: DiffTarget) => void
 }
 
-type Tab = "commit" | "changes"
-
-/** The selected commit's details, or the active worktree's uncommitted changes. */
-export const DetailsPanel = ({ repo, selected, worktree, changes, preferences, openDiff, onOpenDiff }: DetailsPanelProps) => {
-  // Selecting another commit shows its details, whichever tab was open.
-  const oid = selected?.row.oid
-  const [chosen, setChosen] = useState<{ readonly tab: Tab; readonly oid: string | undefined }>({ tab: "commit", oid })
-  const tab = chosen.oid === oid ? chosen.tab : "commit"
-  const setTab = (next: Tab) => setChosen({ tab: next, oid })
-  return (
-    <aside aria-label="Details" className="flex w-[clamp(260px,26vw,340px)] flex-none flex-col border-l">
-      <div
-        role="tablist"
-        aria-label="Details"
-        className="flex h-8 flex-none items-center gap-0.5 border-b px-2"
-        onKeyDown={(event) => {
-          if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return
-          event.preventDefault()
-          setTab(tab === "commit" ? "changes" : "commit")
-          const list = event.currentTarget
-          requestAnimationFrame(() => list.querySelector<HTMLElement>("[aria-selected=true]")?.focus())
-        }}
-      >
-        <TabButton active={tab === "commit"} onClick={() => setTab("commit")}>
-          Commit
-        </TabButton>
-        <TabButton active={tab === "changes"} onClick={() => setTab("changes")}>
-          Changes
-          {changes > 0 && <span className="ml-1.5 text-subtle-foreground tabular-nums">{changes}</span>}
-        </TabButton>
-      </div>
-      <div className="flex-1 overflow-y-auto select-text" onKeyDown={moveBetweenFiles}>
-        {tab === "commit" ? (
-          <CommitTab repo={repo} selected={selected} preferences={preferences} openDiff={openDiff} onOpenDiff={onOpenDiff} />
-        ) : worktree ? (
-          <ChangesTab worktree={worktree} openDiff={openDiff} onOpenDiff={onOpenDiff} />
-        ) : (
-          <Empty>No worktree selected</Empty>
-        )}
-      </div>
-    </aside>
-  )
-}
-
-const TabButton = ({ active, onClick, children }: { active: boolean; onClick: () => void; children: ReactNode }) => (
-  <button
-    role="tab"
-    aria-selected={active}
-    tabIndex={active ? 0 : -1}
-    onClick={onClick}
-    className={cn(
-      "flex h-6 items-center rounded-md px-2 text-xs font-medium",
-      active ? "bg-foreground/[0.08] text-foreground" : "text-subtle-foreground hover:bg-foreground/[0.05] hover:text-foreground",
-    )}
-  >
-    {children}
-  </button>
+/** Whatever is selected in the graph: a commit's details, or the active worktree's uncommitted changes. */
+export const DetailsPanel = ({ repo, selected, worktree, showChanges, preferences, openDiff, onOpenDiff }: DetailsPanelProps) => (
+  <aside aria-label="Details" className="flex w-[clamp(260px,26vw,340px)] flex-none flex-col border-l">
+    <div className="min-h-0 flex-1 overflow-y-auto select-text" onKeyDown={moveBetweenFiles}>
+      {showChanges && worktree ? (
+        <ChangesTab worktree={worktree} openDiff={openDiff} onOpenDiff={onOpenDiff} />
+      ) : (
+        <CommitTab repo={repo} selected={selected} preferences={preferences} openDiff={openDiff} onOpenDiff={onOpenDiff} />
+      )}
+    </div>
+  </aside>
 )
 
 const Empty = ({ children }: { children: string }) => (
@@ -189,56 +144,127 @@ const CommitTab = ({
   )
 }
 
+/** A group of changed files, and how a file moves out of it. */
+interface Group {
+  readonly title: string
+  readonly kind: DiffKind
+  readonly statusOf: (file: FileStatus) => StatusCode | undefined
+  /** Staging moves a file into the index; unstaging moves it back out. */
+  readonly action: "stage" | "unstage"
+}
+
+const groups: ReadonlyArray<Group> = [
+  { title: "Conflicted", kind: "unstaged", action: "stage", statusOf: (f) => (f.index === "unmerged" ? f.index : undefined) },
+  {
+    title: "Staged",
+    kind: "staged",
+    action: "unstage",
+    statusOf: (f) => (f.index !== "unmodified" && f.index !== "untracked" && f.index !== "unmerged" ? f.index : undefined),
+  },
+  {
+    title: "Unstaged",
+    kind: "unstaged",
+    action: "stage",
+    statusOf: (f) => (f.workTree !== "unmodified" && f.workTree !== "untracked" && f.workTree !== "unmerged" ? f.workTree : undefined),
+  },
+  { title: "Untracked", kind: "untracked", action: "stage", statusOf: (f) => (f.index === "untracked" ? f.index : undefined) },
+]
+
 const ChangesTab = ({ worktree, openDiff, onOpenDiff }: { worktree: WorktreeId } & FileListProps) => {
+  const run = useRun()
   const { data: files } = useLiveQuery({ query: (q) => q.from({ file: fileStatusesCollection(worktree) }) })
-  if (files.length === 0) {
-    return <Empty>No uncommitted changes</Empty>
+  const sections = groups.flatMap((group) => {
+    const entries = files
+      .flatMap((file) => {
+        const status = group.statusOf(file)
+        return status ? [{ file, status }] : []
+      })
+      .sort((a, b) => a.file.path.localeCompare(b.file.path))
+    return entries.length > 0 ? [{ group, entries }] : []
+  })
+  const staged = sections.find((section) => section.group.kind === "staged")?.entries.length ?? 0
+
+  // Moves files in or out of the index. An open diff of one of them follows
+  // it to its new group.
+  const apply = (action: Group["action"], paths: ReadonlyArray<string>) => {
+    const open = openDiff?.request
+    if (open?.worktreeId === worktree && paths.includes(open.path)) {
+      onOpenDiff({ ...openDiff!, request: { ...open, kind: action === "stage" ? "staged" : "unstaged" } })
+    }
+    void run(Rpc.use((rpc) => (action === "stage" ? rpc.stage(worktree, paths) : rpc.unstage(worktree, paths))))
   }
-  const groups: Array<[string, DiffKind, (file: FileStatus) => StatusCode | undefined]> = [
-    ["Conflicted", "unstaged", (f) => (f.index === "unmerged" ? f.index : undefined)],
-    ["Staged", "staged", (f) => (f.index !== "unmodified" && f.index !== "untracked" && f.index !== "unmerged" ? f.index : undefined)],
-    [
-      "Unstaged",
-      "unstaged",
-      (f) => (f.workTree !== "unmodified" && f.workTree !== "untracked" && f.workTree !== "unmerged" ? f.workTree : undefined),
-    ],
-    ["Untracked", "untracked", (f) => (f.index === "untracked" ? f.index : undefined)],
-  ]
+
+  const renderSection = (group: Group, entries: ReadonlyArray<{ file: FileStatus; status: StatusCode }>) => (
+    <section key={group.title}>
+      <h3 className="flex h-9 items-end justify-between gap-2 px-4 pb-1.5 text-xs font-medium text-subtle-foreground">
+        <span>
+          {group.title} <span className="font-normal tabular-nums">{entries.length}</span>
+        </span>
+        {entries.length > 0 && (
+          <button
+            onClick={() => apply(group.action, entries.map(({ file }) => file.path))}
+            className="-mr-1.5 rounded px-1.5 py-0.5 font-normal hover:bg-foreground/[0.05] hover:text-foreground"
+          >
+            {group.action === "stage" ? "Stage all" : "Unstage all"}
+          </button>
+        )}
+      </h3>
+      <ul className="flex flex-col px-2">
+        {entries.map(({ file, status }) => {
+          const target: DiffTarget = {
+            request: { kind: group.kind, worktreeId: worktree, path: file.path, ...(file.oldPath && { oldPath: file.oldPath }) },
+            conflicted: status === "unmerged",
+          }
+          return (
+            <li key={file.id} className="group/file relative">
+              <FileButton target={target} openDiff={openDiff} onOpenDiff={onOpenDiff}>
+                <StatusBadge letter={statusLetters[status]} tone={statusTones[status]} />
+                <FilePath path={file.path} title={file.path} />
+              </FileButton>
+              <button
+                aria-label={`${group.action === "stage" ? "Stage" : "Unstage"} ${file.path}`}
+                title={group.action === "stage" ? "Stage" : "Unstage"}
+                onClick={() => apply(group.action, [file.path])}
+                className="absolute top-1/2 right-1 flex size-5 -translate-y-1/2 items-center justify-center rounded bg-background text-subtle-foreground opacity-0 group-focus-within/file:opacity-100 group-hover/file:opacity-100 hover:text-foreground focus-visible:opacity-100"
+              >
+                {group.action === "stage" ? <Plus className="size-3.5" /> : <Minus className="size-3.5" />}
+              </button>
+            </li>
+          )
+        })}
+      </ul>
+    </section>
+  )
+
+  // What is not yet staged comes first; what will be committed sits apart,
+  // just above the commit composer.
+  const unstaged = sections.filter(({ group }) => group.kind !== "staged")
+  const stagedGroup = groups.find((group) => group.kind === "staged")!
+  const stagedEntries = sections.find(({ group }) => group.kind === "staged")?.entries ?? []
+
   return (
-    <div className="flex flex-col pb-2">
-      {groups.map(([title, kind, statusOf]) => {
-        const entries = files.flatMap((file) => {
-          const status = statusOf(file)
-          return status ? [{ file, status }] : []
-        })
-        if (entries.length === 0) return null
-        return (
-          <section key={title}>
-            <h3 className="flex justify-between px-4 pt-3 pb-1.5 text-xs font-medium text-subtle-foreground">
-              <span>{title}</span>
-              <span>{entries.length}</span>
-            </h3>
-            <ul className="flex flex-col px-2">
-              {entries
-                .sort((a, b) => a.file.path.localeCompare(b.file.path))
-                .map(({ file, status }) => {
-                  const target: DiffTarget = {
-                    request: { kind, worktreeId: worktree, path: file.path, ...(file.oldPath && { oldPath: file.oldPath }) },
-                    conflicted: status === "unmerged",
-                  }
-                  return (
-                    <li key={file.id}>
-                      <FileButton target={target} openDiff={openDiff} onOpenDiff={onOpenDiff}>
-                        <StatusBadge letter={statusLetters[status]} tone={statusTones[status]} />
-                        <FilePath path={file.path} title={file.path} />
-                      </FileButton>
-                    </li>
-                  )
-                })}
-            </ul>
-          </section>
-        )
-      })}
+    <div className="flex h-full flex-col">
+      <h2 className="flex-none px-4 pt-4 text-[15px] leading-snug font-semibold">Uncommitted changes</h2>
+      {files.length === 0 ? (
+        <div className="min-h-0 flex-1">
+          <Empty>No uncommitted changes</Empty>
+        </div>
+      ) : (
+        <>
+          <div className="min-h-0 flex-1 overflow-y-auto pb-2">
+            {unstaged.length > 0 ? (
+              unstaged.map(({ group, entries }) => renderSection(group, entries))
+            ) : (
+              <p className="px-4 pt-3 text-xs text-subtle-foreground">Everything is staged.</p>
+            )}
+          </div>
+          <div className="flex max-h-[40%] min-h-24 flex-none flex-col overflow-y-auto border-t pb-2">
+            {renderSection(stagedGroup, stagedEntries)}
+            {stagedEntries.length === 0 && <p className="px-4 text-xs text-subtle-foreground">Stage files to commit them.</p>}
+          </div>
+        </>
+      )}
+      <CommitComposer worktree={worktree} staged={staged} />
     </div>
   )
 }

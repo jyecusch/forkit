@@ -321,13 +321,19 @@ func (r *openRepo) reloadStatus(ctx context.Context, ids map[model.WorktreeID]bo
 				return err
 			}
 			r.mu.Lock()
+			dirtyChanged := false
 			for i := range r.worktrees {
 				if r.worktrees[i].ID == wt.ID {
+					dirtyChanged = hasChanges(r.worktrees[i].StatusSummary) != hasChanges(summary)
 					summary.Revision = r.worktrees[i].StatusSummary.Revision + 1
 					r.worktrees[i].StatusSummary = summary
 				}
 			}
 			r.mu.Unlock()
+			// Uncommitted changes appearing or going away move the graph's lanes.
+			if dirtyChanged {
+				r.requestGraphRefresh(ctx)
+			}
 			return r.ws.channels.FileStatus.Publish(ctx, string(wt.ID), files)
 		})
 	}
@@ -358,6 +364,27 @@ func (r *openRepo) setGraphOptions(ctx context.Context, options graph.Options) {
 	}
 }
 
+// uncommittedBase returns the commit the active worktree's uncommitted
+// changes build on, or "" when it has none. Callers hold r.mu.
+func (r *openRepo) uncommittedBase() model.OID {
+	active := model.WorktreeID("")
+	for _, open := range r.ws.session.Get().OpenRepos {
+		if open.ID == r.loc.ID {
+			active = open.ActiveWorktreeID
+		}
+	}
+	for _, wt := range r.worktrees {
+		if (wt.ID == active || (active == "" && wt.IsMain)) && wt.Head.Kind != model.HeadKindUnborn && hasChanges(wt.StatusSummary) {
+			return wt.Head.OID
+		}
+	}
+	return ""
+}
+
+func hasChanges(s model.StatusSummary) bool {
+	return s.Staged+s.Unstaged+s.Untracked+s.Conflicted > 0
+}
+
 // requestGraphRefresh asks the graph loop to refresh. Requests made while a
 // refresh runs are coalesced into one more.
 func (r *openRepo) requestGraphRefresh(ctx context.Context) {
@@ -380,6 +407,7 @@ func (r *openRepo) graphLoop() {
 		}
 		r.mu.Lock()
 		refs, options := r.refs, r.graphOptions
+		options.Uncommitted = r.uncommittedBase()
 		ctx := trace.ContextWithSpanContext(r.lifetime, r.graphTrace)
 		var heads []model.OID
 		for _, wt := range r.worktrees {

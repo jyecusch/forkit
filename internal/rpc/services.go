@@ -197,7 +197,11 @@ func position(ids []model.RepoID, id model.RepoID) int {
 
 // SetActiveWorktree selects a worktree sub-tab of a repository.
 func (x *Session) SetActiveWorktree(meta model.CallMeta, repoID model.RepoID, worktreeID model.WorktreeID) error {
-	return x.updateOpenRepo(meta, "Session.SetActiveWorktree", repoID, func(o *model.OpenRepo) { o.ActiveWorktreeID = worktreeID })
+	err := x.updateOpenRepo(meta, "Session.SetActiveWorktree", repoID, func(o *model.OpenRepo) { o.ActiveWorktreeID = worktreeID })
+	if err == nil {
+		x.s.deps.Workspace.ActiveWorktreeChanged(context.Background(), repoID)
+	}
+	return err
 }
 
 // SetEmphasizedRef chooses whose history the graph emphasizes.
@@ -245,6 +249,34 @@ func (x *Worktrees) Create(meta model.CallMeta, repoID model.RepoID, base model.
 func (x *Worktrees) Remove(meta model.CallMeta, worktreeID model.WorktreeID, force bool) error {
 	return callNoResult(x.s, meta, "Worktrees.Remove", func(ctx context.Context) error {
 		return x.s.deps.Workspace.RemoveWorktree(ctx, worktreeID, force)
+	}, attribute.String("worktree.id", string(worktreeID)))
+}
+
+// Stage adds paths' current contents to a worktree's index.
+func (x *Worktrees) Stage(meta model.CallMeta, worktreeID model.WorktreeID, paths []string) error {
+	return callNoResult(x.s, meta, "Worktrees.Stage", func(ctx context.Context) error {
+		return x.s.deps.Workspace.Stage(ctx, worktreeID, paths)
+	}, attribute.String("worktree.id", string(worktreeID)), attribute.Int("paths", len(paths)))
+}
+
+// Unstage returns paths in a worktree's index to their state in HEAD.
+func (x *Worktrees) Unstage(meta model.CallMeta, worktreeID model.WorktreeID, paths []string) error {
+	return callNoResult(x.s, meta, "Worktrees.Unstage", func(ctx context.Context) error {
+		return x.s.deps.Workspace.Unstage(ctx, worktreeID, paths)
+	}, attribute.String("worktree.id", string(worktreeID)), attribute.Int("paths", len(paths)))
+}
+
+// Commit records a worktree's staged changes, or amends its last commit.
+func (x *Worktrees) Commit(meta model.CallMeta, worktreeID model.WorktreeID, message string, amend bool) (model.OID, error) {
+	return call(x.s, meta, "Worktrees.Commit", func(ctx context.Context) (model.OID, error) {
+		return x.s.deps.Workspace.Commit(ctx, worktreeID, message, amend)
+	}, attribute.String("worktree.id", string(worktreeID)), attribute.Bool("commit.amend", amend))
+}
+
+// HeadMessage returns the message of a worktree's checked-out commit.
+func (x *Worktrees) HeadMessage(meta model.CallMeta, worktreeID model.WorktreeID) (string, error) {
+	return call(x.s, meta, "Worktrees.HeadMessage", func(ctx context.Context) (string, error) {
+		return x.s.deps.Workspace.HeadMessage(ctx, worktreeID)
 	}, attribute.String("worktree.id", string(worktreeID)))
 }
 

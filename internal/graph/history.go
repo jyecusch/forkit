@@ -95,6 +95,23 @@ func (h *History) RowOf(oid model.OID) int32 {
 	return h.idRow[id]
 }
 
+// Intern returns the id of a commit, which need not have been read yet, or -1
+// for no commit or a malformed hash.
+func (h *History) Intern(oid model.OID) int32 {
+	if oid == "" {
+		return -1
+	}
+	raw, err := hex.DecodeString(string(oid))
+	if err != nil {
+		return -1
+	}
+	id, err := h.intern(raw)
+	if err != nil {
+		return -1
+	}
+	return id
+}
+
 // OID returns the hash of the commit at row.
 func (h *History) OID(row int) model.OID {
 	return model.OID(hex.EncodeToString(h.oidOf(h.rowID[row])))

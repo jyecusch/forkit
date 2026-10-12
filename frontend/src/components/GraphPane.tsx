@@ -1,10 +1,11 @@
 import { useVirtualizer } from "@tanstack/react-virtual"
 import { Effect } from "effect"
+import { Asterisk } from "lucide-react"
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type KeyboardEvent } from "react"
 import { useForkedEffect, useResolvedTheme } from "@/app/hooks"
 import { useService } from "@/app/services"
 import { layoutColumns, listInset } from "@/graph/columns"
-import { drawGraph, readPalette, type GraphPalette } from "@/graph/draw"
+import { drawGraph, readPalette, uncommittedLine, type GraphPalette } from "@/graph/draw"
 import { geometry, gutter, laneWidth, laneX, rowHeight, widestLane } from "@/graph/geometry"
 import { notify } from "@/app/notifications"
 import { useNow } from "@/app/useNow"
@@ -23,7 +24,8 @@ const overscan = 30
 const maxBadges = 2
 
 export interface ScrollRequest {
-  readonly row: number
+  /** A commit's row, or the uncommitted changes above them all. */
+  readonly row: number | "changes"
   /** Distinguishes repeated requests for the same row. */
   readonly nonce: number
 }
@@ -41,6 +43,12 @@ interface GraphPaneProps {
   /** The active worktree's checked-out commit: ringed, and selected until the user picks one. */
   readonly activeHead: string | undefined
   readonly onSelect: (row: LoadedRow) => void
+  /** Uncommitted changes in the active worktree; with any, a row for them heads the history. */
+  readonly changes: number
+  /** The checked-out commit's row, which the uncommitted changes row joins. */
+  readonly headRow: number | undefined
+  readonly changesSelected: boolean
+  readonly onSelectChanges: () => void
   readonly scrollRequest: ScrollRequest | undefined
   /** Whether this list is on screen; hidden lists neither load nor draw. */
   readonly active: boolean
@@ -75,10 +83,15 @@ export const GraphPane = (props: GraphPaneProps) => {
   const paneWidth = useSize(sectionRef).width
   const viewportHeight = useSize(scrollRef).height
 
+  // The uncommitted changes row sits in space kept above the commits, so
+  // commit rows keep their numbering.
+  const wip = props.changes > 0
+  const wipHeight = wip ? rowHeight : 0
   const virtualizer = useVirtualizer({
     count: view.totalRows,
     getScrollElement: () => scrollRef.current,
     estimateSize: () => rowHeight,
+    paddingStart: wipHeight,
     overscan,
     // Keyboard moves keep a little context visible past the selection.
     scrollPaddingStart: rowHeight * 2,
@@ -115,8 +128,14 @@ export const GraphPane = (props: GraphPaneProps) => {
 
   // A row jumped to is centred, selected and brought into view sideways.
   useEffect(() => {
-    if (!scrollRequest || scrollRequest.row < 0) return
-    const top = Math.max(scrollRequest.row * rowHeight - (virtualizer.scrollRect?.height ?? 0) / 2 + rowHeight / 2, 0)
+    if (!scrollRequest) return
+    if (scrollRequest.row === "changes") {
+      virtualizer.scrollToOffset(0)
+      setJump((last) => ({ nonce: last.nonce + 1, landing: 0 }))
+      return
+    }
+    if (scrollRequest.row < 0) return
+    const top = Math.max(wipHeight + scrollRequest.row * rowHeight - (virtualizer.scrollRect?.height ?? 0) / 2 + rowHeight / 2, 0)
     virtualizer.scrollToOffset(top)
     setPendingSelect(scrollRequest.row)
     setPanToRow(scrollRequest.row)
@@ -145,9 +164,11 @@ export const GraphPane = (props: GraphPaneProps) => {
   const resting = !useScrolling(scrollRef, restAfter) && !pointerOver && !menuOpen && !scrolling
   const viewportFirst = jump.landing ?? Math.floor((virtualizer.scrollOffset ?? 0) / rowHeight)
   const viewportWidest = widestLane(viewportFirst - 3, viewportFirst + viewportRows + 3, (index) => graphData.peek(repo, index))
+
   const lanes = useRatchet(viewportWidest < 0 ? 0 : Math.max(viewportWidest + 2, 2), { scrolling, resting, reset: jump.nonce })
   const columns = layoutColumns(paneWidth, lanes)
   const maxOffset = Math.max(laneX(viewportWidest) + gutter - columns.graph, 0)
+
 
   // When the column grows enough for the rows on screen, stop panning.
   useEffect(() => {
@@ -204,7 +225,7 @@ export const GraphPane = (props: GraphPaneProps) => {
     context.setTransform(dpr, 0, 0, dpr, 0, 0)
   }, [columns.graph, canvasHeight])
 
-  const canvasTop = first * rowHeight
+  const canvasTop = wipHeight + first * rowHeight
   useLayoutEffect(() => {
     const context = canvasRef.current?.getContext("2d")
     if (!context || !palette || !active) return
@@ -214,7 +235,7 @@ export const GraphPane = (props: GraphPaneProps) => {
       geometry({
         first,
         last: Math.min(first + canvasRows, view.totalRows - 1),
-        originY: canvasTop,
+        originY: first * rowHeight,
         offsetX: clampedOffsetX,
         rowAt: (index) => graphData.peek(repo, index),
         activeHead: props.activeHead,
@@ -263,7 +284,27 @@ export const GraphPane = (props: GraphPaneProps) => {
   const selectedIndex = () =>
     items.find((item) => graphData.peek(repo, item.index)?.row.oid === selectedOid)?.index ?? props.selected?.row.index ?? -1
   const pageRows = Math.max(Math.floor(viewportHeight / rowHeight) - 1, 1)
+  const selectChanges = () => {
+    props.onSelectChanges()
+    keyedRow.current = undefined
+    virtualizer.scrollToOffset(0)
+  }
   const onKeyDown = (event: KeyboardEvent) => {
+    // Up from the first commit reaches the uncommitted changes, and down from them the first commit.
+    if (wip && props.changesSelected && (event.key === "ArrowDown" || event.key === "ArrowUp" || event.key === "Home")) {
+      event.preventDefault()
+      if (event.key === "ArrowDown") {
+        virtualizer.scrollToIndex(0)
+        setPendingSelect(0)
+        keyedRow.current = 0
+      }
+      return
+    }
+    if (wip && !props.changesSelected && (event.key === "Home" || (event.key === "ArrowUp" && (keyedRow.current ?? selectedIndex()) === 0))) {
+      event.preventDefault()
+      selectChanges()
+      return
+    }
     if ((event.metaKey || event.ctrlKey) && event.key === "c" && props.selected) {
       copySha(props.selected.row.oid)
       return
@@ -336,7 +377,7 @@ export const GraphPane = (props: GraphPaneProps) => {
               showAuthor={columns.showAuthor}
               showDate={columns.showDate}
               showCommit={columns.showCommit}
-              selected={selectedOid !== undefined && graphData.peek(repo, item.index)?.row.oid === selectedOid}
+              selected={!props.changesSelected && selectedOid !== undefined && graphData.peek(repo, item.index)?.row.oid === selectedOid}
               anyEmphasis={emphasized !== undefined}
               refsById={props.refsById}
               headRef={props.headRef}
@@ -347,15 +388,89 @@ export const GraphPane = (props: GraphPaneProps) => {
               onMenuOpenChange={onMenuOpenChange}
             />
           ))}
+          {wip && (
+            <ChangesRow
+              columns={columns.template}
+              count={props.changes}
+              selected={props.changesSelected}
+              onSelect={selectChanges}
+            />
+          )}
           <canvas
             ref={canvasRef}
             aria-hidden
             className="pointer-events-none absolute"
             style={{ top: canvasTop, left: listInset, width: columns.graph, height: canvasHeight }}
           />
+          {wip && (
+            <ChangesNode
+              x={laneX(0) - clampedOffsetX}
+              width={columns.graph}
+              // The line continues down the first lane, which the layout keeps
+              // for it, unless the changes build on the first commit itself.
+              joinsFirstRow={props.headRow === 0}
+            />
+          )}
         </div>
       </div>
     </section>
+  )
+}
+
+/** The uncommitted changes, as the first row of the history. */
+const ChangesRow = ({ columns, count, selected, onSelect }: { columns: string; count: number; selected: boolean; onSelect: () => void }) => (
+  <div
+    role="row"
+    aria-rowindex={0}
+    aria-selected={selected}
+    aria-label={`Uncommitted changes, ${count} ${count === 1 ? "file" : "files"}`}
+    onClick={onSelect}
+    className={cn(
+      "absolute inset-x-0 top-0 grid cursor-default items-center gap-3",
+      selected ? "bg-selection group-focus-visible/grid:shadow-[inset_2px_0_0_var(--ring)]" : "hover:bg-foreground/[0.05]",
+    )}
+    style={{ height: rowHeight, gridTemplateColumns: columns, paddingInline: listInset }}
+  >
+    <span role="gridcell" />
+    <span role="gridcell" className="flex min-w-0 items-center gap-2">
+      {/* The theme's yellow marks work in progress, rather than weight, with the usual "modified" asterisk. */}
+      <Asterisk aria-hidden className="size-3 flex-none text-highlight" strokeWidth={2.5} />
+      <span className="truncate text-foreground italic">Uncommitted changes</span>
+      <span className="flex-none rounded bg-foreground/[0.07] px-1.5 text-[11px] leading-[18px] text-secondary-foreground tabular-nums">
+        {count} {count === 1 ? "file" : "files"}
+      </span>
+    </span>
+  </div>
+)
+
+/**
+ * The uncommitted changes' node, hollow as not yet a commit, at the top of
+ * the first lane, which the layout keeps for them down to the commit they
+ * build on; the canvas draws that dashed line, and this joins it.
+ */
+const ChangesNode = ({ x, width, joinsFirstRow }: { x: number; width: number; joinsFirstRow: boolean }) => {
+  if (x < 0 || x > width) return null
+  const nodeY = rowHeight / 2
+  const radius = 4
+  // The first row's centre, or just clear of its ring when it is the commit built on.
+  const end = rowHeight + rowHeight / 2 - (joinsFirstRow ? 7 : 0)
+  // Started a whole number of dash patterns above the end, so its dashes run
+  // on into the canvas's below.
+  const period = uncommittedLine.dash[0] + uncommittedLine.dash[1]
+  const start = end - Math.floor((end - nodeY - radius) / period) * period
+  return (
+    <svg
+      aria-hidden
+      className="pointer-events-none absolute top-0"
+      style={{ left: listInset, width, height: end }}
+      fill="none"
+      stroke="var(--lane-0)"
+      strokeOpacity={uncommittedLine.strength}
+      strokeWidth={uncommittedLine.width}
+    >
+      <line x1={x} x2={x} y1={start} y2={end} strokeDasharray={uncommittedLine.dash.join(" ")} />
+      <circle cx={x} cy={nodeY} r={radius - 0.5} fill="var(--background)" />
+    </svg>
   )
 }
 

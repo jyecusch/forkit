@@ -1,8 +1,8 @@
 import { useLiveQuery } from "@tanstack/react-db"
-import { Option } from "effect"
+import { Effect, Option } from "effect"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { toggleDetails, useDetailsShown } from "@/app/detailsShown"
-import { useRun } from "@/app/hooks"
+import { useForkedEffect, useRun } from "@/app/hooks"
 import {
   graphViewsCollection,
   operationsCollection,
@@ -61,6 +61,31 @@ export const RepoView = ({ repo, openRepo, preferences, active }: RepoViewProps)
   const headOids = useMemo(() => new Set(worktrees.map((wt) => wt.head.oid)), [worktrees])
 
   const [selected, setSelected] = useState<LoadedRow>()
+  // The uncommitted changes row, above the history, can be selected instead of a commit.
+  const [changesSelected, setChangesSelected] = useState(false)
+  const selectCommit = useCallback((row: LoadedRow) => {
+    setSelected(row)
+    setChangesSelected(false)
+  }, [])
+  const changes = activeWorktree ? changeCount(activeWorktree) : 0
+  // Once committed or discarded, there are no changes to select; the history takes over.
+  const hadChanges = useRef(changes)
+  useEffect(() => {
+    if (hadChanges.current > 0 && changes === 0) setChangesSelected(false)
+    hadChanges.current = changes
+  }, [changes])
+
+  // The checked-out commit's row, which the uncommitted changes row joins.
+  const [headRow, setHeadRow] = useState<number>()
+  useForkedEffect(
+    () =>
+      headRef && view
+        ? Commands.use((commands) => commands.locate(id, headRef)).pipe(
+            Effect.tap((row) => Effect.sync(() => setHeadRow(Option.getOrUndefined(row)))),
+          )
+        : Effect.sync(() => setHeadRow(undefined)),
+    [id, headRef, view?.version],
+  )
   const [prompt, setPrompt] = useState<PromptSpec>()
   const [newWorktreeBase, setNewWorktreeBase] = useState<Ref>()
   const [scrollRequest, setScrollRequest] = useState<ScrollRequest>()
@@ -97,13 +122,26 @@ export const RepoView = ({ repo, openRepo, preferences, active }: RepoViewProps)
     }
   }, [])
 
+  // The checked-out branch's newest work is its uncommitted changes, so
+  // going to it goes to them when there are any.
+  const goToChanges = useCallback(() => {
+    setScrollRequest({ row: "changes", nonce: Date.now() })
+    setChangesSelected(true)
+    setOpenDiff(undefined)
+  }, [])
+
   const emphasize = useCallback(
-    (ref: Ref) => void run(Commands.use((commands) => commands.emphasize(id, ref.id))).then(scrollTo),
-    [run, id, scrollTo],
+    (ref: Ref) =>
+      void run(Commands.use((commands) => commands.emphasize(id, ref.id))).then((row) =>
+        ref.id === headRef && changes > 0 ? goToChanges() : scrollTo(row),
+      ),
+    [run, id, scrollTo, goToChanges, headRef, changes],
   )
 
   const selectWorktree = (worktree: Worktree) =>
-    void run(Commands.use((commands) => commands.selectWorktree(id, worktree))).then(scrollTo)
+    void run(Commands.use((commands) => commands.selectWorktree(id, worktree))).then((row) =>
+      changeCount(worktree) > 0 ? goToChanges() : scrollTo(row),
+    )
 
   // Open on the checked-out commit, wherever it is in the history.
   const viewLoaded = view !== undefined
@@ -175,6 +213,7 @@ export const RepoView = ({ repo, openRepo, preferences, active }: RepoViewProps)
         onClearEmphasis={() => headBranch && emphasize(headBranch)}
         view={view}
         checkingOut={running.some((op) => op.kind === "checkout")}
+        onShowChanges={() => setChangesSelected(true)}
         detailsShown={showDetails}
         onToggleDetails={toggleDetails}
       />
@@ -191,7 +230,11 @@ export const RepoView = ({ repo, openRepo, preferences, active }: RepoViewProps)
                 headRef={headRef}
                 selected={selected}
                 activeHead={activeWorktree?.head.oid}
-                onSelect={setSelected}
+                onSelect={selectCommit}
+                changes={changes}
+                headRow={headRow}
+                changesSelected={changesSelected}
+                onSelectChanges={() => setChangesSelected(true)}
                 scrollRequest={scrollRequest}
                 active={active}
                 preferences={preferences}
@@ -217,7 +260,7 @@ export const RepoView = ({ repo, openRepo, preferences, active }: RepoViewProps)
             repo={id}
             selected={selected}
             worktree={activeWorktree?.id}
-            changes={activeWorktree ? changeCount(activeWorktree) : 0}
+            showChanges={changesSelected}
             preferences={preferences}
             openDiff={openDiff}
             onOpenDiff={setOpenDiff}

@@ -248,6 +248,7 @@ export namespace model {
 	    threadId: number;
 	    kind: string;
 	    onEmphasized: boolean;
+	    uncommitted?: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new GraphEdge(source);
@@ -260,6 +261,7 @@ export namespace model {
 	        this.threadId = source["threadId"];
 	        this.kind = source["kind"];
 	        this.onEmphasized = source["onEmphasized"];
+	        this.uncommitted = source["uncommitted"];
 	    }
 	}
 	export class GraphRow {
