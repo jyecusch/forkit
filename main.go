@@ -32,7 +32,7 @@ func main() {
 		OnShutdown:       forkit.Shutdown,
 		Bind:             forkit.Server.Services(),
 		Mac: &mac.Options{
-			TitleBar: mac.TitleBarHiddenInset(),
+			TitleBar: mac.TitleBarHidden(),
 		},
 	})
 	if err != nil {
