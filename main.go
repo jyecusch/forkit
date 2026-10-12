@@ -28,6 +28,8 @@ func main() {
 		Height:           900,
 		MinWidth:         900,
 		MinHeight:        560,
+		MaxWidth:         maxWindowSize(),
+		MaxHeight:        maxWindowSize(),
 		AssetServer:      &assetserver.Options{Assets: assets},
 		BackgroundColour: &options.RGBA{R: 14, G: 14, B: 20, A: 255},
 		Menu:             appMenu(),
@@ -41,6 +43,17 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+}
+
+// maxWindowSize lifts the cap Wails puts on Linux windows when no maximum is
+// set: the size of the monitor the window opened on, which makes Hyprland
+// float it on any larger monitor. Other platforms have no cap without one.
+// TODO: Remove this following an upstream fix for Linux window sizing in Wails.
+func maxWindowSize() int {
+	if runtime.GOOS != "linux" {
+		return 0
+	}
+	return 16384
 }
 
 // appMenu gives macOS its standard application and Edit menus, without
