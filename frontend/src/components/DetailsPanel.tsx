@@ -194,6 +194,54 @@ const ChangesTab = ({ worktree, openDiff, onOpenDiff }: { worktree: WorktreeId }
     void run(Rpc.use((rpc) => (action === "stage" ? rpc.stage(worktree, paths) : rpc.unstage(worktree, paths))))
   }
 
+  const renderSection = (group: Group, entries: ReadonlyArray<{ file: FileStatus; status: StatusCode }>) => (
+    <section key={group.title}>
+      <h3 className="flex h-9 items-end justify-between gap-2 px-4 pb-1.5 text-xs font-medium text-subtle-foreground">
+        <span>
+          {group.title} <span className="font-normal tabular-nums">{entries.length}</span>
+        </span>
+        {entries.length > 0 && (
+          <button
+            onClick={() => apply(group.action, entries.map(({ file }) => file.path))}
+            className="-mr-1.5 rounded px-1.5 py-0.5 font-normal hover:bg-foreground/[0.05] hover:text-foreground"
+          >
+            {group.action === "stage" ? "Stage all" : "Unstage all"}
+          </button>
+        )}
+      </h3>
+      <ul className="flex flex-col px-2">
+        {entries.map(({ file, status }) => {
+          const target: DiffTarget = {
+            request: { kind: group.kind, worktreeId: worktree, path: file.path, ...(file.oldPath && { oldPath: file.oldPath }) },
+            conflicted: status === "unmerged",
+          }
+          return (
+            <li key={file.id} className="group/file relative">
+              <FileButton target={target} openDiff={openDiff} onOpenDiff={onOpenDiff}>
+                <StatusBadge letter={statusLetters[status]} tone={statusTones[status]} />
+                <FilePath path={file.path} title={file.path} />
+              </FileButton>
+              <button
+                aria-label={`${group.action === "stage" ? "Stage" : "Unstage"} ${file.path}`}
+                title={group.action === "stage" ? "Stage" : "Unstage"}
+                onClick={() => apply(group.action, [file.path])}
+                className="absolute top-1/2 right-1 flex size-5 -translate-y-1/2 items-center justify-center rounded bg-background text-subtle-foreground opacity-0 group-focus-within/file:opacity-100 group-hover/file:opacity-100 hover:text-foreground focus-visible:opacity-100"
+              >
+                {group.action === "stage" ? <Plus className="size-3.5" /> : <Minus className="size-3.5" />}
+              </button>
+            </li>
+          )
+        })}
+      </ul>
+    </section>
+  )
+
+  // What is not yet staged comes first; what will be committed sits apart,
+  // just above the commit composer.
+  const unstaged = sections.filter(({ group }) => group.kind !== "staged")
+  const stagedGroup = groups.find((group) => group.kind === "staged")!
+  const stagedEntries = sections.find(({ group }) => group.kind === "staged")?.entries ?? []
+
   return (
     <div className="flex h-full flex-col">
       <h2 className="flex-none px-4 pt-4 text-[15px] leading-snug font-semibold">Uncommitted changes</h2>
@@ -202,47 +250,19 @@ const ChangesTab = ({ worktree, openDiff, onOpenDiff }: { worktree: WorktreeId }
           <Empty>No uncommitted changes</Empty>
         </div>
       ) : (
-        <div className="flex-1 overflow-y-auto pb-2">
-          {sections.map(({ group, entries }) => (
-            <section key={group.title}>
-              <h3 className="flex h-9 items-end justify-between gap-2 px-4 pb-1.5 text-xs font-medium text-subtle-foreground">
-                <span>
-                  {group.title} <span className="font-normal tabular-nums">{entries.length}</span>
-                </span>
-                <button
-                  onClick={() => apply(group.action, entries.map(({ file }) => file.path))}
-                  className="-mr-1.5 rounded px-1.5 py-0.5 font-normal hover:bg-foreground/[0.05] hover:text-foreground"
-                >
-                  {group.action === "stage" ? "Stage all" : "Unstage all"}
-                </button>
-              </h3>
-              <ul className="flex flex-col px-2">
-                {entries.map(({ file, status }) => {
-                  const target: DiffTarget = {
-                    request: { kind: group.kind, worktreeId: worktree, path: file.path, ...(file.oldPath && { oldPath: file.oldPath }) },
-                    conflicted: status === "unmerged",
-                  }
-                  return (
-                    <li key={file.id} className="group/file relative">
-                      <FileButton target={target} openDiff={openDiff} onOpenDiff={onOpenDiff}>
-                        <StatusBadge letter={statusLetters[status]} tone={statusTones[status]} />
-                        <FilePath path={file.path} title={file.path} />
-                      </FileButton>
-                      <button
-                        aria-label={`${group.action === "stage" ? "Stage" : "Unstage"} ${file.path}`}
-                        title={group.action === "stage" ? "Stage" : "Unstage"}
-                        onClick={() => apply(group.action, [file.path])}
-                        className="absolute top-1/2 right-1 flex size-5 -translate-y-1/2 items-center justify-center rounded bg-background text-subtle-foreground opacity-0 group-focus-within/file:opacity-100 group-hover/file:opacity-100 hover:text-foreground focus-visible:opacity-100"
-                      >
-                        {group.action === "stage" ? <Plus className="size-3.5" /> : <Minus className="size-3.5" />}
-                      </button>
-                    </li>
-                  )
-                })}
-              </ul>
-            </section>
-          ))}
-        </div>
+        <>
+          <div className="min-h-0 flex-1 overflow-y-auto pb-2">
+            {unstaged.length > 0 ? (
+              unstaged.map(({ group, entries }) => renderSection(group, entries))
+            ) : (
+              <p className="px-4 pt-3 text-xs text-subtle-foreground">Everything is staged.</p>
+            )}
+          </div>
+          <div className="flex max-h-[40%] min-h-24 flex-none flex-col overflow-y-auto border-t pb-2">
+            {renderSection(stagedGroup, stagedEntries)}
+            {stagedEntries.length === 0 && <p className="px-4 text-xs text-subtle-foreground">Stage files to commit them.</p>}
+          </div>
+        </>
       )}
       <CommitComposer worktree={worktree} staged={staged} />
     </div>
