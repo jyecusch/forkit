@@ -3,6 +3,8 @@ import { Effect } from "effect"
 import { ChevronDown, ChevronLeft, ChevronUp } from "lucide-react"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useForkedEffect } from "@/app/hooks"
+import { highlight } from "@/highlight/client"
+import { syntaxStyles, tokenStride } from "@/highlight/styles"
 import { shortOid } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import type { DiffHunk, DiffLine, DiffRequest, FileDiff, RepoId } from "@/model/model.gen"
@@ -38,8 +40,17 @@ const hunkHeight = 28
 
 type Row =
   | { readonly type: "hunk"; readonly hunk: DiffHunk }
-  | { readonly type: "line"; readonly line: DiffLine }
+  | {
+      readonly type: "line"
+      readonly line: DiffLine
+      /** The line's place in the old or new file text, to find its highlighting. */
+      readonly side: Side
+      readonly index: number
+    }
   | { readonly type: "truncated" }
+
+/** Old for removed lines, new for added and unchanged ones. */
+type Side = 0 | 1
 
 /**
  * One file, whole, with its changes marked in place, shown instead of the
@@ -68,7 +79,21 @@ export const DiffView = ({ repo, target, revision, active, onClose }: DiffViewPr
 
   const scrollRef = useRef<HTMLDivElement>(null)
 
-  const rows = useMemo(() => flatten(diff), [diff])
+  const { rows, texts } = useMemo(() => flatten(diff), [diff])
+
+  // Highlighting arrives after the plain text, from a worker.
+  const [highlighted, setHighlighted] = useState<{ readonly texts: unknown; readonly sides: ReadonlyArray<LineTokens> }>()
+  useEffect(() => {
+    if (!diff || diff.binary) return
+    let current = true
+    void highlight(request.path, texts).then((sides) => {
+      if (current && sides) setHighlighted({ texts, sides: sides.map(indexByLine) })
+    })
+    return () => {
+      current = false
+    }
+  }, [diff, texts, request.path])
+  const sides = highlighted?.texts === texts ? highlighted.sides : undefined
   const virtualizer = useVirtualizer({
     count: rows.length,
     getScrollElement: () => scrollRef.current,
@@ -178,7 +203,7 @@ export const DiffView = ({ repo, target, revision, active, onClose }: DiffViewPr
                   {row.type === "hunk" ? (
                     <HunkHeader hunk={row.hunk} />
                   ) : row.type === "line" ? (
-                    <Line line={row.line} gutter={gutter} />
+                    <Line line={row.line} gutter={gutter} tokens={sides?.[row.side]?.(row.index)} />
                   ) : (
                     <p className="flex h-full items-center px-3 font-sans text-subtle-foreground">
                       The rest of this file's changes are too long to show.
@@ -229,7 +254,7 @@ const lineTones: Record<DiffLine["kind"], { row: string; marker: string; symbol:
   removed: { row: "bg-destructive/10", marker: "text-destructive", symbol: "−" },
 }
 
-const Line = ({ line, gutter }: { line: DiffLine; gutter: string }) => {
+const Line = ({ line, gutter, tokens }: { line: DiffLine; gutter: string; tokens: Int32Array | undefined }) => {
   const tone = lineTones[line.kind]
   return (
     <div className={cn("flex h-full items-center pl-1 whitespace-pre", tone.row)}>
@@ -242,7 +267,7 @@ const Line = ({ line, gutter }: { line: DiffLine; gutter: string }) => {
       <span aria-hidden className={cn("w-4 flex-none text-center select-none", tone.marker)}>
         {tone.symbol}
       </span>
-      <span className="pr-4 text-foreground">{line.text}</span>
+      <span className="pr-4 text-foreground">{tokens && tokens.length > 0 ? colour(line.text, tokens) : line.text}</span>
       {line.noNewline && (
         <span title="No newline at end of file" className="ml-1 font-sans text-[11px] text-subtle-foreground select-none">
           no newline at end
@@ -252,17 +277,69 @@ const Line = ({ line, gutter }: { line: DiffLine; gutter: string }) => {
   )
 }
 
-const flatten = (diff: FileDiff | undefined): Array<Row> => {
-  if (!diff) return []
+/**
+ * Lays the diff out as rows, and rebuilds the old and new file texts from
+ * it so each can be highlighted whole.
+ */
+const flatten = (diff: FileDiff | undefined): { rows: Array<Row>; texts: [string, string] } => {
+  if (!diff) return { rows: [], texts: ["", ""] }
   const rows: Array<Row> = []
+  const old: Array<string> = []
+  const next: Array<string> = []
   // The whole file comes back as one hunk, whose header says nothing new.
   const headers = diff.hunks.length > 1
   for (const hunk of diff.hunks) {
     if (headers) rows.push({ type: "hunk", hunk })
-    for (const line of hunk.lines) rows.push({ type: "line", line })
+    for (const line of hunk.lines) {
+      if (line.kind === "removed") {
+        rows.push({ type: "line", line, side: 0, index: old.length })
+        old.push(line.text)
+      } else {
+        rows.push({ type: "line", line, side: 1, index: next.length })
+        if (line.kind === "context") old.push(line.text)
+        next.push(line.text)
+      }
+    }
   }
   if (diff.truncated) rows.push({ type: "truncated" })
-  return rows
+  return { rows, texts: [old.join("\n"), next.join("\n")] }
+}
+
+/** Finds the tokens of one line of highlighted text. */
+type LineTokens = (line: number) => Int32Array | undefined
+
+/** Indexes [line, from, to, style] quads, which arrive in line order, by line. */
+const indexByLine = (tokens: Int32Array): LineTokens => {
+  const starts = new Map<number, [number, number]>()
+  for (let i = 0; i < tokens.length; i += tokenStride) {
+    const line = tokens[i]!
+    const range = starts.get(line)
+    if (range) range[1] = i + tokenStride
+    else starts.set(line, [i, i + tokenStride])
+  }
+  return (line) => {
+    const range = starts.get(line)
+    return range && tokens.subarray(range[0], range[1])
+  }
+}
+
+/** Splits a line into its highlighted tokens and the plain text between them. */
+const colour = (text: string, tokens: Int32Array) => {
+  const parts: Array<React.ReactNode> = []
+  let at = 0
+  for (let i = 0; i < tokens.length; i += tokenStride) {
+    const from = tokens[i + 1]!
+    const to = tokens[i + 2]!
+    if (from > at) parts.push(text.slice(at, from))
+    parts.push(
+      <span key={from} className={`syn-${syntaxStyles[tokens[i + 3]!]}`}>
+        {text.slice(from, to)}
+      </span>,
+    )
+    at = to
+  }
+  if (at < text.length) parts.push(text.slice(at))
+  return parts
 }
 
 /** The rows where each run of changed lines begins. */

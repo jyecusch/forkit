@@ -7,6 +7,8 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   // Served from the app bundle, so chunk size does not affect load time.
   build: { chunkSizeWarningLimit: 2000 },
+  // Module workers can split code, so each language loads only when needed.
+  worker: { format: "es" },
   resolve: {
     alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) },
   },
