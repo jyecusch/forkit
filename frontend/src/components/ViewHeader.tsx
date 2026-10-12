@@ -1,4 +1,4 @@
-import { Check, LoaderCircle, PanelRight, Tag, X } from "lucide-react"
+import { GitBranch, GitCommitHorizontal, LoaderCircle, PanelRight, Tag, X } from "lucide-react"
 import type { ReactNode } from "react"
 import { cn } from "@/lib/utils"
 import { baseName } from "@/lib/format"
@@ -49,8 +49,10 @@ export const ViewHeader = ({ worktree, refsById, headEmphasized, emphasizedOther
           <span className={cn(chip, headEmphasized ? emphasizedTint : "bg-foreground/[0.06] text-secondary-foreground")} aria-busy={checkingOut}>
             {checkingOut ? (
               <LoaderCircle aria-label="Checking out" className="size-3 flex-none animate-spin" />
+            ) : worktree.head.kind === "detached" ? (
+              <GitCommitHorizontal aria-hidden className="size-3 flex-none" />
             ) : (
-              <Check aria-label="Checked out" className="size-3 flex-none" />
+              <GitBranch aria-hidden className="size-3 flex-none" />
             )}
             <span className="truncate">{headLabel(worktree, refsById)}</span>
             {head && <AheadBehind ahead={head.ahead} behind={head.behind} />}

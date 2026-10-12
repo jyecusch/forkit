@@ -52,6 +52,7 @@ export const RepoView = ({ repo, openRepo, preferences, active }: RepoViewProps)
     [worktrees],
   )
   const refsById = useMemo(() => new Map<string, Ref>(refs.map((ref) => [ref.id, ref])), [refs])
+  const worktreesById = useMemo(() => new Map<string, Worktree>(worktrees.map((wt) => [wt.id, wt])), [worktrees])
 
   const activeWorktree =
     sortedWorktrees.find((wt) => wt.id === openRepo?.activeWorktreeId) ??
@@ -244,6 +245,7 @@ export const RepoView = ({ repo, openRepo, preferences, active }: RepoViewProps)
                 view={view}
                 emphasized={emphasized}
                 refsById={refsById}
+                worktreesById={worktreesById}
                 headOids={headOids}
                 headRef={headRef}
                 selected={selected}
