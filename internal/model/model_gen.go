@@ -290,6 +290,11 @@ type GraphPreferences struct {
 	DimmedOpacity float64 `json:"dimmedOpacity"`
 }
 
+type DiffPreferences struct {
+	// Treat lines that differ only in spacing as unchanged.
+	IgnoreWhitespace bool `json:"ignoreWhitespace"`
+}
+
 type GitPreferences struct {
 	// Empty means find git on PATH.
 	BinaryPath string `json:"binaryPath"`
@@ -311,6 +316,7 @@ type Preferences struct {
 	Version    int                   `json:"version"`
 	Appearance AppearancePreferences `json:"appearance"`
 	Graph      GraphPreferences      `json:"graph"`
+	Diff       DiffPreferences       `json:"diff"`
 	Git        GitPreferences        `json:"git"`
 	Behaviour  BehaviourPreferences  `json:"behaviour"`
 	Telemetry  TelemetryPreferences  `json:"telemetry"`
@@ -424,6 +430,8 @@ type DiffRequest struct {
 	Path       string     `json:"path"`
 	// The path before a rename or copy.
 	OldPath string `json:"oldPath,omitempty"`
+	// Treat lines that differ only in spacing as unchanged.
+	IgnoreWhitespace *bool `json:"ignoreWhitespace,omitempty"`
 }
 
 type DiffLineKind string

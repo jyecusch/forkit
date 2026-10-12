@@ -18,9 +18,15 @@ const minSimilarity = 0.4
  * replaced it, word by word. Returns the changed ranges of each, or null when
  * the lines are too different for marking the changes to help.
  */
-export const wordDiff = (before: string, after: string): { before: Array<Range>; after: Array<Range> } | null => {
+export const wordDiff = (
+  before: string,
+  after: string,
+  ignoreWhitespace = false,
+): { before: Array<Range>; after: Array<Range> } | null => {
   const a = before.match(tokenPattern) ?? []
   const b = after.match(tokenPattern) ?? []
+  // Ignoring whitespace, any run of spaces matches any other.
+  const same = ignoreWhitespace ? (x: string, y: string) => x === y || (!x.trim() && !y.trim()) : (x: string, y: string) => x === y
   if (a.length * b.length > maxCells) return null
 
   // Longest common subsequence of tokens, filled from the end.
@@ -29,7 +35,7 @@ export const wordDiff = (before: string, after: string): { before: Array<Range>;
   for (let i = a.length - 1; i >= 0; i--) {
     for (let j = b.length - 1; j >= 0; j--) {
       lengths[i * width + j] =
-        a[i] === b[j] ? lengths[(i + 1) * width + j + 1]! + 1 : Math.max(lengths[(i + 1) * width + j]!, lengths[i * width + j + 1]!)
+        same(a[i]!, b[j]!) ? lengths[(i + 1) * width + j + 1]! + 1 : Math.max(lengths[(i + 1) * width + j]!, lengths[i * width + j + 1]!)
     }
   }
 
@@ -41,7 +47,7 @@ export const wordDiff = (before: string, after: string): { before: Array<Range>;
   let bt = 0
   let kept = 0
   while (i < a.length || j < b.length) {
-    if (i < a.length && j < b.length && a[i] === b[j]) {
+    if (i < a.length && j < b.length && same(a[i]!, b[j]!)) {
       kept += a[i]!.length
       at += a[i++]!.length
       bt += b[j++]!.length

@@ -129,6 +129,33 @@ func TestDiffShowsTheWholeFile(t *testing.T) {
 	}
 }
 
+func TestDiffCanIgnoreWhitespace(t *testing.T) {
+	ctx := context.Background()
+	git, fixture, loc := setup(t)
+	fixture.WriteFile("f.go", "func f() {\nreturn 1\n}\n")
+	fixture.Git("add", "f.go")
+	fixture.Commit("add f")
+	fixture.WriteFile("f.go", "func f() {\n\treturn 2\n}\n")
+
+	ignore := true
+	diff, err := repo.ReadDiff(ctx, git, loc, fixture.Dir, model.DiffRequest{Kind: model.DiffKindUnstaged, Path: "f.go", IgnoreWhitespace: &ignore})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(lines(diff), "|"); got != " 1:1 func f() {|-2 return 1|+2 \treturn 2| 3:3 }" {
+		t.Errorf("lines = %q", got)
+	}
+
+	fixture.WriteFile("f.go", "func f() {\n\treturn 1\n}\n")
+	diff, err = repo.ReadDiff(ctx, git, loc, fixture.Dir, model.DiffRequest{Kind: model.DiffKindUnstaged, Path: "f.go", IgnoreWhitespace: &ignore})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(diff.Hunks) != 0 {
+		t.Errorf("a re-indent alone still shows as a change: %q", lines(diff))
+	}
+}
+
 func TestDiffFollowsARename(t *testing.T) {
 	ctx := context.Background()
 	git, fixture, loc := setup(t)

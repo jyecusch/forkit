@@ -47,6 +47,7 @@ func Defaults() model.Preferences {
 			ShowTags:           true,
 			DimmedOpacity:      0.4,
 		},
+		Diff:      model.DiffPreferences{},
 		Git:       model.GitPreferences{MaintainCommitGraph: true},
 		Behaviour: model.BehaviourPreferences{DirtyCheckout: model.DirtyCheckoutAsk},
 		Telemetry: model.TelemetryPreferences{Mode: model.TelemetryModeLocal},

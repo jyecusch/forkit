@@ -18,6 +18,11 @@ describe("wordDiff", () => {
     expect(marked("call(a, b, c)", diff.after)).toEqual([", c"])
   })
 
+  it("can treat any spacing as the same", () => {
+    const diff = wordDiff("if (a  &&  b) {", "if (a && c) {", true)!
+    expect(marked("if (a && c) {", diff.after)).toEqual(["c"])
+  })
+
   it("leaves lines that were rewritten unmarked", () => {
     expect(wordDiff("return cache.get(key)", "throw new Error(message)")).toBeNull()
   })

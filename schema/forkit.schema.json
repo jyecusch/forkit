@@ -186,6 +186,14 @@
         "dimmedOpacity": { "type": "number", "minimum": 0.1, "maximum": 0.8, "description": "Opacity of threads outside the emphasized history." }
       }
     },
+    "DiffPreferences": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ignoreWhitespace"],
+      "properties": {
+        "ignoreWhitespace": { "type": "boolean", "description": "Treat lines that differ only in spacing as unchanged." }
+      }
+    },
     "GitPreferences": {
       "type": "object",
       "additionalProperties": false,
@@ -215,12 +223,13 @@
     "Preferences": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "version", "appearance", "graph", "git", "behaviour", "telemetry"],
+      "required": ["id", "version", "appearance", "graph", "diff", "git", "behaviour", "telemetry"],
       "properties": {
         "id": { "type": "string" },
         "version": { "type": "integer" },
         "appearance": { "$ref": "#/$defs/AppearancePreferences" },
         "graph": { "$ref": "#/$defs/GraphPreferences" },
+        "diff": { "$ref": "#/$defs/DiffPreferences" },
         "git": { "$ref": "#/$defs/GitPreferences" },
         "behaviour": { "$ref": "#/$defs/BehaviourPreferences" },
         "telemetry": { "$ref": "#/$defs/TelemetryPreferences" }
@@ -330,7 +339,8 @@
         "oid": { "$ref": "#/$defs/Oid", "description": "The commit, for a commit diff." },
         "worktreeId": { "$ref": "#/$defs/WorktreeId", "description": "The worktree, for every other kind." },
         "path": { "type": "string" },
-        "oldPath": { "type": "string", "description": "The path before a rename or copy." }
+        "oldPath": { "type": "string", "description": "The path before a rename or copy." },
+        "ignoreWhitespace": { "type": "boolean", "description": "Treat lines that differ only in spacing as unchanged." }
       }
     },
     "DiffLineKind": { "enum": ["context", "added", "removed"] },
