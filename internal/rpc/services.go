@@ -2,6 +2,7 @@ package rpc
 
 import (
 	"context"
+	"encoding/base64"
 	"slices"
 
 	"go.opentelemetry.io/otel/attribute"
@@ -24,10 +25,14 @@ func (x *Sync) Subscribe(meta model.CallMeta, channel, scope string) (model.Sync
 // Telemetry receives spans from the frontend.
 type Telemetry struct{ s *Server }
 
-// Ingest accepts an OTLP protobuf TracesData message. It is not traced
-// itself, which would make every export produce more spans to export.
-func (x *Telemetry) Ingest(payload []byte) error {
-	return x.s.deps.Telemetry.Ingest(x.s.deps.Ctx, payload)
+// Ingest accepts a base64-encoded OTLP protobuf TracesData message. It is
+// not traced itself, which would make every export produce more spans.
+func (x *Telemetry) Ingest(payload string) error {
+	decoded, err := base64.StdEncoding.DecodeString(payload)
+	if err != nil {
+		return callError{apperr.ToRPC(apperr.New(model.ErrorCodeInvalidArgument, "payload is not base64"))}
+	}
+	return x.s.deps.Telemetry.Ingest(x.s.deps.Ctx, decoded)
 }
 
 // Repos opens repositories and reads their history.

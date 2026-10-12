@@ -313,7 +313,6 @@ func goName(name string) string {
 func generateTS(defs []definition) []byte {
 	var b strings.Builder
 	fmt.Fprintf(&b, "// %s\n\nimport { Effect, Schema } from \"effect\"\n\n", header)
-	b.WriteString("const emptyArray = Schema.withDecodingDefaultKey(Effect.succeed([]))\n")
 	for _, def := range dependencyOrder(defs) {
 		s := def.schema
 		if s.Description != "" {
@@ -375,7 +374,7 @@ func tsStruct(n *node, indent string) string {
 		expr := tsType(prop.schema, inner)
 		switch {
 		case prop.schema.Type == "array":
-			expr += ".pipe(emptyArray)"
+			expr += ".pipe(Schema.withDecodingDefaultKey(Effect.succeed([])))"
 		case n.isOptional(prop.name):
 			expr = fmt.Sprintf("Schema.optionalKey(%s)", expr)
 		}

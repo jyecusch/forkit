@@ -22,6 +22,9 @@
   --input: #292e42;
   --ring: #7aa2f7;
   --selection: #283457;
+  --accent: #292e42;
+  --muted: #24283b;
+  --secondary: #292e42;
   --primary: #7aa2f7;
   --primary-foreground: #16161e;
   --destructive: #f7768e;
@@ -50,6 +53,9 @@
   --input: #c4c8da;
   --ring: #2e7de9;
   --selection: #b7c1e3;
+  --accent: #c4c8da;
+  --muted: #d0d5e3;
+  --secondary: #c4c8da;
   --primary: #2e7de9;
   --primary-foreground: #e1e2e7;
   --destructive: #f52a65;
@@ -70,6 +76,12 @@
   --color-sidebar: var(--sidebar);
   --color-card: var(--card);
   --color-popover: var(--popover);
+  --color-popover-foreground: var(--foreground);
+  --color-card-foreground: var(--foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-secondary: var(--secondary);
   --color-foreground: var(--foreground);
   --color-secondary-foreground: var(--secondary-foreground);
   --color-muted-foreground: var(--muted-foreground);

@@ -2,7 +2,6 @@
 
 import { Effect, Schema } from "effect"
 
-const emptyArray = Schema.withDecodingDefaultKey(Effect.succeed([]))
 
 /** Hash of the repository's canonical common git dir. */
 export const RepoId = Schema.String.pipe(Schema.brand("RepoId"))
@@ -227,14 +226,14 @@ export type OpenRepo = typeof OpenRepo.Type
 
 export const Session = Schema.Struct({
   id: Schema.String,
-  openRepos: Schema.Array(OpenRepo).pipe(emptyArray),
+  openRepos: Schema.Array(OpenRepo).pipe(Schema.withDecodingDefaultKey(Effect.succeed([]))),
   activeRepoId: Schema.optionalKey(RepoId),
 })
 export type Session = typeof Session.Type
 
 export const Commit = Schema.Struct({
   oid: Oid,
-  parents: Schema.Array(Oid).pipe(emptyArray),
+  parents: Schema.Array(Oid).pipe(Schema.withDecodingDefaultKey(Effect.succeed([]))),
   authorName: Schema.String,
   authorEmail: Schema.String,
   authorTime: UnixMillis,
@@ -261,8 +260,8 @@ export const GraphRow = Schema.Struct({
   oid: Oid,
   lane: Schema.Int,
   threadId: Schema.Int,
-  edges: Schema.Array(GraphEdge).pipe(emptyArray),
-  refIds: Schema.Array(RefId).pipe(emptyArray),
+  edges: Schema.Array(GraphEdge).pipe(Schema.withDecodingDefaultKey(Effect.succeed([]))),
+  refIds: Schema.Array(RefId).pipe(Schema.withDecodingDefaultKey(Effect.succeed([]))),
   onEmphasized: Schema.Boolean,
 })
 export type GraphRow = typeof GraphRow.Type
@@ -280,8 +279,8 @@ export type GraphView = typeof GraphView.Type
 export const GraphWindow = Schema.Struct({
   version: Schema.Int,
   start: Schema.Int,
-  rows: Schema.Array(GraphRow).pipe(emptyArray),
-  commits: Schema.Array(Commit).pipe(emptyArray),
+  rows: Schema.Array(GraphRow).pipe(Schema.withDecodingDefaultKey(Effect.succeed([]))),
+  commits: Schema.Array(Commit).pipe(Schema.withDecodingDefaultKey(Effect.succeed([]))),
 })
 export type GraphWindow = typeof GraphWindow.Type
 
@@ -300,7 +299,7 @@ export type FileChange = typeof FileChange.Type
 
 export const CommitDetail = Schema.Struct({
   oid: Oid,
-  parents: Schema.Array(Oid).pipe(emptyArray),
+  parents: Schema.Array(Oid).pipe(Schema.withDecodingDefaultKey(Effect.succeed([]))),
   authorName: Schema.String,
   authorEmail: Schema.String,
   authorTime: UnixMillis,
@@ -308,7 +307,7 @@ export const CommitDetail = Schema.Struct({
   committerEmail: Schema.String,
   committerTime: UnixMillis,
   body: Schema.String,
-  files: Schema.Array(FileChange).pipe(emptyArray),
+  files: Schema.Array(FileChange).pipe(Schema.withDecodingDefaultKey(Effect.succeed([]))),
 })
 export type CommitDetail = typeof CommitDetail.Type
 
@@ -332,12 +331,12 @@ export const SyncDelta = Schema.Struct({
   seq: Schema.Int,
   prevSeq: Schema.Int,
   traceparent: Schema.String,
-  ops: Schema.Array(SyncOp).pipe(emptyArray),
+  ops: Schema.Array(SyncOp).pipe(Schema.withDecodingDefaultKey(Effect.succeed([]))),
 })
 export type SyncDelta = typeof SyncDelta.Type
 
 export const SyncSnapshot = Schema.Struct({
   seq: Schema.Int,
-  entities: Schema.Array(Schema.Unknown).pipe(emptyArray),
+  entities: Schema.Array(Schema.Unknown).pipe(Schema.withDecodingDefaultKey(Effect.succeed([]))),
 })
 export type SyncSnapshot = typeof SyncSnapshot.Type
