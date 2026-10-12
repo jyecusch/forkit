@@ -40,12 +40,13 @@
     "WorktreeOperation": { "enum": ["none", "merge", "rebase", "cherryPick", "revert", "bisect"] },
     "StatusSummary": {
       "type": "object",
-      "required": ["staged", "unstaged", "untracked", "conflicted"],
+      "required": ["staged", "unstaged", "untracked", "conflicted", "revision"],
       "properties": {
         "staged": { "type": "integer" },
         "unstaged": { "type": "integer" },
         "untracked": { "type": "integer" },
-        "conflicted": { "type": "integer" }
+        "conflicted": { "type": "integer" },
+        "revision": { "type": "integer", "description": "Counts up each time the worktree's status is read, so views of file contents know to refresh." }
       }
     },
     "Worktree": {
@@ -318,6 +319,53 @@
         "additions": { "type": "integer" },
         "deletions": { "type": "integer" },
         "binary": { "type": "boolean" }
+      }
+    },
+    "DiffKind": { "enum": ["commit", "staged", "unstaged", "untracked"], "description": "Where a file's changes come from: a commit against its first parent, or a worktree's index or files." },
+    "DiffRequest": {
+      "type": "object",
+      "required": ["kind", "path"],
+      "properties": {
+        "kind": { "$ref": "#/$defs/DiffKind" },
+        "oid": { "$ref": "#/$defs/Oid", "description": "The commit, for a commit diff." },
+        "worktreeId": { "$ref": "#/$defs/WorktreeId", "description": "The worktree, for every other kind." },
+        "path": { "type": "string" },
+        "oldPath": { "type": "string", "description": "The path before a rename or copy." }
+      }
+    },
+    "DiffLineKind": { "enum": ["context", "added", "removed"] },
+    "DiffLine": {
+      "type": "object",
+      "required": ["kind", "text"],
+      "properties": {
+        "kind": { "$ref": "#/$defs/DiffLineKind" },
+        "oldLine": { "type": "integer" },
+        "newLine": { "type": "integer" },
+        "text": { "type": "string" },
+        "noNewline": { "type": "boolean", "description": "The file ends on this line without a newline." }
+      }
+    },
+    "DiffHunk": {
+      "type": "object",
+      "required": ["oldStart", "oldLines", "newStart", "newLines", "section", "lines"],
+      "properties": {
+        "oldStart": { "type": "integer" },
+        "oldLines": { "type": "integer" },
+        "newStart": { "type": "integer" },
+        "newLines": { "type": "integer" },
+        "section": { "type": "string", "description": "The enclosing function or heading git names after the hunk's range, if any." },
+        "lines": { "type": "array", "items": { "$ref": "#/$defs/DiffLine" } }
+      }
+    },
+    "FileDiff": {
+      "type": "object",
+      "required": ["path", "binary", "truncated", "hunks"],
+      "properties": {
+        "path": { "type": "string" },
+        "oldPath": { "type": "string" },
+        "binary": { "type": "boolean" },
+        "truncated": { "type": "boolean", "description": "The diff was cut short at the line limit." },
+        "hunks": { "type": "array", "items": { "$ref": "#/$defs/DiffHunk" } }
       }
     },
     "CommitDetail": {

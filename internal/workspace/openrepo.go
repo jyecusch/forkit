@@ -323,6 +323,7 @@ func (r *openRepo) reloadStatus(ctx context.Context, ids map[model.WorktreeID]bo
 			r.mu.Lock()
 			for i := range r.worktrees {
 				if r.worktrees[i].ID == wt.ID {
+					summary.Revision = r.worktrees[i].StatusSummary.Revision + 1
 					r.worktrees[i].StatusSummary = summary
 				}
 			}

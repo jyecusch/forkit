@@ -14,6 +14,10 @@ export function CommitDetail(arg1, arg2, arg3) {
   return window['go']['rpc']['Repos']['CommitDetail'](arg1, arg2, arg3);
 }
 
+export function Diff(arg1, arg2, arg3) {
+  return window['go']['rpc']['Repos']['Diff'](arg1, arg2, arg3);
+}
+
 export function GraphWindow(arg1, arg2, arg3, arg4, arg5) {
   return window['go']['rpc']['Repos']['GraphWindow'](arg1, arg2, arg3, arg4, arg5);
 }

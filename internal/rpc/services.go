@@ -110,6 +110,32 @@ func (x *Repos) CommitDetail(meta model.CallMeta, id model.RepoID, oid model.OID
 	}, attribute.String("repo.id", string(id)))
 }
 
+// Diff returns one file's changes in a commit or a worktree.
+func (x *Repos) Diff(meta model.CallMeta, id model.RepoID, req model.DiffRequest) (model.FileDiff, error) {
+	return call(x.s, meta, "Repos.Diff", func(ctx context.Context) (model.FileDiff, error) {
+		loc, err := x.s.deps.Workspace.Location(id)
+		if err != nil {
+			return model.FileDiff{}, err
+		}
+		dir := loc.WorkDir
+		if req.Kind == model.DiffKindCommit {
+			if !isOID(req.OID) {
+				return model.FileDiff{}, apperr.New(model.ErrorCodeInvalidArgument, "not a commit hash")
+			}
+		} else {
+			wt, err := x.s.deps.Workspace.WorktreeInfo(req.WorktreeID)
+			if err != nil {
+				return model.FileDiff{}, err
+			}
+			if wt.RepoID != id {
+				return model.FileDiff{}, apperr.New(model.ErrorCodeWorktreeNotFound, "worktree is not in this repository")
+			}
+			dir = wt.Path
+		}
+		return repo.ReadDiff(ctx, x.s.deps.Workspace.Git(), loc, dir, req)
+	}, attribute.String("repo.id", string(id)), attribute.String("diff.kind", string(req.Kind)))
+}
+
 var oidPattern = regexp.MustCompile(`^(?:[0-9a-f]{40}|[0-9a-f]{64})$`)
 
 // isOID reports whether oid is a full SHA-1 or SHA-256 hash, so it can be

@@ -202,6 +202,12 @@ func (r *openRepo) headBranch(id model.WorktreeID) model.RefID {
 	return ""
 }
 
+// WorktreeInfo returns an open worktree by ID.
+func (w *Workspace) WorktreeInfo(id model.WorktreeID) (repo.WorktreeInfo, error) {
+	_, wt, err := w.worktree(id)
+	return wt, err
+}
+
 // worktree finds an open worktree by ID.
 func (w *Workspace) worktree(id model.WorktreeID) (*openRepo, repo.WorktreeInfo, error) {
 	w.mu.Lock()

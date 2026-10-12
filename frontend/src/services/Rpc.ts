@@ -3,11 +3,13 @@ import { fromRejection, type RpcFailure } from "@/model/errors"
 import {
   CheckoutResult,
   CommitDetail,
+  FileDiff,
   GraphWindow,
   Repo,
   SyncSnapshot,
   Worktree,
   type CheckoutMode,
+  type DiffRequest,
   type Oid,
   type RefId,
   type RepoId,
@@ -37,6 +39,7 @@ export class Rpc extends Context.Service<
     ) => Effect.Effect<GraphWindow, RpcFailure>
     readonly rowOfRef: (id: RepoId, ref: RefId) => Effect.Effect<number, RpcFailure>
     readonly commitDetail: (id: RepoId, oid: Oid) => Effect.Effect<CommitDetail, RpcFailure>
+    readonly diff: (id: RepoId, request: DiffRequest) => Effect.Effect<FileDiff, RpcFailure>
     readonly setPreference: (path: string, value: unknown) => Effect.Effect<void, RpcFailure>
     readonly resetPreference: (path: string) => Effect.Effect<void, RpcFailure>
     readonly setActiveRepo: (id: RepoId) => Effect.Effect<void, RpcFailure>
@@ -72,6 +75,11 @@ export class Rpc extends Context.Service<
     rowOfRef: (id, ref) => invoke("Repos.RowOfRef", Schema.Int, (meta) => Repos.RowOfRef(meta, id, ref), { "repo.id": id }),
     commitDetail: (id, oid) =>
       invoke("Repos.CommitDetail", CommitDetail, (meta) => Repos.CommitDetail(meta, id, oid), { "repo.id": id }),
+    diff: (id, request) =>
+      invoke("Repos.Diff", FileDiff, (meta) => Repos.Diff(meta, id, model.DiffRequest.createFrom(request)), {
+        "repo.id": id,
+        "diff.kind": request.kind,
+      }),
     setPreference: (path, value) =>
       invoke("Preferences.Set", Schema.Void, (meta) => Preferences.Set(meta, path, value), { "preference.path": path }),
     resetPreference: (path) =>
