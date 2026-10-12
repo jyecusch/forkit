@@ -20,19 +20,31 @@ const dotRadius = 4
 /** Radius of the bend where a line changes lane. */
 const elbowRadius = 8
 
+export interface DrawOptions {
+  /** How strongly history outside the emphasized one keeps its colour. */
+  readonly dimmedStrength: number
+  readonly width: number
+  readonly height: number
+  /** Lanes continue past this edge, so it fades out. */
+  readonly fadeLeft: boolean
+  readonly fadeRight: boolean
+}
+
+/** Width of the fade at an edge lanes continue past. */
+const fadeWidth = 16
+
 /**
  * Draws graph geometry. Every line and dot is drawn opaque at the same size,
  * whatever the history looks like; lines outside the emphasized history are
  * only toned down towards the background. Transparency would make
  * overlapping strokes and dot outlines show through each other.
+ *
+ * Where lanes continue past an edge the graph fades out, and a commit whose
+ * dot is past it gets a marker on that edge, drawn after the fade so every
+ * row still shows where its commit is.
  */
-export const drawGraph = (
-  context: CanvasRenderingContext2D,
-  geometry: Geometry,
-  palette: GraphPalette,
-  dimmedStrength: number,
-  width: number,
-) => {
+export const drawGraph = (context: CanvasRenderingContext2D, geometry: Geometry, palette: GraphPalette, options: DrawOptions) => {
+  const { dimmedStrength, width, height } = options
   const colors = new Map<string, string>()
   const colorOf = (thread: number, emphasized: boolean) => {
     const key = `${thread % palette.lanes.length}:${emphasized}`
@@ -55,11 +67,33 @@ export const drawGraph = (
     context.stroke()
   }
 
-  // A dot panned out of view is pinned half-visible to the edge it left by,
-  // so every row still shows where its commit is.
+  const clipped: Array<Dot> = []
   for (const dot of geometry.dots) {
-    const pinned = { ...dot, x: Math.min(Math.max(dot.x, 0), width) }
-    drawDot(context, pinned, colorOf(dot.thread, dot.emphasized), palette.background)
+    if (dot.x < 0 || dot.x > width) clipped.push(dot)
+    else drawDot(context, dot, colorOf(dot.thread, dot.emphasized), palette.background)
+  }
+
+  context.save()
+  context.globalCompositeOperation = "destination-out"
+  for (const [fade, x] of [
+    [options.fadeLeft, 0],
+    [options.fadeRight, width - fadeWidth],
+  ] as const) {
+    if (!fade) continue
+    const gradient = context.createLinearGradient(x, 0, x + fadeWidth, 0)
+    gradient.addColorStop(x === 0 ? 0 : 1, "black")
+    gradient.addColorStop(x === 0 ? 1 : 0, "transparent")
+    context.fillStyle = gradient
+    context.fillRect(x, 0, fadeWidth, height)
+  }
+  context.restore()
+
+  for (const dot of clipped) {
+    const edge = dot.x < 0 ? 0 : width
+    context.fillStyle = palette.lanes[dot.thread % palette.lanes.length]!
+    context.beginPath()
+    context.arc(edge, dot.y, dotRadius, 0, Math.PI * 2)
+    context.fill()
   }
 }
 

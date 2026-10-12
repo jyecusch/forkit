@@ -9,7 +9,7 @@ export interface Badge {
   readonly isEmphasized: boolean
   /** A local branch whose upstream points at the same commit; the upstream is not shown separately. */
   readonly inSync: boolean
-  /** For a remote branch, the same-named branches on other remotes folded into it. */
+  /** Same-named remote branches folded into this badge, whether it is a local or a remote branch. */
   readonly sameOnOtherRemotes: ReadonlyArray<Ref>
 }
 
@@ -43,12 +43,13 @@ export const badgesFor = (
   const rank = (ref: Ref) =>
     ref.id === headRef || ref.id === headUpstream ? -2 : ref.id === emphasized ? -1 : kindOrder[ref.kind]
   const badges: Array<Badge & { sameOnOtherRemotes: Array<Ref> }> = []
-  const byRemoteName = new Map<string, { sameOnOtherRemotes: Array<Ref> }>()
+  // Remote branches fold into a same-named branch shown before them, local or remote.
+  const byName = new Map<string, { sameOnOtherRemotes: Array<Ref> }>()
   const ordered = refs
     .filter((ref) => !(ref.kind === "remoteBranch" && absorbed.has(ref.id)))
     .sort((a, b) => rank(a) - rank(b) || a.shortName.localeCompare(b.shortName, undefined, { numeric: true }))
   for (const ref of ordered) {
-    const same = ref.kind === "remoteBranch" && ref.id !== emphasized ? byRemoteName.get(remoteBranchName(ref)) : undefined
+    const same = ref.kind === "remoteBranch" && ref.id !== emphasized ? byName.get(remoteBranchName(ref)) : undefined
     if (same) {
       same.sameOnOtherRemotes.push(ref)
       continue
@@ -60,7 +61,8 @@ export const badgesFor = (
       inSync: ref.upstreamRefId !== undefined && refIds.includes(ref.upstreamRefId),
       sameOnOtherRemotes: [],
     }
-    if (ref.kind === "remoteBranch" && !badge.isEmphasized) byRemoteName.set(remoteBranchName(ref), badge)
+    if (ref.kind === "localBranch" && !byName.has(ref.shortName)) byName.set(ref.shortName, badge)
+    if (ref.kind === "remoteBranch" && !badge.isEmphasized) byName.set(remoteBranchName(ref), badge)
     badges.push(badge)
   }
   return badges

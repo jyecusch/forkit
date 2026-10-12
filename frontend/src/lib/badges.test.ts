@@ -17,7 +17,7 @@ const ids = refs.map((r) => r.id as RefId)
 describe("badgesFor", () => {
   it("puts the checked-out branch first and folds in its upstream at the same commit", () => {
     const badges = badgesFor(ids, byId, { head: "main" as RefId, emphasized: undefined })
-    expect(badges.map((b) => b.ref.id)).toEqual(["main", "topic", "fork/main", "v1"])
+    expect(badges.map((b) => b.ref.id)).toEqual(["main", "topic", "v1"])
     expect(badges[0]).toMatchObject({ isHead: true, inSync: true })
   })
 
@@ -28,11 +28,19 @@ describe("badgesFor", () => {
 
   it("puts the emphasized ref straight after the checked-out branch", () => {
     const badges = badgesFor(ids, byId, { head: "main" as RefId, emphasized: "v1" as RefId })
-    expect(badges.map((b) => b.ref.id)).toEqual(["main", "v1", "topic", "fork/main"])
+    expect(badges.map((b) => b.ref.id)).toEqual(["main", "v1", "topic"])
   })
 
   it("folds same-named branches on other remotes into one badge", () => {
     const badges = badgesFor(["fork/main", "origin/main"] as Array<RefId>, byId, { head: undefined, emphasized: undefined })
     expect(badges.map((b) => [b.ref.id, b.sameOnOtherRemotes.map((r) => r.id)])).toEqual([["fork/main", ["origin/main"]]])
+  })
+
+  it("folds a remote branch into a local branch of the same name", () => {
+    const badges = badgesFor(["topic", "fork/main", "main"] as Array<RefId>, byId, { head: undefined, emphasized: undefined })
+    expect(badges.map((b) => [b.ref.id, b.sameOnOtherRemotes.map((r) => r.id)])).toEqual([
+      ["main", ["fork/main"]],
+      ["topic", []],
+    ])
   })
 })

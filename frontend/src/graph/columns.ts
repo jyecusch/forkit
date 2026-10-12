@@ -5,8 +5,8 @@ export const listInset = 12
 const gap = 12
 const commitWidth = 64
 const dateWidth = 96
-const authorWidth = 120
-const minDescription = 320
+const authorWidth = 104
+const minDescription = 280
 const maxGraph = 160
 /** The graph's share of a wide pane, when that is more than maxGraph. */
 const graphShare = 0.25
@@ -49,7 +49,7 @@ export const layoutColumns = (paneWidth: number, lanes: number): Columns => {
   const fixedWidth = (c: Choice) => listInset * 2 + optional(c).reduce((sum, w) => sum + w + gap, gap)
   const choice = choices.find((c) => paneWidth - fixedWidth(c) >= minDescription + minGraph) ?? choices[choices.length - 1]!
   const budget = Math.min(Math.max(maxGraph, Math.round(paneWidth * graphShare)), paneWidth - fixedWidth(choice) - minDescription)
-  const graph = Math.max(gutter * 2, Math.min(graphNeeds, budget))
+  const graph = Math.max(graphWidthFor(1), Math.min(graphNeeds, budget))
   const template = [`${graph}px`, "minmax(0,1fr)", ...optional(choice).map((w) => `${w}px`)].join(" ")
   return { graph, graphNeeds, ...choice, template }
 }

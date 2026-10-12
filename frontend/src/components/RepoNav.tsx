@@ -145,7 +145,7 @@ export const RepoNav = (props: RepoNavProps) => {
     switch (row.type) {
       case "section":
         return (
-          <div className="flex h-full items-end pb-1">
+          <div className="group/row relative flex h-full items-end pb-1">
             <button
               {...treeItem(row, 1)}
               onClick={() => setOpen(row.id, row.collapsed)}
@@ -154,7 +154,7 @@ export const RepoNav = (props: RepoNavProps) => {
             >
               {row.title}
               <span className="ml-auto flex items-center gap-2">
-                {row.collapsed && <span className="text-[11px] tabular-nums">{row.count}</span>}
+                {row.collapsed && <span className="text-[11px] font-normal tabular-nums">{row.count}</span>}
                 <TrailingChevron open={!row.collapsed} />
               </span>
             </button>
@@ -164,7 +164,7 @@ export const RepoNav = (props: RepoNavProps) => {
                 title="New worktree"
                 tabIndex={-1}
                 onClick={() => props.onNewWorktree(undefined)}
-                className="mr-[3px] flex size-6 flex-none items-center justify-center rounded-md text-subtle-foreground hover:bg-foreground/[0.05] hover:text-foreground"
+                className="absolute right-6 bottom-1 flex size-6 items-center justify-center rounded-md text-subtle-foreground opacity-0 group-hover/row:opacity-100 hover:bg-foreground/[0.05] hover:text-foreground"
               >
                 <Plus className="size-3.5" />
               </button>
@@ -230,7 +230,7 @@ export const RepoNav = (props: RepoNavProps) => {
             <span className="min-w-0 flex-1 truncate">
               <Highlight text={row.name} query={filter} />
             </span>
-            {current && <Check aria-label="Checked out here" className="size-3.5 flex-none text-primary" />}
+            {current && <Check aria-label="Checked out here" className="size-3.5 flex-none text-secondary-foreground" />}
             {elsewhere && <Meta title={`Checked out in ${worktreeNames.get(elsewhere.id)}`}>{worktreeNames.get(elsewhere.id)}</Meta>}
             <AheadBehind ahead={row.ref.ahead} behind={row.ref.behind} />
           </NavButton>

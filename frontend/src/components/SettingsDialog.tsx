@@ -24,10 +24,10 @@ export const SettingsDialog = ({ open, onOpenChange, preferences: p }: SettingsD
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent aria-describedby={undefined} className="max-h-[76vh] grid-rows-[auto_minmax(0,1fr)] gap-0 p-0 sm:max-w-[520px]">
-        <DialogHeader className="px-5 pt-5 pb-3">
+        <DialogHeader className="px-5 pt-5 pb-1">
           <DialogTitle>Preferences</DialogTitle>
         </DialogHeader>
-        <div className="flex flex-col gap-4 overflow-y-auto px-5 pb-5 [mask-image:linear-gradient(to_bottom,black_calc(100%-16px),transparent)]">
+        <div className="flex flex-col gap-4 overflow-y-auto px-5 pt-3 pb-5 [mask-image:linear-gradient(to_bottom,transparent,black_12px,black_calc(100%-16px),transparent)]">
           <Group title="Appearance">
             <Row label="Theme">
               <Choice

@@ -1,7 +1,8 @@
 import { useLiveQuery } from "@tanstack/react-db"
 import { Option } from "effect"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { useMediaQuery, useRun } from "@/app/hooks"
+import { toggleDetails, useDetailsShown } from "@/app/detailsShown"
+import { useRun } from "@/app/hooks"
 import {
   graphViewsCollection,
   operationsCollection,
@@ -17,8 +18,7 @@ import type { LoadedRow } from "@/services/GraphData"
 import { DetailsPanel } from "./DetailsPanel"
 import { GraphPane, type ScrollRequest } from "./GraphPane"
 import { RepoNav } from "./RepoNav"
-import { Chrome } from "./Chrome"
-import { RepoTabs } from "./RepoTabs"
+import { ChromeLayer } from "./Chrome"
 import { SidebarFooter } from "./SidebarFooter"
 import { NewWorktreeDialog } from "./NewWorktreeDialog"
 import { Prompt, type PromptSpec } from "./Prompt"
@@ -63,10 +63,13 @@ export const RepoView = ({ repo, openRepo, preferences, active }: RepoViewProps)
   const [prompt, setPrompt] = useState<PromptSpec>()
   const [newWorktreeBase, setNewWorktreeBase] = useState<Ref>()
   const [scrollRequest, setScrollRequest] = useState<ScrollRequest>()
-  // The details panel follows the window's width until it is toggled.
-  const wide = useMediaQuery("(min-width: 1000px)", true)
-  const [detailsToggled, setDetailsToggled] = useState<boolean>()
-  const showDetails = detailsToggled ?? wide
+  // Dialogs belong to the repository on screen.
+  useEffect(() => {
+    if (active) return
+    setPrompt(undefined)
+    setNewWorktreeBase(undefined)
+  }, [active])
+  const showDetails = useDetailsShown()
 
   const scrollTo = useCallback((row: Option.Option<Option.Option<number>>) => {
     const index = Option.flatten(row)
@@ -142,7 +145,7 @@ export const RepoView = ({ repo, openRepo, preferences, active }: RepoViewProps)
     </>
   )
   return (
-    <Chrome sidebar={sidebar} tabs={<RepoTabs />}>
+    <ChromeLayer active={active} sidebar={sidebar}>
       <ViewHeader
         worktree={activeWorktree}
         refsById={refsById}
@@ -152,7 +155,7 @@ export const RepoView = ({ repo, openRepo, preferences, active }: RepoViewProps)
         view={view}
         checkingOut={running.some((op) => op.kind === "checkout")}
         detailsShown={showDetails}
-        onToggleDetails={() => setDetailsToggled(!showDetails)}
+        onToggleDetails={toggleDetails}
       />
       <div className="flex min-h-0 flex-1">
         <main className="flex min-h-0 min-w-0 flex-1 flex-col">
@@ -168,6 +171,7 @@ export const RepoView = ({ repo, openRepo, preferences, active }: RepoViewProps)
               activeHead={activeWorktree?.head.oid}
               onSelect={setSelected}
               scrollRequest={scrollRequest}
+              active={active}
               preferences={preferences}
             />
           ) : (
@@ -188,7 +192,7 @@ export const RepoView = ({ repo, openRepo, preferences, active }: RepoViewProps)
       </div>
       <Prompt spec={prompt} onClose={() => setPrompt(undefined)} />
       <NewWorktreeDialog repo={repo} base={newWorktreeBase} onClose={() => setNewWorktreeBase(undefined)} />
-    </Chrome>
+    </ChromeLayer>
   )
 }
 

@@ -29,7 +29,7 @@ export const NewWorktreeDialog = ({ repo, base, onClose }: NewWorktreeDialogProp
 
   const canUseBase = base?.kind === "localBranch" && !base.checkedOutInWorktreeId
   const effectiveBranch = branch.trim() || (canUseBase ? base.shortName : "")
-  const folder = `${repo.name}-${(effectiveBranch || "branch").replace(/[^A-Za-z0-9._-]+/g, "-")}`
+  const folder = `${repo.name}-${(effectiveBranch || "feature/my-change").replace(/[^A-Za-z0-9._-]+/g, "-")}`
   const path = parent ? `${parent}/${folder}` : ""
 
   const create = async () => {

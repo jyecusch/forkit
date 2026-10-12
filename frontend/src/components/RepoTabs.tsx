@@ -139,7 +139,7 @@ export const RepoTabs = () => {
         title="Open repository"
         onClick={() => void run(Commands.use((commands) => commands.openRepository()))}
         style={noDrag}
-        className="mb-1 ml-1 flex size-6 flex-none items-center justify-center rounded-md text-subtle-foreground hover:bg-foreground/[0.05] hover:text-foreground"
+        className="mb-1 ml-3 flex size-6 flex-none items-center justify-center rounded-md text-subtle-foreground hover:bg-foreground/[0.05] hover:text-foreground"
       >
         <Plus className="size-4" />
       </button>

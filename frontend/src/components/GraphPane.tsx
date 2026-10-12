@@ -1,4 +1,5 @@
 import { useVirtualizer } from "@tanstack/react-virtual"
+import { Effect } from "effect"
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type KeyboardEvent } from "react"
 import { useForkedEffect, useResolvedTheme } from "@/app/hooks"
 import { useService } from "@/app/services"
@@ -40,6 +41,8 @@ interface GraphPaneProps {
   readonly activeHead: string | undefined
   readonly onSelect: (row: LoadedRow) => void
   readonly scrollRequest: ScrollRequest | undefined
+  /** Whether this list is on screen; hidden lists neither load nor draw. */
+  readonly active: boolean
   readonly preferences: Preferences
 }
 
@@ -50,7 +53,7 @@ interface GraphPaneProps {
  * when the rendered range changes.
  */
 export const GraphPane = (props: GraphPaneProps) => {
-  const { repo, view, emphasized, preferences, scrollRequest } = props
+  const { repo, view, emphasized, preferences, scrollRequest, active } = props
   const graphData = useService(GraphData)
   const sectionRef = useRef<HTMLElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -81,13 +84,26 @@ export const GraphPane = (props: GraphPaneProps) => {
   const first = items[0]?.index ?? 0
   const last = items[items.length - 1]?.index ?? 0
 
-  useForkedEffect(() => graphData.ensure({ repo, view, emphasized, first, last }), [graphData, repo, view, emphasized, first, last])
+  useForkedEffect(
+    () => (active ? graphData.ensure({ repo, view, emphasized, first, last }) : Effect.void),
+    [active, graphData, repo, view, emphasized, first, last],
+  )
 
+  // Jumps (to a ref, to either end, back to this tab) re-size the graph for
+  // where they land; scrolling only ever widens it.
+  const [jumps, setJumps] = useState(0)
+  const jump = () => setJumps((n) => n + 1)
   useEffect(() => {
-    if (scrollRequest && scrollRequest.row >= 0) {
-      virtualizer.scrollToIndex(scrollRequest.row, { align: "center" })
-      setPanToRow(scrollRequest.row)
-    }
+    if (active) setJumps((n) => n + 1)
+  }, [active])
+
+  // A row jumped to is centred, selected and brought into view sideways.
+  useEffect(() => {
+    if (!scrollRequest || scrollRequest.row < 0) return
+    virtualizer.scrollToOffset(Math.max(scrollRequest.row * rowHeight - (virtualizer.scrollRect?.height ?? 0) / 2 + rowHeight / 2, 0))
+    setPendingSelect(scrollRequest.row)
+    setPanToRow(scrollRequest.row)
+    setJumps((n) => n + 1)
   }, [scrollRequest, virtualizer])
 
   const theme = useResolvedTheme()
@@ -95,13 +111,22 @@ export const GraphPane = (props: GraphPaneProps) => {
     setPalette(readPalette(document.documentElement))
   }, [theme])
 
-  // The graph is sized for the lanes seen so far, plus one spare. It widens
-  // only once scrolling stops, and never narrows, so text holds still.
+  // The graph is sized for the lanes on screen, plus one spare. While
+  // scrolling it only widens, and only once the reader has paused with rows
+  // clipped, so text does not move under a moving list.
   const scrolling = useScrolling(scrollRef)
-  const visibleWidest = widestLane(first, last, (index) => graphData.peek(repo, index))
-  const lanes = useRatchet(visibleWidest < 0 ? 0 : Math.max(visibleWidest + 2, 2), scrolling)
+  const viewportFirst = Math.floor((virtualizer.scrollOffset ?? 0) / rowHeight)
+  const viewportWidest = widestLane(viewportFirst - 3, viewportFirst + Math.ceil(viewportHeight / rowHeight) + 3, (index) =>
+    graphData.peek(repo, index),
+  )
+  const lanes = useRatchet(viewportWidest < 0 ? 0 : Math.max(viewportWidest + 2, 2), scrolling, jumps)
   const columns = layoutColumns(paneWidth, lanes)
-  const maxOffset = Math.max(laneX(visibleWidest) + gutter - columns.graph, 0)
+  const maxOffset = Math.max(laneX(viewportWidest) + gutter - columns.graph, 0)
+
+  // When the column grows enough for the rows on screen, stop panning.
+  useEffect(() => {
+    if (maxOffset === 0) setOffsetX(0)
+  }, [maxOffset])
   const clampedOffsetX = Math.min(offsetX, maxOffset)
 
   // Bring a row the user jumped to into view sideways once it has loaded.
@@ -155,7 +180,7 @@ export const GraphPane = (props: GraphPaneProps) => {
   const canvasTop = first * rowHeight
   useLayoutEffect(() => {
     const context = canvasRef.current?.getContext("2d")
-    if (!context || !palette) return
+    if (!context || !palette || !active) return
     context.clearRect(0, 0, columns.graph, canvasHeight)
     drawGraph(
       context,
@@ -170,10 +195,17 @@ export const GraphPane = (props: GraphPaneProps) => {
         anyEmphasis: emphasized !== undefined,
       }),
       palette,
-      preferences.graph.dimmedOpacity,
-      columns.graph,
+      {
+        dimmedStrength: preferences.graph.dimmedOpacity,
+        width: columns.graph,
+        height: canvasHeight,
+        fadeLeft: clampedOffsetX > 0,
+        fadeRight: clampedOffsetX < maxOffset,
+      },
     )
   }, [
+    active,
+    maxOffset,
     graphData,
     repo,
     first,
@@ -232,12 +264,9 @@ export const GraphPane = (props: GraphPaneProps) => {
     const next = Math.min(target, view.totalRows - 1)
     virtualizer.scrollToIndex(next)
     setPendingSelect(next)
+    if (event.key === "Home" || event.key === "End") jump()
   }
 
-  const clippedLeft = clampedOffsetX > 0
-  const clippedRight = clampedOffsetX < maxOffset
-  const fade = 16
-  const canvasMask = `linear-gradient(to right, ${clippedLeft ? "transparent" : "black"}, black ${fade}px, black calc(100% - ${fade}px), ${clippedRight ? "transparent" : "black"})`
   return (
     <section ref={sectionRef} className="flex min-h-0 min-w-0 flex-1 flex-col" aria-label="History">
       <div
@@ -285,7 +314,7 @@ export const GraphPane = (props: GraphPaneProps) => {
             ref={canvasRef}
             aria-hidden
             className="pointer-events-none absolute"
-            style={{ top: canvasTop, left: listInset, width: columns.graph, height: canvasHeight, maskImage: canvasMask }}
+            style={{ top: canvasTop, left: listInset, width: columns.graph, height: canvasHeight }}
           />
         </div>
       </div>
@@ -297,18 +326,22 @@ const copySha = (oid: string) =>
   void navigator.clipboard.writeText(oid).then(() => notify({ tone: "info", message: `Copied ${shortOid(oid)}`, duration: 1500 }))
 
 /**
- * Follows a value that only ever grows: the first value applies at once,
- * later increases wait until the user has stopped scrolling.
+ * Follows a value that only grows, and only once scrolling has stopped. A
+ * new reset starts it again from the next value.
  */
-const useRatchet = (value: number, scrolling: boolean) => {
-  const [settled, setSettled] = useState(value)
+const useRatchet = (value: number, scrolling: boolean, reset: number) => {
+  const [settled, setSettled] = useState({ value, reset })
+  const current = settled.reset === reset ? settled.value : 0
   useEffect(() => {
-    if (value > settled && (settled === 0 || !scrolling)) setSettled(value)
-  }, [value, settled, scrolling])
-  return settled === 0 ? value : settled
+    if (value > current && (current === 0 || !scrolling)) setSettled({ value, reset })
+  }, [value, current, scrolling, reset])
+  return current === 0 ? value : current
 }
 
-/** Whether an element has scrolled within the last quarter second. */
+/** How long scrolling must pause before the reader is taken to be reading. */
+const idleAfter = 600
+
+/** Whether an element has scrolled recently. */
 const useScrolling = (ref: React.RefObject<HTMLElement | null>) => {
   const [scrolling, setScrolling] = useState(false)
   useEffect(() => {
@@ -318,7 +351,7 @@ const useScrolling = (ref: React.RefObject<HTMLElement | null>) => {
     const onScroll = () => {
       setScrolling(true)
       clearTimeout(timer)
-      timer = setTimeout(() => setScrolling(false), 250)
+      timer = setTimeout(() => setScrolling(false), idleAfter)
     }
     element.addEventListener("scroll", onScroll, { passive: true })
     return () => {
@@ -394,7 +427,7 @@ const CommitRow = memo(function CommitRow({
   const { row, commit } = loaded
   const dim = anyEmphasis && !row.onEmphasized
   const badges = badgesFor(row.refIds, refsById, { head: headRef, emphasized })
-  const meta = cn("truncate text-xs", dim ? "text-subtle-foreground" : "text-secondary-foreground")
+  const meta = cn("truncate text-xs", dim && !selected ? "text-subtle-foreground" : "text-secondary-foreground")
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>
@@ -448,7 +481,7 @@ const CommitRow = memo(function CommitRow({
             </span>
           )}
           {showCommit && (
-            <span role="gridcell" className={cn("font-mono text-xs", dim ? "text-subtle-foreground" : "text-secondary-foreground")}>
+            <span role="gridcell" className={cn("font-mono text-xs", dim && !selected ? "text-subtle-foreground" : "text-secondary-foreground")}>
               {shortOid(row.oid)}
             </span>
           )}

@@ -9,13 +9,13 @@ describe("layoutColumns", () => {
 
   it("caps a wide graph so the description keeps its room", () => {
     const columns = layoutColumns(500, 70)
-    expect(columns.graph).toBe(144)
+    expect(columns.graph).toBe(76)
     expect(columns.graph).toBeLessThan(columns.graphNeeds)
   })
 
   it("keeps author while the graph has a few lanes, and drops it before going below", () => {
-    expect(layoutColumns(800, 20)).toMatchObject({ showAuthor: true, graph: 128 })
-    expect(layoutColumns(720, 20)).toMatchObject({ showAuthor: false })
+    expect(layoutColumns(800, 20)).toMatchObject({ showAuthor: true, graph: 184 })
+    expect(layoutColumns(660, 20)).toMatchObject({ showAuthor: false })
   })
 
   it("lets a wide graph take a quarter of a wide pane", () => {
@@ -23,8 +23,8 @@ describe("layoutColumns", () => {
   })
 
   it("drops author, then commit, then date as the pane narrows", () => {
-    expect(layoutColumns(700, 3)).toMatchObject({ showAuthor: false, showDate: true, showCommit: true })
-    expect(layoutColumns(560, 3)).toMatchObject({ showAuthor: false, showDate: true, showCommit: false })
-    expect(layoutColumns(420, 3)).toMatchObject({ showAuthor: false, showDate: false, showCommit: false })
+    expect(layoutColumns(650, 3)).toMatchObject({ showAuthor: false, showDate: true, showCommit: true })
+    expect(layoutColumns(540, 3)).toMatchObject({ showAuthor: false, showDate: true, showCommit: false })
+    expect(layoutColumns(470, 3)).toMatchObject({ showAuthor: false, showDate: false, showCommit: false })
   })
 })

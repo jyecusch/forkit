@@ -1,6 +1,6 @@
 import { useLiveQuery } from "@tanstack/react-db"
 import { Outlet, useNavigate } from "@tanstack/react-router"
-import { useEffect, useLayoutEffect, useMemo } from "react"
+import { useEffect, useLayoutEffect, useMemo, useState } from "react"
 import { usePreferences, useResolvedTheme, useSession } from "@/app/hooks"
 import { setPreferencesOpen, usePreferencesOpen } from "@/app/preferencesDialog"
 import { useService } from "@/app/services"
@@ -9,7 +9,6 @@ import { GraphData } from "@/services/GraphData"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { reposCollection } from "@/data/collections"
 import type { Repo, RepoId } from "@/model/model.gen"
-import { cn } from "@/lib/utils"
 import { Chrome } from "./Chrome"
 import { RepoTabs } from "./RepoTabs"
 import { RepoView } from "./RepoView"
@@ -58,15 +57,18 @@ export const AppShell = () => {
 }
 
 /**
- * Shows one repository, once its entities have arrived. Every open
- * repository stays mounted, hidden behind the active one, so switching tabs
- * keeps each one's scroll position, selection and sidebar as they were.
+ * Shows one repository, once its entities have arrived. Every repository
+ * shown since it was opened stays mounted, hidden behind the active one, so
+ * switching tabs keeps each one's scroll position, selection and sidebar.
  */
 export const RepoRoute = ({ repoId }: { repoId: RepoId }) => {
   const session = useSession()
   const preferences = usePreferences()
   const { data: repos } = useLiveQuery({ query: (q) => q.from({ repo: reposCollection }) })
   const byId = new Map<string, Repo>(repos.map((repo) => [repo.id, repo]))
+  // A repository is mounted when first shown, then kept.
+  const [shown, setShown] = useState<ReadonlySet<RepoId>>(new Set([repoId]))
+  if (!shown.has(repoId)) setShown(new Set([...shown, repoId]))
   if (!byId.has(repoId) || !preferences) {
     return (
       <Chrome sidebar={<SidebarSkeleton />} tabs={<RepoTabs />}>
@@ -75,19 +77,12 @@ export const RepoRoute = ({ repoId }: { repoId: RepoId }) => {
     )
   }
   return (
-    <div className="relative flex min-h-0 flex-1">
+    <Chrome tabs={<RepoTabs />}>
       {session?.openRepos.map((open) => {
         const repo = byId.get(open.id)
-        const active = open.id === repoId
-        return (
-          repo && (
-            <div key={repo.id} className={cn("absolute inset-0 flex", !active && "invisible")} aria-hidden={!active}>
-              <RepoView repo={repo} openRepo={open} preferences={preferences} active={active} />
-            </div>
-          )
-        )
+        return repo && shown.has(repo.id) && <RepoView key={repo.id} repo={repo} openRepo={open} preferences={preferences} active={open.id === repoId} />
       })}
-    </div>
+    </Chrome>
   )
 }
 

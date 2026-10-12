@@ -1,4 +1,4 @@
-import { Check, Cloud, Tag } from "lucide-react"
+import { Check, Tag } from "lucide-react"
 import { remoteBranchName, type Badge } from "@/lib/badges"
 import { cn } from "@/lib/utils"
 
@@ -18,14 +18,20 @@ interface RefBadgeProps {
  * A ref on a commit row. Badges are neutral so that a branch never looks
  * like part of another's history. The accent means one thing everywhere:
  * the emphasized ref. The checked-out branch carries a check, local
- * branches a dot in their commit's lane colour, remote branches an outline
- * and tags a tag.
+ * branches a dot in their commit's lane colour and how far they are from
+ * their upstream, remote branches an outline and tags a tag.
  */
 export const RefBadge = ({ badge, thread, dim, selected, primary }: RefBadgeProps) => {
   const { ref, isHead, isEmphasized, inSync, sameOnOtherRemotes } = badge
-  const merged = sameOnOtherRemotes.length > 0
+  // Same-named branches on several remotes read as one, with a count.
+  const merged = ref.kind === "remoteBranch" && sameOnOtherRemotes.length > 0
   const name = merged ? remoteBranchName(ref) : ref.shortName
-  const title = [[ref, ...sameOnOtherRemotes].map((r) => r.shortName).join(", "), isHead && "checked out here", isEmphasized && "emphasized", inSync && "in sync with its upstream"]
+  const title = [
+    [ref, ...sameOnOtherRemotes].map((r) => r.shortName).join(", "),
+    isHead && "checked out here",
+    isEmphasized && "emphasized",
+    inSync && "in sync with its upstream",
+  ]
     .filter(Boolean)
     .join(" · ")
   const tone = isEmphasized
@@ -49,14 +55,23 @@ export const RefBadge = ({ badge, thread, dim, selected, primary }: RefBadgeProp
     >
       {isHead ? (
         <Check aria-label="checked out" className="size-3 flex-none" />
-      ) : ref.kind === "localBranch" ? (
+      ) : ref.kind === "localBranch" && !isEmphasized ? (
         <span aria-hidden className="size-1.5 flex-none rounded-full" style={{ background: laneColor(thread) }} />
       ) : ref.kind === "tag" ? (
         <Tag aria-hidden className="size-3 flex-none" />
       ) : null}
       <span className="truncate">{name}</span>
       {merged && <span className="flex-none text-[10px] opacity-70 tabular-nums">×{sameOnOtherRemotes.length + 1}</span>}
-      {inSync && primary && <Cloud aria-label="in sync with upstream" className="size-3 flex-none opacity-70" />}
+      {primary && ref.kind === "localBranch" && <AheadBehind ahead={ref.ahead} behind={ref.behind} />}
     </span>
   )
 }
+
+const AheadBehind = ({ ahead, behind }: { ahead: number | undefined; behind: number | undefined }) =>
+  ahead || behind ? (
+    <span className="flex-none opacity-70 tabular-nums">
+      {ahead ? `↑${ahead}` : ""}
+      {ahead && behind ? " " : ""}
+      {behind ? `↓${behind}` : ""}
+    </span>
+  ) : null

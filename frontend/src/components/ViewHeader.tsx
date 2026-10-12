@@ -1,4 +1,4 @@
-import { Folder, GitBranch, LoaderCircle, PanelRight, Tag, X } from "lucide-react"
+import { Check, Folder, LoaderCircle, PanelRight, Tag, X } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { baseName } from "@/lib/format"
 import { changeCount, headLabel } from "@/lib/worktree"
@@ -38,7 +38,7 @@ export const ViewHeader = ({ worktree, refsById, headEmphasized, emphasizedOther
             {checkingOut ? (
               <LoaderCircle aria-label="Checking out" className="size-3 flex-none animate-spin" />
             ) : (
-              <GitBranch aria-hidden className="size-3 flex-none" />
+              <Check aria-label="Checked out" className="size-3 flex-none" />
             )}
             <span className="truncate">{headLabel(worktree, refsById)}</span>
             {head && Boolean(head.ahead || head.behind) && (
@@ -101,8 +101,8 @@ const chip = "flex h-[22px] min-w-0 items-center gap-1 rounded-md px-1.5 text-xs
 /** The accent marks the emphasized ref, as its badges do in the list. */
 const emphasizedChip = "bg-primary/12 text-primary shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--primary)_40%,transparent)]"
 
-const RefKindIcon = ({ kind }: { kind: Ref["kind"] }) =>
-  kind === "tag" ? <Tag aria-hidden className="size-3 flex-none" /> : <GitBranch aria-hidden className="size-3 flex-none" />
+/** Drawn like the ref's badge in the list: tags have a tag, branches nothing. */
+const RefKindIcon = ({ kind }: { kind: Ref["kind"] }) => (kind === "tag" ? <Tag aria-hidden className="size-3 flex-none" /> : null)
 
 const operationLabels: Record<WorktreeOperation, string> = {
   none: "",
