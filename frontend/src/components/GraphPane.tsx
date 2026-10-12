@@ -4,7 +4,7 @@ import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState, useSyn
 import { useForkedEffect, useResolvedTheme } from "@/app/hooks"
 import { useService } from "@/app/services"
 import { layoutColumns, listInset } from "@/graph/columns"
-import { drawGraph, readPalette, type GraphPalette } from "@/graph/draw"
+import { drawGraph, readPalette, uncommittedLine, type GraphPalette } from "@/graph/draw"
 import { geometry, gutter, laneWidth, laneX, rowHeight, widestLane } from "@/graph/geometry"
 import { notify } from "@/app/notifications"
 import { useNow } from "@/app/useNow"
@@ -441,10 +441,6 @@ const ChangesRow = ({ columns, count, selected, onSelect }: { columns: string; c
 )
 
 /**
- * The uncommitted changes' node, drawn hollow as not yet a commit, and a
- * dashed line down to the commit they build on.
- */
-/**
  * The uncommitted changes' node, hollow as not yet a commit, at the top of
  * the first lane, which the layout keeps for them down to the commit they
  * build on; the canvas draws that dashed line, and this joins it.
@@ -455,10 +451,22 @@ const ChangesNode = ({ x, width, joinsFirstRow }: { x: number; width: number; jo
   const radius = 4
   // The first row's centre, or just clear of its ring when it is the commit built on.
   const end = rowHeight + rowHeight / 2 - (joinsFirstRow ? 7 : 0)
+  // Started a whole number of dash patterns above the end, so its dashes run
+  // on into the canvas's below.
+  const period = uncommittedLine.dash[0] + uncommittedLine.dash[1]
+  const start = end - Math.floor((end - nodeY - radius) / period) * period
   return (
-    <svg aria-hidden className="pointer-events-none absolute top-0" style={{ left: listInset, width, height: end }} fill="none" strokeWidth={2}>
-      <line x1={x} x2={x} y1={nodeY + radius} y2={end} stroke="var(--lane-0)" strokeDasharray="3 3" />
-      <circle cx={x} cy={nodeY} r={radius - 1} stroke="var(--lane-0)" fill="var(--background)" />
+    <svg
+      aria-hidden
+      className="pointer-events-none absolute top-0"
+      style={{ left: listInset, width, height: end }}
+      fill="none"
+      stroke="var(--lane-0)"
+      strokeOpacity={uncommittedLine.strength}
+      strokeWidth={uncommittedLine.width}
+    >
+      <line x1={x} x2={x} y1={start} y2={end} strokeDasharray={uncommittedLine.dash.join(" ")} />
+      <circle cx={x} cy={nodeY} r={radius - 0.5} fill="var(--background)" />
     </svg>
   )
 }
