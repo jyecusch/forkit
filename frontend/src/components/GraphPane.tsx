@@ -13,7 +13,7 @@ import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } 
 import { badgesFor } from "@/lib/badges"
 import { formatDate, formatFullDate, shortOid } from "@/lib/format"
 import { cn } from "@/lib/utils"
-import type { GraphView, Preferences, Ref, RefId, RepoId } from "@/model/model.gen"
+import type { GraphView, Preferences, Ref, RefId, RepoId, Worktree } from "@/model/model.gen"
 import { GraphData, type LoadedRow } from "@/services/GraphData"
 import { focusIsLost } from "./Chrome"
 import { RefBadge } from "./RefBadge"
@@ -35,6 +35,8 @@ interface GraphPaneProps {
   readonly view: GraphView
   readonly emphasized: RefId | undefined
   readonly refsById: ReadonlyMap<string, Ref>
+  /** Every worktree, so a branch checked out in one can show it. */
+  readonly worktreesById: ReadonlyMap<string, Worktree>
   /** Commits checked out in some worktree, drawn as rings. */
   readonly headOids: ReadonlySet<string>
   /** The active worktree's branch, labelled HEAD. */
@@ -376,6 +378,7 @@ export const GraphPane = (props: GraphPaneProps) => {
               selected={!props.changesSelected && selectedOid !== undefined && graphData.peek(repo, item.index)?.row.oid === selectedOid}
               anyEmphasis={emphasized !== undefined}
               refsById={props.refsById}
+              worktreesById={props.worktreesById}
               headRef={props.headRef}
               emphasized={emphasized}
               dateFormat={preferences.appearance.dateFormat}
@@ -541,6 +544,7 @@ interface CommitRowProps {
   readonly selected: boolean
   readonly anyEmphasis: boolean
   readonly refsById: ReadonlyMap<string, Ref>
+  readonly worktreesById: ReadonlyMap<string, Worktree>
   readonly headRef: RefId | undefined
   readonly emphasized: RefId | undefined
   readonly dateFormat: Preferences["appearance"]["dateFormat"]
@@ -560,6 +564,7 @@ const CommitRow = memo(function CommitRow({
   selected,
   anyEmphasis,
   refsById,
+  worktreesById,
   headRef,
   emphasized,
   dateFormat,
@@ -603,7 +608,15 @@ const CommitRow = memo(function CommitRow({
             {badges.length > 0 && (
               <span className="flex max-w-[60%] min-w-0 flex-none items-center gap-1 overflow-hidden">
                 {badges.slice(0, maxBadges).map((badge, i) => (
-                  <RefBadge key={badge.ref.id} badge={badge} thread={row.threadId} dim={dim} selected={selected} primary={i === 0} />
+                  <RefBadge
+                    key={badge.ref.id}
+                    badge={badge}
+                    worktree={badge.ref.checkedOutInWorktreeId ? worktreesById.get(badge.ref.checkedOutInWorktreeId) : undefined}
+                    thread={row.threadId}
+                    dim={dim}
+                    selected={selected}
+                    primary={i === 0}
+                  />
                 ))}
                 {badges.length > maxBadges && (
                   <span

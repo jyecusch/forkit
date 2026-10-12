@@ -1,7 +1,10 @@
-import { Check, Tag } from "lucide-react"
+import { Tag } from "lucide-react"
 import { remoteBranchName, type Badge } from "@/lib/badges"
+import { baseName } from "@/lib/format"
 import { cn } from "@/lib/utils"
+import type { Worktree } from "@/model/model.gen"
 import { AheadBehind } from "./AheadBehind"
+import { WorktreeIcon } from "./WorktreeIcon"
 
 export const laneColor = (thread: number) => `var(--lane-${thread % 8})`
 
@@ -11,6 +14,8 @@ export const emphasizedTint =
 
 interface RefBadgeProps {
   readonly badge: Badge
+  /** The worktree the branch is checked out in, if any. */
+  readonly worktree: Worktree | undefined
   readonly thread: number
   readonly dim: boolean
   /** The row is selected, so accent fills go solid to keep their contrast. */
@@ -22,18 +27,19 @@ interface RefBadgeProps {
 /**
  * A ref on a commit row. The emphasized ref is filled with its line's
  * colour; other local branches carry a dot in it, so a label leads to its
- * line. The checked-out branch carries a check, local branches how far they
- * are from their upstream, remote branches an outline in the theme's remote
- * colour and tags a tag in its tag colour.
+ * line. A branch checked out in a worktree carries that worktree's icon
+ * instead, local branches how far they are from their upstream, remote
+ * branches an outline in the theme's remote colour and tags a tag in its tag
+ * colour.
  */
-export const RefBadge = ({ badge, thread, dim, selected, primary }: RefBadgeProps) => {
+export const RefBadge = ({ badge, worktree, thread, dim, selected, primary }: RefBadgeProps) => {
   const { ref, isHead, isEmphasized, inSync, sameOnOtherRemotes } = badge
   // Same-named branches on several remotes read as one, with a count.
   const merged = ref.kind === "remoteBranch" && sameOnOtherRemotes.length > 0
   const name = merged ? remoteBranchName(ref) : ref.shortName
   const title = [
     [ref, ...sameOnOtherRemotes].map((r) => r.shortName).join(", "),
-    isHead && "checked out here",
+    worktree && (isHead ? "checked out here" : `checked out in ${baseName(worktree.path)}`),
     isEmphasized && "emphasized",
     inSync && "in sync with its upstream",
   ]
@@ -59,8 +65,8 @@ export const RefBadge = ({ badge, thread, dim, selected, primary }: RefBadgeProp
       )}
       style={{ "--line": laneColor(thread) } as React.CSSProperties}
     >
-      {isHead ? (
-        <Check aria-label="checked out" className="size-3 flex-none" />
+      {worktree ? (
+        <WorktreeIcon worktree={worktree} className="size-3 flex-none" />
       ) : ref.kind === "localBranch" && !isEmphasized ? (
         <span aria-hidden className="size-1.5 flex-none rounded-full" style={{ background: laneColor(thread) }} />
       ) : ref.kind === "tag" ? (

@@ -1,5 +1,5 @@
 import { useVirtualizer } from "@tanstack/react-virtual"
-import { Archive, Check, ChevronRight, GitBranch, Plus, Search, Server, Tag, X } from "lucide-react"
+import { Archive, ChevronRight, GitBranch, Plus, Search, Server, Tag, X } from "lucide-react"
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react"
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu"
 import { buildNavRows, revealedNodes, type NavRow } from "@/lib/navTree"
@@ -52,6 +52,7 @@ interface RepoNavProps {
  */
 export const RepoNav = (props: RepoNavProps) => {
   const { active, refs, remotes, worktrees, activeWorktree, emphasized, reveal } = props
+  const activeTree = worktrees.find((wt) => wt.id === activeWorktree)
   const [filter, setFilter] = useState("")
   // Open and closed choices made while filtering are forgotten with the filter.
   const [choices, setChoices] = useState<ReadonlyMap<string, boolean>>(new Map())
@@ -235,8 +236,19 @@ export const RepoNav = (props: RepoNavProps) => {
             <span className="min-w-0 flex-1 truncate">
               <Highlight text={row.name} query={filter} />
             </span>
-            {current && <Check aria-label="Checked out here" className="size-3.5 flex-none text-secondary-foreground" />}
-            {elsewhere && <Meta title={`Checked out in ${worktreeNames.get(elsewhere.id)}`}>{worktreeNames.get(elsewhere.id)}</Meta>}
+            {current && activeTree && (
+              <span title="Checked out here" className="flex flex-none text-secondary-foreground">
+                <WorktreeIcon worktree={activeTree} className="size-3.5" />
+              </span>
+            )}
+            {elsewhere && (
+              <Meta title={`Checked out in ${worktreeNames.get(elsewhere.id)}`}>
+                <span className="flex items-center gap-1">
+                  <WorktreeIcon worktree={elsewhere} className="size-3 flex-none" />
+                  {worktreeNames.get(elsewhere.id)}
+                </span>
+              </Meta>
+            )}
             <AheadBehind ahead={row.ref.ahead} behind={row.ref.behind} className="text-[11px]" />
           </NavButton>
         )
