@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"io"
 	"log/slog"
+	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -118,4 +120,22 @@ func TestOpenPublishesRepositoryAndFollowsChanges(t *testing.T) {
 	if got := session.Get(); len(got.OpenRepos) != 0 || got.ActiveRepoID != "" {
 		t.Fatalf("session after close = %+v", got)
 	}
+}
+
+func waitUntil(t *testing.T, condition func() bool) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for !condition() {
+		if time.Now().After(deadline) {
+			t.Fatal("condition not met")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+}
+
+func runGit(dir string, args ...string) error {
+	cmd := exec.Command("git", args...)
+	cmd.Dir = dir
+	cmd.Env = append(os.Environ(), "GIT_AUTHOR_NAME=Ada", "GIT_AUTHOR_EMAIL=a@example.com", "GIT_COMMITTER_NAME=Ada", "GIT_COMMITTER_EMAIL=a@example.com")
+	return cmd.Run()
 }

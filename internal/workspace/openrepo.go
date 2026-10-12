@@ -41,6 +41,7 @@ type openRepo struct {
 	remotes       []model.Remote
 	graphOptions  graph.Options
 	graphTrace    trace.SpanContext
+	operations    map[string]model.Operation
 
 	graphRequests chan struct{}
 }
@@ -57,6 +58,7 @@ func newOpenRepo(w *Workspace, loc repo.Location) *openRepo {
 		openedAt:      nowMillis(),
 		graphOptions:  graphOptions(w.prefs.Get()),
 		graphRequests: make(chan struct{}, 1),
+		operations:    map[string]model.Operation{},
 	}
 	go r.graphLoop()
 	return r

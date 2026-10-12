@@ -159,7 +159,6 @@ const (
 	OperationKindCheckout       OperationKind = "checkout"
 	OperationKindCreateWorktree OperationKind = "createWorktree"
 	OperationKindRemoveWorktree OperationKind = "removeWorktree"
-	OperationKindStash          OperationKind = "stash"
 )
 
 type OperationState string
@@ -187,6 +186,20 @@ type Operation struct {
 	Progress   *OperationProgress `json:"progress,omitempty"`
 	Error      *RpcError          `json:"error,omitempty"`
 	TraceID    string             `json:"traceId"`
+}
+
+// What to do with uncommitted changes: refuse to check out, stash them and reapply them afterwards, or let git carry them over.
+type CheckoutMode string
+
+const (
+	CheckoutModeSafe  CheckoutMode = "safe"
+	CheckoutModeStash CheckoutMode = "stash"
+	CheckoutModeCarry CheckoutMode = "carry"
+)
+
+type CheckoutResult struct {
+	// Stashed changes conflicted when reapplied and were left in the stash.
+	ReapplyConflicted bool `json:"reapplyConflicted"`
 }
 
 type Theme string

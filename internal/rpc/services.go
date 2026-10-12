@@ -175,3 +175,36 @@ func (x *Session) updateOpenRepo(meta model.CallMeta, method string, id model.Re
 		return err
 	}, attribute.String("repo.id", string(id)))
 }
+
+// Worktrees checks out refs and manages worktrees.
+type Worktrees struct{ s *Server }
+
+// Checkout switches a worktree to a ref, handling uncommitted changes as
+// mode says.
+func (x *Worktrees) Checkout(meta model.CallMeta, worktreeID model.WorktreeID, refID model.RefID, mode model.CheckoutMode) (model.CheckoutResult, error) {
+	return call(x.s, meta, "Worktrees.Checkout", func(ctx context.Context) (model.CheckoutResult, error) {
+		return x.s.deps.Workspace.Checkout(ctx, worktreeID, refID, mode)
+	}, attribute.String("worktree.id", string(worktreeID)), attribute.String("checkout.mode", string(mode)))
+}
+
+// Create adds a worktree; see workspace.CreateWorktree.
+func (x *Worktrees) Create(meta model.CallMeta, repoID model.RepoID, base model.RefID, newBranch, path string) (model.Worktree, error) {
+	return call(x.s, meta, "Worktrees.Create", func(ctx context.Context) (model.Worktree, error) {
+		return x.s.deps.Workspace.CreateWorktree(ctx, repoID, base, newBranch, path)
+	}, attribute.String("repo.id", string(repoID)))
+}
+
+// Remove deletes a linked worktree.
+func (x *Worktrees) Remove(meta model.CallMeta, worktreeID model.WorktreeID, force bool) error {
+	return callNoResult(x.s, meta, "Worktrees.Remove", func(ctx context.Context) error {
+		return x.s.deps.Workspace.RemoveWorktree(ctx, worktreeID, force)
+	}, attribute.String("worktree.id", string(worktreeID)))
+}
+
+// ChooseParentDirectory asks the user where to put a new worktree and
+// returns "" if they cancel.
+func (x *Worktrees) ChooseParentDirectory(meta model.CallMeta) (string, error) {
+	return call(x.s, meta, "Worktrees.ChooseParentDirectory", func(context.Context) (string, error) {
+		return x.s.deps.ChooseDirectory("Choose where to create the worktree")
+	})
+}

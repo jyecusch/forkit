@@ -43,6 +43,7 @@ type Server struct {
 	Repos       *Repos
 	Preferences *Preferences
 	Session     *Session
+	Worktrees   *Worktrees
 }
 
 // NewServer creates the services. Call Start before the frontend can call
@@ -54,6 +55,7 @@ func NewServer() *Server {
 	s.Repos = &Repos{s}
 	s.Preferences = &Preferences{s}
 	s.Session = &Session{s}
+	s.Worktrees = &Worktrees{s}
 	return s
 }
 
@@ -62,7 +64,7 @@ func (s *Server) Start(deps *Deps) { s.deps = deps }
 
 // Services lists the structs to bind with Wails.
 func (s *Server) Services() []any {
-	return []any{s.Sync, s.Telemetry, s.Repos, s.Preferences, s.Session}
+	return []any{s.Sync, s.Telemetry, s.Repos, s.Preferences, s.Session, s.Worktrees}
 }
 
 // callError is a model.RpcError encoded as JSON, which is how Wails passes

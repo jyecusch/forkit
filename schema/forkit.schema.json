@@ -116,7 +116,7 @@
       }
     },
 
-    "OperationKind": { "enum": ["checkout", "createWorktree", "removeWorktree", "stash"] },
+    "OperationKind": { "enum": ["checkout", "createWorktree", "removeWorktree"] },
     "OperationState": { "enum": ["queued", "running", "done", "failed", "cancelled"] },
     "OperationProgress": {
       "type": "object",
@@ -139,6 +139,18 @@
         "progress": { "$ref": "#/$defs/OperationProgress" },
         "error": { "$ref": "#/$defs/RpcError" },
         "traceId": { "type": "string" }
+      }
+    },
+
+    "CheckoutMode": {
+      "description": "What to do with uncommitted changes: refuse to check out, stash them and reapply them afterwards, or let git carry them over.",
+      "enum": ["safe", "stash", "carry"]
+    },
+    "CheckoutResult": {
+      "type": "object",
+      "required": ["reapplyConflicted"],
+      "properties": {
+        "reapplyConflicted": { "type": "boolean", "description": "Stashed changes conflicted when reapplied and were left in the stash." }
       }
     },
 

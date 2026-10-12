@@ -123,7 +123,7 @@ export const FileStatus = Schema.Struct({
 })
 export type FileStatus = typeof FileStatus.Type
 
-export const OperationKind = Schema.Literals(["checkout", "createWorktree", "removeWorktree", "stash"])
+export const OperationKind = Schema.Literals(["checkout", "createWorktree", "removeWorktree"])
 export type OperationKind = typeof OperationKind.Type
 
 export const OperationState = Schema.Literals(["queued", "running", "done", "failed", "cancelled"])
@@ -157,6 +157,15 @@ export const Operation = Schema.Struct({
   traceId: Schema.String,
 })
 export type Operation = typeof Operation.Type
+
+/** What to do with uncommitted changes: refuse to check out, stash them and reapply them afterwards, or let git carry them over. */
+export const CheckoutMode = Schema.Literals(["safe", "stash", "carry"])
+export type CheckoutMode = typeof CheckoutMode.Type
+
+export const CheckoutResult = Schema.Struct({
+  reapplyConflicted: Schema.Boolean,
+})
+export type CheckoutResult = typeof CheckoutResult.Type
 
 export const Theme = Schema.Literals(["tokyo-night", "tokyo-night-day"])
 export type Theme = typeof Theme.Type
