@@ -1,6 +1,6 @@
 import { useVirtualizer } from "@tanstack/react-virtual"
 import { Effect } from "effect"
-import { ChevronDown, ChevronLeft, ChevronUp, Space } from "lucide-react"
+import { ChevronDown, ChevronLeft, ChevronUp, Columns2, Rows2, Space } from "lucide-react"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useForkedEffect, usePreferences, useRun } from "@/app/hooks"
 import { highlight } from "@/highlight/client"
@@ -8,7 +8,7 @@ import { syntaxStyles, tokenStride } from "@/highlight/styles"
 import { shortOid } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import { wordDiff, type Range } from "@/lib/wordDiff"
-import type { DiffHunk, DiffLine, DiffRequest, FileDiff, RepoId } from "@/model/model.gen"
+import type { DiffHunk, DiffLayout, DiffLine, DiffRequest, FileDiff, RepoId } from "@/model/model.gen"
 import { Preferences } from "@/services/Preferences"
 import { Rpc } from "@/services/Rpc"
 
@@ -40,19 +40,23 @@ interface DiffViewProps {
 const lineHeight = 20
 const hunkHeight = 28
 
-type Row =
-  | { readonly type: "hunk"; readonly hunk: DiffHunk }
-  | {
-      readonly type: "line"
-      readonly line: DiffLine
-      /** The line's place in the old or new file text, to find its highlighting. */
-      readonly side: Side
-      readonly index: number
-    }
-  | { readonly type: "truncated" }
+/** A line and its place in the old or new file text, where its highlighting is found. */
+interface Cell {
+  readonly line: DiffLine
+  readonly side: Side
+  readonly index: number
+}
 
 /** Old for removed lines, new for added and unchanged ones. */
 type Side = 0 | 1
+
+type Row =
+  | { readonly type: "hunk"; readonly hunk: DiffHunk }
+  /** Unified: one line, old and new interleaved. */
+  | { readonly type: "line"; readonly cell: Cell }
+  /** Split: old on the left and new on the right; a side is empty opposite an addition or removal. */
+  | { readonly type: "split"; readonly left: Cell | undefined; readonly right: Cell | undefined }
+  | { readonly type: "truncated" }
 
 /**
  * One file, whole, with its changes marked in place, shown instead of the
@@ -64,6 +68,15 @@ export const DiffView = ({ repo, target, revision, active, onClose }: DiffViewPr
   const ignoreWhitespace = usePreferences()?.diff.ignoreWhitespace ?? false
   const setIgnoreWhitespace = (ignore: boolean) =>
     void run(Preferences.use((preferences) => preferences.set("diff.ignoreWhitespace", ignore)))
+  const layout = usePreferences()?.diff.layout ?? "unified"
+  const setLayout = (next: DiffLayout) => {
+    // Rows differ in height between layouts, so the line in view is kept rather than the scroll offset.
+    const row = rows[anchorRow()]
+    keepInView.current = row?.type === "line" ? row.cell.line : row?.type === "split" ? (row.right ?? row.left)?.line : undefined
+    void run(Preferences.use((preferences) => preferences.set("diff.layout", next)))
+  }
+  const keepInView = useRef<DiffLine>(undefined)
+  const split = layout === "split"
   const request: DiffRequest = { ...target.request, ignoreWhitespace }
   const [loaded, setLoaded] = useState<{ readonly target: DiffTarget; readonly diff: FileDiff }>()
   const [failed, setFailed] = useState<string>()
@@ -85,24 +98,26 @@ export const DiffView = ({ repo, target, revision, active, onClose }: DiffViewPr
 
   const scrollRef = useRef<HTMLDivElement>(null)
 
-  const { rows, texts, partners } = useMemo(() => flatten(diff), [diff])
+  const laidOut = useMemo(() => flatten(diff), [diff])
+  const { texts } = laidOut
+  const rows = split ? laidOut.split : laidOut.unified
 
-  // What changed within each edited line, worked out as lines come on screen.
+  // What changed within each edited line, worked out as lines come on screen
+  // and kept per removed line, its pair's key.
   const wordChanges = useMemo(() => {
-    const cache = new Map<number, ReturnType<typeof wordDiff>>()
-    return (row: number): ReadonlyArray<Range> | undefined => {
-      const partner = partners[row]!
-      if (partner < 0) return undefined
-      const removed = Math.min(row, partner)
+    const cache = new Map<Cell, ReturnType<typeof wordDiff>>()
+    return (cell: Cell | undefined): ReadonlyArray<Range> | undefined => {
+      const pair = cell && laidOut.pairs.get(cell)
+      if (!cell || !pair) return undefined
+      const removed = cell.side === 0 ? cell : pair
       let diff = cache.get(removed)
       if (diff === undefined) {
-        const [before, after] = [rows[removed], rows[Math.max(row, partner)]]
-        diff = before?.type === "line" && after?.type === "line" ? wordDiff(before.line.text, after.line.text, ignoreWhitespace) : null
+        diff = wordDiff(removed.line.text, (removed === cell ? pair : cell).line.text, ignoreWhitespace)
         cache.set(removed, diff)
       }
-      return diff ? (row === removed ? diff.before : diff.after) : undefined
+      return diff ? (cell === removed ? diff.before : diff.after) : undefined
     }
-  }, [rows, partners, ignoreWhitespace])
+  }, [laidOut, ignoreWhitespace])
 
   // Highlighting arrives after the plain text, from a worker.
   const [highlighted, setHighlighted] = useState<{ readonly texts: unknown; readonly sides: ReadonlyArray<LineTokens> }>()
@@ -117,10 +132,11 @@ export const DiffView = ({ repo, target, revision, active, onClose }: DiffViewPr
     }
   }, [diff, texts, request.path])
   const sides = highlighted?.texts === texts ? highlighted.sides : undefined
+  const tokensOf = (cell: Cell | undefined) => cell && sides?.[cell.side]?.(cell.index)
   const virtualizer = useVirtualizer({
     count: rows.length,
     getScrollElement: () => scrollRef.current,
-    estimateSize: (index) => (rows[index]?.type === "line" ? lineHeight : hunkHeight),
+    estimateSize: (index) => (rows[index]?.type === "hunk" ? hunkHeight : lineHeight),
     overscan: 30,
   })
   useEffect(() => virtualizer.measure(), [rows, virtualizer])
@@ -129,16 +145,41 @@ export const DiffView = ({ repo, target, revision, active, onClose }: DiffViewPr
   const blocks = useMemo(() => changeBlocks(rows), [rows])
   const changes = useMemo(() => blocks.map((block) => block.start), [blocks])
 
-  // Scrolls a change to a third of the way down, with context above it.
+  // Scrolls a row to a third of the way down, with context above it. Rows
+  // measured as they come into view can move it, so it is checked and
+  // corrected over the next few frames until it settles.
   const third = () => (scrollRef.current?.clientHeight ?? 0) / 3
+  const settling = useRef(0)
   const reveal = (row: number) => {
-    const start = virtualizer.measurementsCache[row]?.start ?? row * lineHeight
-    virtualizer.scrollToOffset(Math.max(start - third(), 0))
+    cancelAnimationFrame(settling.current)
+    let frames = 0
+    const place = () => {
+      const element = scrollRef.current
+      const start = virtualizer.measurementsCache[row]?.start ?? row * lineHeight
+      const target = Math.max(start - third(), 0)
+      if (element && Math.abs(element.scrollTop - target) > 1) virtualizer.scrollToOffset(target)
+      if (++frames < 8) settling.current = requestAnimationFrame(place)
+    }
+    place()
   }
-  // Changes are counted from the row a third of the way down.
-  const anchorRow = () => virtualizer.getVirtualItemForOffset((virtualizer.scrollOffset ?? 0) + third())?.index ?? 0
-  // How many changes start at or above the anchor, for "2 of 7".
-  const anchor = diff ? anchorRow() : 0
+  // The row at an offset, from the rows as drawn.
+  const rowAt = (offset: number) =>
+    virtualizer.getVirtualItems().find((item) => item.start <= offset && offset < item.end)?.index ??
+    virtualizer.getVirtualItemForOffset(offset)?.index ??
+    0
+  // Changes are counted from the row a third of the way down. The browser
+  // rounds scroll positions, so a revealed row can sit a fraction above it.
+  const anchorRow = () => rowAt((scrollRef.current?.scrollTop ?? 0) + third() + 2)
+  // How many changes start at or above the anchor, for "2 of 7". At the
+  // bottom of the file the last changes cannot reach the anchor, so every
+  // change on screen counts.
+  const scroller = scrollRef.current
+  const atEnd = scroller !== null && scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 1
+  const anchor = !diff
+    ? 0
+    : atEnd
+      ? rowAt(scroller.scrollTop + scroller.clientHeight - 1)
+      : anchorRow()
   const passed = changes.filter((row) => row <= anchor).length
 
   const scrollToFraction = (fraction: number) => {
@@ -153,6 +194,17 @@ export const DiffView = ({ repo, target, revision, active, onClose }: DiffViewPr
       direction === 1 ? changes.find((row) => row > anchor) : [...changes].reverse().find((row) => row < anchor)
     if (next !== undefined) reveal(next)
   }
+
+  // After a layout switch, the line that was in view is brought back to the same place.
+  useEffect(() => {
+    const line = keepInView.current
+    if (!line) return
+    keepInView.current = undefined
+    const index = rows.findIndex((row) =>
+      row.type === "line" ? row.cell.line === line : row.type === "split" && (row.left?.line === line || row.right?.line === line),
+    )
+    if (index >= 0) reveal(index)
+  }, [rows])
 
   // A newly opened file starts at its first change; a reload stays put.
   const revealed = useRef<DiffTarget>(undefined)
@@ -207,6 +259,24 @@ export const DiffView = ({ repo, target, revision, active, onClose }: DiffViewPr
         </span>
         {diff && !diff.binary && (
           <span className="ml-auto flex flex-none items-center gap-3">
+            <span role="radiogroup" aria-label="Layout" className="flex rounded-md bg-foreground/[0.05] p-0.5">
+              {(["unified", "split"] as const).map((option) => (
+                <button
+                  key={option}
+                  role="radio"
+                  aria-checked={layout === option}
+                  aria-label={option === "unified" ? "Unified" : "Side by side"}
+                  title={option === "unified" ? "Unified" : "Side by side"}
+                  onClick={() => setLayout(option)}
+                  className={cn(
+                    "flex size-5 items-center justify-center rounded-[4px]",
+                    layout === option ? "bg-background text-foreground shadow-sm" : "text-subtle-foreground hover:text-foreground",
+                  )}
+                >
+                  {option === "unified" ? <Rows2 className="size-3.5" /> : <Columns2 className="size-3.5" />}
+                </button>
+              ))}
+            </span>
             <button
               aria-label="Ignore whitespace"
               aria-pressed={ignoreWhitespace}
@@ -251,20 +321,27 @@ export const DiffView = ({ repo, target, revision, active, onClose }: DiffViewPr
               "[&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-foreground/15",
             )}
           >
-            <div className="relative" style={{ height: virtualizer.getTotalSize(), minWidth: `max(100%, ${width})` }}>
+            <div className="relative" style={{ height: virtualizer.getTotalSize(), minWidth: split ? "100%" : `max(100%, ${width})` }}>
               {virtualizer.getVirtualItems().map((item) => {
                 const row = rows[item.index]!
                 return (
-                  <div key={item.key} className="absolute inset-x-0" style={{ top: item.start, height: item.size }}>
+                  <div
+                    key={item.key}
+                    // Split lines wrap, so their rows are measured; unified rows are one line each.
+                    ref={split ? virtualizer.measureElement : undefined}
+                    data-index={item.index}
+                    className="absolute inset-x-0"
+                    style={{ top: item.start, height: split && row.type === "split" ? undefined : item.size }}
+                  >
                     {row.type === "hunk" ? (
                       <HunkHeader hunk={row.hunk} />
                     ) : row.type === "line" ? (
-                      <Line
-                        line={row.line}
-                        gutter={gutter}
-                        tokens={sides?.[row.side]?.(row.index)}
-                        changed={wordChanges(item.index)}
-                      />
+                      <Line line={row.cell.line} gutter={gutter} tokens={tokensOf(row.cell)} changed={wordChanges(row.cell)} />
+                    ) : row.type === "split" ? (
+                      <div className="grid min-h-5 grid-cols-2 divide-x divide-border/60">
+                        <SplitCell cell={row.left} gutter={gutter} tokens={tokensOf(row.left)} changed={wordChanges(row.left)} />
+                        <SplitCell cell={row.right} gutter={gutter} tokens={tokensOf(row.right)} changed={wordChanges(row.right)} />
+                      </div>
                     ) : (
                       <p className="flex h-full items-center px-3 font-sans text-subtle-foreground">
                         The rest of this file's changes are too long to show.
@@ -357,52 +434,94 @@ const Line = ({ line, gutter, tokens, changed }: LineProps) => {
   )
 }
 
+/** One side of a split row: a line number, its marker and its text, wrapped to fit. */
+const SplitCell = ({ cell, gutter, tokens, changed }: Omit<LineProps, "line"> & { readonly cell: Cell | undefined }) => {
+  if (!cell) return <div aria-hidden className="bg-foreground/[0.025]" />
+  const { line } = cell
+  const tone = lineTones[line.kind]
+  return (
+    <div className={cn("flex min-w-0 items-start pl-1", tone.row)}>
+      <span className="flex-none pr-2 text-right leading-5 text-muted-foreground tabular-nums select-none" style={{ width: gutter }}>
+        {cell.side === 0 ? line.oldLine : line.newLine}
+      </span>
+      <span aria-hidden className={cn("w-4 flex-none text-center leading-5 select-none", tone.marker)}>
+        {tone.symbol}
+      </span>
+      <span className="min-w-0 flex-1 pr-3 leading-5 whitespace-pre-wrap text-foreground [overflow-wrap:anywhere]">
+        {paint(line.text, tokens, changed, changedTones[line.kind])}
+        {line.noNewline && (
+          <span title="No newline at end of file" className="ml-1 font-sans text-[11px] text-subtle-foreground select-none">
+            no newline at end
+          </span>
+        )}
+      </span>
+    </div>
+  )
+}
+
 /**
- * Lays the diff out as rows, and rebuilds the old and new file texts from
- * it so each can be highlighted whole.
+ * Lays the diff out both ways, unified and split, and rebuilds the old and
+ * new file texts so each can be highlighted whole. Removed and added lines
+ * in one change are paired in order, as edits of each other, so their
+ * changed words can be marked and, split, set side by side.
  */
-const flatten = (diff: FileDiff | undefined): { rows: Array<Row>; texts: [string, string]; partners: Int32Array } => {
-  if (!diff) return { rows: [], texts: ["", ""], partners: new Int32Array() }
-  const rows: Array<Row> = []
+const flatten = (diff: FileDiff | undefined) => {
+  const unified: Array<Row> = []
+  const split: Array<Row> = []
+  const pairs = new Map<Cell, Cell>()
   const old: Array<string> = []
   const next: Array<string> = []
-  // Removed and added lines in one change are paired in order, as edits of
-  // each other, so their changed words can be marked.
-  const pairs: Array<[number, number]> = []
-  let removedRun: Array<number> = []
-  let addedRun: Array<number> = []
+  if (!diff) return { unified, split, pairs, texts: ["", ""] as [string, string] }
+
+  let removed: Array<Cell> = []
+  let added: Array<Cell> = []
   const closeRun = () => {
-    for (let k = 0; k < Math.min(removedRun.length, addedRun.length); k++) pairs.push([removedRun[k]!, addedRun[k]!])
-    removedRun = []
-    addedRun = []
+    for (let k = 0; k < Math.max(removed.length, added.length); k++) {
+      const [left, right] = [removed[k], added[k]]
+      if (left && right) {
+        pairs.set(left, right)
+        pairs.set(right, left)
+      }
+      split.push({ type: "split", left, right })
+    }
+    removed = []
+    added = []
   }
   // The whole file comes back as one hunk, whose header says nothing new.
   const headers = diff.hunks.length > 1
   for (const hunk of diff.hunks) {
-    if (headers) rows.push({ type: "hunk", hunk })
+    if (headers) {
+      unified.push({ type: "hunk", hunk })
+      split.push({ type: "hunk", hunk })
+    }
     for (const line of hunk.lines) {
-      if (line.kind === "context") closeRun()
-      else if (line.kind === "removed" && addedRun.length > 0) closeRun()
-      if (line.kind === "removed") removedRun.push(rows.length)
-      if (line.kind === "added") addedRun.push(rows.length)
+      if (line.kind === "context" || (line.kind === "removed" && added.length > 0)) closeRun()
       if (line.kind === "removed") {
-        rows.push({ type: "line", line, side: 0, index: old.length })
+        const cell: Cell = { line, side: 0, index: old.length }
         old.push(line.text)
-      } else {
-        rows.push({ type: "line", line, side: 1, index: next.length })
-        if (line.kind === "context") old.push(line.text)
+        removed.push(cell)
+        unified.push({ type: "line", cell })
+      } else if (line.kind === "added") {
+        const cell: Cell = { line, side: 1, index: next.length }
         next.push(line.text)
+        added.push(cell)
+        unified.push({ type: "line", cell })
+      } else {
+        const left: Cell = { line, side: 0, index: old.length }
+        const right: Cell = { line, side: 1, index: next.length }
+        old.push(line.text)
+        next.push(line.text)
+        unified.push({ type: "line", cell: right })
+        split.push({ type: "split", left, right })
       }
     }
     closeRun()
   }
-  if (diff.truncated) rows.push({ type: "truncated" })
-  const partners = new Int32Array(rows.length).fill(-1)
-  for (const [removed, added] of pairs) {
-    partners[removed] = added
-    partners[added] = removed
+  if (diff.truncated) {
+    unified.push({ type: "truncated" })
+    split.push({ type: "truncated" })
   }
-  return { rows, texts: [old.join("\n"), next.join("\n")], partners }
+  return { unified, split, pairs, texts: [old.join("\n"), next.join("\n")] as [string, string] }
 }
 
 /** Finds the tokens of one line of highlighted text. */
@@ -468,7 +587,11 @@ const changeBlocks = (rows: ReadonlyArray<Row>) => {
   const blocks: Array<ChangeBlock> = []
   let current: ChangeBlock | undefined
   rows.forEach((row, index) => {
-    if (row.type !== "line" || row.line.kind === "context") {
+    const kinds =
+      row.type === "line" ? [row.cell.line.kind] : row.type === "split" ? [row.left?.line.kind, row.right?.line.kind] : []
+    const isAdded = kinds.includes("added")
+    const isRemoved = kinds.includes("removed")
+    if (!isAdded && !isRemoved) {
       current = undefined
       return
     }
@@ -477,8 +600,8 @@ const changeBlocks = (rows: ReadonlyArray<Row>) => {
       blocks.push(current)
     }
     current.end = index
-    if (row.line.kind === "added") current.added = true
-    else current.removed = true
+    current.added ||= isAdded
+    current.removed ||= isRemoved
   })
   return blocks
 }

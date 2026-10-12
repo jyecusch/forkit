@@ -186,12 +186,14 @@
         "dimmedOpacity": { "type": "number", "minimum": 0.1, "maximum": 0.8, "description": "Opacity of threads outside the emphasized history." }
       }
     },
+    "DiffLayout": { "enum": ["unified", "split"], "description": "One column of old and new lines, or old and new side by side." },
     "DiffPreferences": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["ignoreWhitespace"],
+      "required": ["ignoreWhitespace", "layout"],
       "properties": {
-        "ignoreWhitespace": { "type": "boolean", "description": "Treat lines that differ only in spacing as unchanged." }
+        "ignoreWhitespace": { "type": "boolean", "description": "Treat lines that differ only in spacing as unchanged." },
+        "layout": { "$ref": "#/$defs/DiffLayout" }
       }
     },
     "GitPreferences": {
