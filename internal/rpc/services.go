@@ -136,6 +136,21 @@ func (x *Repos) Diff(meta model.CallMeta, id model.RepoID, req model.DiffRequest
 	}, attribute.String("repo.id", string(id)), attribute.String("diff.kind", string(req.Kind)))
 }
 
+// Fetch updates remote-tracking branches from remote, or from every remote
+// when it is empty.
+func (x *Repos) Fetch(meta model.CallMeta, id model.RepoID, remote string) error {
+	return callNoResult(x.s, meta, "Repos.Fetch", func(ctx context.Context) error {
+		return x.s.deps.Workspace.Fetch(ctx, id, remote)
+	}, attribute.String("repo.id", string(id)))
+}
+
+// CancelOperation stops a running operation.
+func (x *Repos) CancelOperation(meta model.CallMeta, id model.RepoID, operation string) error {
+	return callNoResult(x.s, meta, "Repos.CancelOperation", func(context.Context) error {
+		return x.s.deps.Workspace.CancelOperation(id, operation)
+	}, attribute.String("repo.id", string(id)))
+}
+
 var oidPattern = regexp.MustCompile(`^(?:[0-9a-f]{40}|[0-9a-f]{64})$`)
 
 // isOID reports whether oid is a full SHA-1 or SHA-256 hash, so it can be
@@ -278,6 +293,21 @@ func (x *Worktrees) HeadMessage(meta model.CallMeta, worktreeID model.WorktreeID
 	return call(x.s, meta, "Worktrees.HeadMessage", func(ctx context.Context) (string, error) {
 		return x.s.deps.Workspace.HeadMessage(ctx, worktreeID)
 	}, attribute.String("worktree.id", string(worktreeID)))
+}
+
+// Pull brings a worktree's branch up to date with its upstream.
+func (x *Worktrees) Pull(meta model.CallMeta, worktreeID model.WorktreeID) error {
+	return callNoResult(x.s, meta, "Worktrees.Pull", func(ctx context.Context) error {
+		return x.s.deps.Workspace.Pull(ctx, worktreeID)
+	}, attribute.String("worktree.id", string(worktreeID)))
+}
+
+// Push sends a worktree's branch to its upstream, or publishes it to remote
+// when it has none.
+func (x *Worktrees) Push(meta model.CallMeta, worktreeID model.WorktreeID, remote string, force bool) error {
+	return callNoResult(x.s, meta, "Worktrees.Push", func(ctx context.Context) error {
+		return x.s.deps.Workspace.Push(ctx, worktreeID, remote, force)
+	}, attribute.String("worktree.id", string(worktreeID)), attribute.Bool("push.force", force))
 }
 
 // ChooseParentDirectory asks the user where to put a new worktree and

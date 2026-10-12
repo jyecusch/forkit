@@ -1,4 +1,5 @@
 import { Check, LoaderCircle, PanelRight, Tag, X } from "lucide-react"
+import type { ReactNode } from "react"
 import { cn } from "@/lib/utils"
 import { baseName } from "@/lib/format"
 import { changeCount, headLabel } from "@/lib/worktree"
@@ -22,13 +23,15 @@ interface ViewHeaderProps {
   readonly onShowChanges: () => void
   readonly detailsShown: boolean
   readonly onToggleDetails: () => void
+  /** Actions on the checked-out branch, shown at the end of the header. */
+  readonly actions?: ReactNode
 }
 
 /**
  * The panel's second header level: which worktree and branch the view is
  * about, and what the graph is showing.
  */
-export const ViewHeader = ({ worktree, refsById, headEmphasized, emphasizedOther, onClearEmphasis, view, checkingOut, detailsShown, onToggleDetails, onShowChanges }: ViewHeaderProps) => {
+export const ViewHeader = ({ worktree, refsById, headEmphasized, emphasizedOther, onClearEmphasis, view, checkingOut, detailsShown, onToggleDetails, onShowChanges, actions }: ViewHeaderProps) => {
   const changes = worktree ? changeCount(worktree) : 0
   const head = worktree?.head.refId ? refsById.get(worktree.head.refId) : undefined
   // A branch's chip takes its graph line's colour; anything else the accent.
@@ -80,6 +83,7 @@ export const ViewHeader = ({ worktree, refsById, headEmphasized, emphasizedOther
         </div>
       )}
       <div className="ml-auto flex flex-none items-center gap-3 text-xs text-subtle-foreground">
+        {actions}
         {view && (
           <span className="tabular-nums">
             {view.totalRows.toLocaleString()} {view.totalRows === 1 ? "commit" : "commits"}

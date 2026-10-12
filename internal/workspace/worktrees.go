@@ -49,7 +49,7 @@ func (w *Workspace) CreateWorktree(ctx context.Context, repoID model.RepoID, bas
 	if newBranch != "" {
 		args = []string{"worktree", "add", "-b", newBranch, path, ref.FullName}
 	}
-	err = r.runOperation(ctx, model.OperationKindCreateWorktree, "", func(ctx context.Context) error {
+	err = r.runOperation(ctx, model.OperationKindCreateWorktree, "", func(ctx context.Context, _ func(gitexec.Progress)) error {
 		_, err := w.git.Repo(r.loc.CommonDir, r.loc.WorkDir).Mutate(ctx, args...)
 		return err
 	})
@@ -76,7 +76,7 @@ func (w *Workspace) RemoveWorktree(ctx context.Context, worktreeID model.Worktre
 	if force {
 		args = []string{"worktree", "remove", "--force", wt.Path}
 	}
-	err = r.runOperation(ctx, model.OperationKindRemoveWorktree, wt.ID, func(ctx context.Context) error {
+	err = r.runOperation(ctx, model.OperationKindRemoveWorktree, wt.ID, func(ctx context.Context, _ func(gitexec.Progress)) error {
 		_, err := w.git.Repo(r.loc.CommonDir, r.loc.WorkDir).Mutate(ctx, args...)
 		if !force && gitexec.IsWorktreeDirty(err) {
 			return apperr.New(model.ErrorCodeDirtyWorktree, fmt.Sprintf("%s has uncommitted changes.", filepath.Base(wt.Path)))

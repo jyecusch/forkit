@@ -56,10 +56,14 @@ These answer the plan's open questions and record where the implementation diffe
 - **Reads run with `GIT_OPTIONAL_LOCKS=0`**, so Forkit never contends with your own git commands. As a result, `git status` cannot save its refreshed stat cache, so Forkit refreshes each worktree's index once when the repository opens.
 - **Diffs are read one file at a time** when a file is opened, by streaming `git diff` (or `diff-tree` for a commit) with the whole file as context, so changes are shown where they sit. Reading stops at 50,000 lines, and the diff says so. A worktree's status summary carries a revision that counts up on every status read, so an open diff of uncommitted changes reloads when its file changes.
 - **Code is highlighted with Lezer in a Web Worker.** Lezer's parsers are plain JavaScript, so there is no regex engine or WASM to load, and each language is a separate chunk loaded the first time it is needed. Both sides of a diff are parsed as whole files, so strings and comments that span lines colour correctly, and tokens come back as one typed array. Colours are per-theme CSS variables, so highlighting follows the theme.
+- **Fetch, pull and push use the user's own git credentials.** Network commands run detached from any terminal, so ssh or git can never stop to ask for a password nobody can see. Credential helpers, credential managers' sign-in windows and the SSH agent still work; anything that needs typing in a terminal fails with an explanation instead.
+- **A pull is a fetch, then a merge or rebase that Forkit chooses** from the pull preference (fast-forward only by default), with uncommitted changes stashed for its duration. Pulling never depends on how git's own pull is configured.
+- **Pushes force only with a lease**, so a force push is refused if the remote branch moved since it was last fetched.
+- **Remotes are fetched in the background** at the interval in the preferences, starting from when FETCH_HEAD was last written. After each failure the interval doubles, to at most eight times as long, and failures show on the remote instead of interrupting.
 - **Frontend spans reach the backend** through Effect's OTLP tracer with a custom HttpClient that calls a Wails binding. Backend and frontend spans share one exporter: a rotating local file by default, or OTLP when configured.
 
 ## Not yet built
 
-From the roadmap: staging hunks and lines, discarding changes, and commit signing; fetch, pull, push and auth; merge, rebase, conflict resolution, stash management, search, blame and reflog undo; signing, notarization, installers and auto-update; the diagnostics panel, command palette and an accessibility pass.
+From the roadmap: staging hunks and lines, discarding changes, and commit signing; prompting for credentials inside Forkit; merge, rebase, conflict resolution, stash management, search, blame and reflog undo; signing, notarization, installers and auto-update; the diagnostics panel, command palette and an accessibility pass.
 
 Also planned: resizable panels throughout (the sidebar, the details panel, the graph column, the unstaged and staged sections and the diff's panes), with their sizes remembered.

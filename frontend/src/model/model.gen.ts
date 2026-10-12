@@ -124,7 +124,7 @@ export const FileStatus = Schema.Struct({
 })
 export type FileStatus = typeof FileStatus.Type
 
-export const OperationKind = Schema.Literals(["checkout", "createWorktree", "removeWorktree"])
+export const OperationKind = Schema.Literals(["checkout", "createWorktree", "removeWorktree", "fetch", "pull", "push"])
 export type OperationKind = typeof OperationKind.Type
 
 export const OperationState = Schema.Literals(["queued", "running", "done", "failed", "cancelled"])
@@ -137,7 +137,7 @@ export const OperationProgress = Schema.Struct({
 })
 export type OperationProgress = typeof OperationProgress.Type
 
-export const ErrorCode = Schema.Literals(["NotARepo", "RepoNotOpen", "RefNotFound", "WorktreeNotFound", "DirtyWorktree", "BranchCheckedOutElsewhere", "OperationInProgress", "IndexLocked", "AuthFailed", "GitNotFound", "GitTooOld", "GitFailed", "InvalidArgument", "Cancelled", "Internal"])
+export const ErrorCode = Schema.Literals(["NotARepo", "RepoNotOpen", "RefNotFound", "WorktreeNotFound", "DirtyWorktree", "BranchCheckedOutElsewhere", "OperationInProgress", "IndexLocked", "AuthFailed", "PushRejected", "Diverged", "NoUpstream", "GitNotFound", "GitTooOld", "GitFailed", "InvalidArgument", "Cancelled", "Internal"])
 export type ErrorCode = typeof ErrorCode.Type
 
 export const RpcError = Schema.Struct({
@@ -217,9 +217,16 @@ export const DiffPreferences = Schema.Struct({
 })
 export type DiffPreferences = typeof DiffPreferences.Type
 
+/** How a pull brings in the upstream's commits when the branch has its own: refuse, merge them, or rebase onto them. */
+export const PullMode = Schema.Literals(["ffOnly", "merge", "rebase"])
+export type PullMode = typeof PullMode.Type
+
 export const GitPreferences = Schema.Struct({
   binaryPath: Schema.String,
   maintainCommitGraph: Schema.Boolean,
+  fetchInterval: Schema.Int.pipe(Schema.check(Schema.isBetween({ minimum: 0, maximum: 120 }))),
+  pruneOnFetch: Schema.Boolean,
+  pullMode: PullMode,
 })
 export type GitPreferences = typeof GitPreferences.Type
 

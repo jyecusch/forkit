@@ -35,6 +35,13 @@ export class Commands extends Context.Service<
     readonly createWorktree: (repo: RepoId, base: RefId, newBranch: string, path: string) => Effect.Effect<Worktree, RpcFailure>
     readonly removeWorktree: (worktree: WorktreeId, force: boolean) => Effect.Effect<void, RpcFailure>
     readonly chooseWorktreeParent: () => Effect.Effect<Option.Option<string>, RpcFailure>
+    /** Fetches from remote, or from every remote when it is empty. */
+    readonly fetch: (repo: RepoId, remote: string) => Effect.Effect<void, RpcFailure>
+    /** Brings a worktree's branch up to date with its upstream. */
+    readonly pull: (worktree: WorktreeId) => Effect.Effect<void, RpcFailure>
+    /** Pushes a worktree's branch, publishing it to remote when it has no upstream. */
+    readonly push: (worktree: WorktreeId, remote: string, force: boolean) => Effect.Effect<void, RpcFailure>
+    readonly cancelOperation: (repo: RepoId, operation: string) => Effect.Effect<void, RpcFailure>
   }
 >()("forkit/Commands") {
   static readonly layer = Layer.effect(
@@ -87,6 +94,18 @@ export class Commands extends Context.Service<
         }),
         chooseWorktreeParent: Effect.fn("command.chooseWorktreeParent")(function* () {
           return yield* rpc.chooseWorktreeParent()
+        }),
+        fetch: Effect.fn("command.fetch")(function* (repo: RepoId, remote: string) {
+          yield* rpc.fetch(repo, remote)
+        }),
+        pull: Effect.fn("command.pull")(function* (worktree: WorktreeId) {
+          yield* rpc.pull(worktree)
+        }),
+        push: Effect.fn("command.push")(function* (worktree: WorktreeId, remote: string, force: boolean) {
+          yield* rpc.push(worktree, remote, force)
+        }),
+        cancelOperation: Effect.fn("command.cancelOperation")(function* (repo: RepoId, operation: string) {
+          yield* rpc.cancelOperation(repo, operation)
         }),
       })
     }),

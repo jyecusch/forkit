@@ -42,6 +42,42 @@ func IsWorktreeDirty(err error) bool {
 	return stderrContains(err, "contains modified or untracked files")
 }
 
+// IsAuthFailed reports whether a remote refused, or could not be given,
+// credentials.
+func IsAuthFailed(err error) bool {
+	return stderrContainsAny(err,
+		"Authentication failed",
+		"Permission denied (publickey",
+		"Host key verification failed",
+		"could not read Username",
+		"could not read Password",
+		"terminal prompts disabled",
+		"Invalid username or password",
+	)
+}
+
+// IsPushRejected reports whether a push was refused because the remote
+// branch has commits the pushed one lacks, or, with a lease, moved since it
+// was last fetched.
+func IsPushRejected(err error) bool {
+	return stderrContainsAny(err, "(fetch first)", "(non-fast-forward)", "(stale info)")
+}
+
+// IsNotFastForward reports whether a fast-forward-only merge was refused
+// because the branches have diverged.
+func IsNotFastForward(err error) bool {
+	return stderrContains(err, "Not possible to fast-forward")
+}
+
+func stderrContainsAny(err error, texts ...string) bool {
+	for _, text := range texts {
+		if stderrContains(err, text) {
+			return true
+		}
+	}
+	return false
+}
+
 func stderrContains(err error, text string) bool {
 	var gitErr *Error
 	return errors.As(err, &gitErr) && strings.Contains(gitErr.Stderr, text)

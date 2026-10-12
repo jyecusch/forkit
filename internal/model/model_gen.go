@@ -161,6 +161,9 @@ const (
 	OperationKindCheckout       OperationKind = "checkout"
 	OperationKindCreateWorktree OperationKind = "createWorktree"
 	OperationKindRemoveWorktree OperationKind = "removeWorktree"
+	OperationKindFetch          OperationKind = "fetch"
+	OperationKindPull           OperationKind = "pull"
+	OperationKindPush           OperationKind = "push"
 )
 
 type OperationState string
@@ -307,7 +310,21 @@ type GitPreferences struct {
 	BinaryPath string `json:"binaryPath"`
 	// Write git's commit-graph file when it is missing, which speeds up history walks.
 	MaintainCommitGraph bool `json:"maintainCommitGraph"`
+	// Minutes between fetches in the background; 0 turns them off.
+	FetchInterval int `json:"fetchInterval"`
+	// Remove remote-tracking branches whose branch is gone from the remote.
+	PruneOnFetch bool     `json:"pruneOnFetch"`
+	PullMode     PullMode `json:"pullMode"`
 }
+
+// How a pull brings in the upstream's commits when the branch has its own: refuse, merge them, or rebase onto them.
+type PullMode string
+
+const (
+	PullModeFFOnly PullMode = "ffOnly"
+	PullModeMerge  PullMode = "merge"
+	PullModeRebase PullMode = "rebase"
+)
 
 type BehaviourPreferences struct {
 	DirtyCheckout DirtyCheckout `json:"dirtyCheckout"`
@@ -504,6 +521,9 @@ const (
 	ErrorCodeOperationInProgress       ErrorCode = "OperationInProgress"
 	ErrorCodeIndexLocked               ErrorCode = "IndexLocked"
 	ErrorCodeAuthFailed                ErrorCode = "AuthFailed"
+	ErrorCodePushRejected              ErrorCode = "PushRejected"
+	ErrorCodeDiverged                  ErrorCode = "Diverged"
+	ErrorCodeNoUpstream                ErrorCode = "NoUpstream"
 	ErrorCodeGitNotFound               ErrorCode = "GitNotFound"
 	ErrorCodeGitTooOld                 ErrorCode = "GitTooOld"
 	ErrorCodeGitFailed                 ErrorCode = "GitFailed"

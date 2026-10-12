@@ -12,6 +12,10 @@ export function Create(arg1:model.CallMeta,arg2:model.RepoID,arg3:model.RefID,ar
 
 export function HeadMessage(arg1:model.CallMeta,arg2:model.WorktreeID):Promise<string>;
 
+export function Pull(arg1:model.CallMeta,arg2:model.WorktreeID):Promise<void>;
+
+export function Push(arg1:model.CallMeta,arg2:model.WorktreeID,arg3:string,arg4:boolean):Promise<void>;
+
 export function Remove(arg1:model.CallMeta,arg2:model.WorktreeID,arg3:boolean):Promise<void>;
 
 export function Stage(arg1:model.CallMeta,arg2:model.WorktreeID,arg3:Array<string>):Promise<void>;

@@ -37,6 +37,15 @@ var commandEnv = []string{
 	"GIT_PAGER=cat",
 }
 
+// networkEnv is commandEnv without GIT_TERMINAL_PROMPT=0, which would also
+// stop credential managers from showing their sign-in windows. Network
+// commands have no terminal to prompt on instead.
+var networkEnv = []string{
+	"LC_ALL=C",
+	"GIT_OPTIONAL_LOCKS=0",
+	"GIT_PAGER=cat",
+}
+
 // Git locates and runs a git binary.
 type Git struct {
 	binary  string
@@ -80,7 +89,7 @@ func (g *Git) Version() Version { return g.version }
 func (g *Git) Run(ctx context.Context, dir string, args ...string) ([]byte, error) {
 	ctx, cancel := withDefaultTimeout(ctx)
 	defer cancel()
-	return g.run(ctx, dir, args, nil, nil)
+	return g.run(ctx, dir, args, runOptions{})
 }
 
 // Repo returns a handle that runs commands in dir. Writes are serialized per
@@ -119,7 +128,7 @@ func (r *Repo) Mutate(ctx context.Context, args ...string) ([]byte, error) {
 	defer cancel()
 	r.writeLock.Lock()
 	defer r.writeLock.Unlock()
-	return r.git.run(ctx, r.dir, args, nil, nil)
+	return r.git.run(ctx, r.dir, args, runOptions{})
 }
 
 // MutateWithInput is Mutate with stdin, for commands such as "commit -F -"
@@ -129,15 +138,25 @@ func (r *Repo) MutateWithInput(ctx context.Context, stdin io.Reader, args ...str
 	defer cancel()
 	r.writeLock.Lock()
 	defer r.writeLock.Unlock()
-	return r.git.run(ctx, r.dir, args, stdin, nil)
+	return r.git.run(ctx, r.dir, args, runOptions{stdin: stdin})
 }
 
 // Stream executes a read-only command, feeding it stdin (which may be nil),
 // and hands its stdout to consume as it is produced. The process is killed if
 // consume returns early or ctx ends.
 func (r *Repo) Stream(ctx context.Context, stdin io.Reader, consume func(io.Reader) error, args ...string) error {
-	_, err := r.git.run(ctx, r.dir, args, stdin, consume)
+	_, err := r.git.run(ctx, r.dir, args, runOptions{stdin: stdin, consume: consume})
 	return err
+}
+
+// Network executes a command that talks to a remote, such as fetch or push,
+// and reports the progress git prints as it goes. It has no default timeout,
+// so ctx must end it. It runs detached from any terminal, so a password or
+// host key prompt fails at once instead of waiting for input nobody can
+// give; credential helpers and the SSH agent still work. It does not take
+// the write lock: it only updates refs, which git locks itself.
+func (r *Repo) Network(ctx context.Context, onProgress func(Progress), args ...string) ([]byte, error) {
+	return r.git.run(ctx, r.dir, args, runOptions{network: true, onProgress: onProgress})
 }
 
 // Process is a long-running git command driven through its stdin and stdout,
@@ -183,7 +202,16 @@ func withDefaultTimeout(ctx context.Context) (context.Context, context.CancelFun
 	return context.WithTimeout(ctx, DefaultTimeout)
 }
 
-func (g *Git) run(ctx context.Context, dir string, args []string, stdin io.Reader, consume func(io.Reader) error) ([]byte, error) {
+type runOptions struct {
+	stdin   io.Reader
+	consume func(io.Reader) error
+	// network detaches the command from the terminal and lets it ask
+	// credential helpers, which may show their own sign-in windows.
+	network    bool
+	onProgress func(Progress)
+}
+
+func (g *Git) run(ctx context.Context, dir string, args []string, opts runOptions) ([]byte, error) {
 	ctx, span := g.tracer.Start(ctx, "git "+subcommand(args), trace.WithAttributes(
 		attribute.String("git.subcommand", subcommand(args)),
 		attribute.StringSlice("git.args", RedactArgs(args)),
@@ -192,15 +220,20 @@ func (g *Git) run(ctx context.Context, dir string, args []string, stdin io.Reade
 
 	cmd := exec.CommandContext(ctx, g.binary, args...)
 	cmd.Dir = dir
-	cmd.Env = append(os.Environ(), commandEnv...)
+	env := commandEnv
+	if opts.network {
+		env = networkEnv
+		detach(cmd)
+	}
+	cmd.Env = append(os.Environ(), env...)
 	cmd.WaitDelay = 2 * time.Second
-	cmd.Stdin = stdin
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
+	cmd.Stdin = opts.stdin
+	stderr := &progressWriter{onProgress: opts.onProgress}
+	cmd.Stderr = stderr
 
 	var stdout bytes.Buffer
 	counter := &countingReader{}
-	if consume == nil {
+	if opts.consume == nil {
 		cmd.Stdout = &stdout
 	} else {
 		pipe, err := cmd.StdoutPipe()
@@ -216,8 +249,8 @@ func (g *Git) run(ctx context.Context, dir string, args []string, stdin io.Reade
 		return nil, err
 	}
 	var consumeErr error
-	if consume != nil {
-		consumeErr = consume(counter)
+	if opts.consume != nil {
+		consumeErr = opts.consume(counter)
 		if consumeErr != nil {
 			_ = cmd.Process.Kill()
 		}
@@ -232,7 +265,7 @@ func (g *Git) run(ctx context.Context, dir string, args []string, stdin io.Reade
 	)
 	err := consumeErr
 	if err == nil {
-		err = g.commandError(ctx, args, waitErr, stderr.Bytes())
+		err = g.commandError(ctx, args, waitErr, stderr.output())
 	}
 	if err != nil {
 		span.RecordError(err)
