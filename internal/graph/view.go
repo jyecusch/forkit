@@ -49,6 +49,7 @@ type View struct {
 	firstChangedRow int
 	refTips         map[model.RefID]model.OID
 	refsAt          map[model.OID][]model.RefID
+	branchThreads   map[string]int
 
 	emphasisMu sync.Mutex
 	emphasis   emphasisCache
@@ -179,6 +180,7 @@ func (v *View) install(ctx context.Context, g *Graph, tips []model.OID, options 
 	v.mu.Lock()
 	v.graph, v.tips, v.options, v.complete = g, tips, options, complete
 	v.refTips, v.refsAt = indexRefs(refs)
+	v.branchThreads = branchThreads(g, refs)
 	v.version++
 	v.firstChangedRow = 0
 	v.mu.Unlock()
@@ -194,6 +196,7 @@ func (v *View) publish(ctx context.Context) {
 		LaneCount:       v.graph.LaneCount(),
 		Complete:        v.complete,
 		FirstChangedRow: v.firstChangedRow,
+		BranchThreads:   v.branchThreads,
 	}
 	v.mu.RUnlock()
 	_ = v.channel.Publish(ctx, string(v.repoID), []model.GraphView{view})
@@ -336,6 +339,20 @@ func indexRefs(refs []model.Ref) (map[model.RefID]model.OID, map[model.OID][]mod
 		at[oid] = append(at[oid], ref.ID)
 	}
 	return tips, at
+}
+
+// branchThreads maps each local branch in g to its commit's thread.
+func branchThreads(g *Graph, refs []model.Ref) map[string]int {
+	threads := map[string]int{}
+	for _, ref := range refs {
+		if ref.Kind != model.RefKindLocalBranch {
+			continue
+		}
+		if row := g.history.RowOf(commitOf(ref)); row >= 0 && int(row) < g.Len() {
+			threads[string(ref.ID)] = int(g.placements[row].thread)
+		}
+	}
+	return threads
 }
 
 // commitOf returns the commit a ref points at, peeling annotated tags.

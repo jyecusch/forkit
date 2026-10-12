@@ -303,6 +303,7 @@ export const GraphView = Schema.Struct({
   laneCount: Schema.Int,
   complete: Schema.Boolean,
   firstChangedRow: Schema.Int,
+  branchThreads: Schema.Record(Schema.String, Schema.Int),
 })
 export type GraphView = typeof GraphView.Type
 

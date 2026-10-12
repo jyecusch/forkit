@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils"
 import { changeCount, headLabel } from "@/lib/worktree"
 import type { Ref, RefId, Remote, Worktree, WorktreeId } from "@/model/model.gen"
 import { AheadBehind } from "./AheadBehind"
+import { laneColor } from "./RefBadge"
 import { WorktreeIcon } from "./WorktreeIcon"
 
 /** Rows are 28 px; section headers add 8 px of space above. */
@@ -30,6 +31,8 @@ interface RepoNavProps {
   readonly worktrees: ReadonlyArray<Worktree>
   readonly activeWorktree: WorktreeId | undefined
   readonly emphasized: RefId | undefined
+  /** The graph thread of each local branch, which colours its icon like its line. */
+  readonly branchThreads: Readonly<Record<string, number>> | undefined
   /** Refs whose folders stay open, such as the checked-out branch. */
   readonly reveal: ReadonlyArray<RefId>
   readonly onEmphasize: (ref: Ref) => void
@@ -227,7 +230,7 @@ export const RepoNav = (props: RepoNavProps) => {
                 open()
               }
             }}
-            icon={<RefIcon kind={row.ref.kind} selected={row.ref.id === emphasized} />}
+            icon={<RefIcon kind={row.ref.kind} selected={row.ref.id === emphasized} thread={props.branchThreads?.[row.ref.id]} />}
           >
             <span className="min-w-0 flex-1 truncate">
               <Highlight text={row.name} query={filter} />
@@ -409,8 +412,11 @@ const Chevron = ({ open }: { open: boolean }) => (
   <ChevronRight aria-hidden className={cn("size-3.5 flex-none transition-transform", open && "rotate-90")} />
 )
 
-/** A ref's icon, in its kind's colour unless the row is selected, which takes the highlight. */
-const RefIcon = ({ kind, selected }: { kind: Ref["kind"]; selected: boolean }) => {
+/**
+ * A ref's icon, in its kind's colour unless the row is selected, which takes
+ * the highlight. A local branch's is always the colour of its graph line.
+ */
+const RefIcon = ({ kind, selected, thread }: { kind: Ref["kind"]; selected: boolean; thread: number | undefined }) => {
   switch (kind) {
     case "tag":
       return <Tag aria-hidden className={cn("size-3.5", !selected && "text-tag")} />
@@ -419,7 +425,7 @@ const RefIcon = ({ kind, selected }: { kind: Ref["kind"]; selected: boolean }) =
     case "remoteBranch":
       return <GitBranch aria-hidden className={cn("size-3.5", !selected && "text-remote")} />
     case "localBranch":
-      return <GitBranch aria-hidden className="size-3.5" />
+      return <GitBranch aria-hidden className="size-3.5" style={thread === undefined ? undefined : { color: laneColor(thread) }} />
   }
 }
 

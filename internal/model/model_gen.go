@@ -389,6 +389,8 @@ type GraphView struct {
 	Complete bool `json:"complete"`
 	// Rows before this index are unchanged since the previous version.
 	FirstChangedRow int `json:"firstChangedRow"`
+	// The thread of each local branch's commit, by ref ID, so a branch can be shown in its line's colour.
+	BranchThreads map[string]int `json:"branchThreads"`
 }
 
 type GraphWindow struct {

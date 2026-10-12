@@ -298,14 +298,19 @@
     },
     "GraphView": {
       "type": "object",
-      "required": ["id", "version", "totalRows", "laneCount", "complete", "firstChangedRow"],
+      "required": ["id", "version", "totalRows", "laneCount", "complete", "firstChangedRow", "branchThreads"],
       "properties": {
         "id": { "$ref": "#/$defs/RepoId" },
         "version": { "type": "integer" },
         "totalRows": { "type": "integer" },
         "laneCount": { "type": "integer" },
         "complete": { "type": "boolean", "description": "False while history is still streaming in." },
-        "firstChangedRow": { "type": "integer", "description": "Rows before this index are unchanged since the previous version." }
+        "firstChangedRow": { "type": "integer", "description": "Rows before this index are unchanged since the previous version." },
+        "branchThreads": {
+          "type": "object",
+          "additionalProperties": { "type": "integer" },
+          "description": "The thread of each local branch's commit, by ref ID, so a branch can be shown in its line's colour."
+        }
       }
     },
     "GraphWindow": {

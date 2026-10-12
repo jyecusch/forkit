@@ -2,6 +2,7 @@ package graph_test
 
 import (
 	"context"
+	"encoding/json"
 	"slices"
 	"strings"
 	"testing"
@@ -22,6 +23,7 @@ type viewFixture struct {
 	repo    *gittest.Repo
 	loc     repo.Location
 	view    *graph.View
+	hub     *synchub.Hub
 	options graph.Options
 }
 
@@ -47,7 +49,7 @@ func newViewFixture(t *testing.T) *viewFixture {
 	channel := synchub.NewChannel(hub, "graphViews", func(v model.GraphView) string { return string(v.ID) })
 	view := graph.NewView(ctx, loc.ID, git.Repo(loc.CommonDir, loc.WorkDir), channel, tracer)
 	t.Cleanup(view.Close)
-	return &viewFixture{t: t, git: git, repo: fixture, loc: loc, view: view, options: graph.Options{Order: model.GraphOrderTopo, IncludeTags: true}}
+	return &viewFixture{t: t, git: git, repo: fixture, loc: loc, view: view, hub: hub, options: graph.Options{Order: model.GraphOrderTopo, IncludeTags: true}}
 }
 
 func (f *viewFixture) refresh() []model.Ref {
@@ -136,6 +138,47 @@ func TestWindowMarksEmphasizedHistoryAndRefs(t *testing.T) {
 	row := f.view.RowOfRef(tag)
 	if row < 0 || !slices.Contains(window.Rows[row].RefIDs, tag) {
 		t.Errorf("tag v1 not found on its commit's row (refs %v)", refs)
+	}
+}
+
+// published returns the graph view last published for the repository.
+func (f *viewFixture) published() model.GraphView {
+	f.t.Helper()
+	snapshot := f.hub.Subscribe("graphViews", string(f.loc.ID))
+	if len(snapshot.Entities) != 1 {
+		f.t.Fatalf("published %d graph views, want 1", len(snapshot.Entities))
+	}
+	raw, err := json.Marshal(snapshot.Entities[0])
+	var view model.GraphView
+	if err == nil {
+		err = json.Unmarshal(raw, &view)
+	}
+	if err != nil {
+		f.t.Fatal(err)
+	}
+	return view
+}
+
+func TestViewPublishesEachBranchsThread(t *testing.T) {
+	f := newViewFixture(t)
+	f.repo.Git("checkout", "-qb", "feature")
+	f.repo.Commit("feature work")
+	f.repo.Git("checkout", "-q", "main")
+	f.repo.Commit("main work")
+	f.repo.Git("tag", "v1")
+	f.refresh()
+
+	window := f.window("")
+	threads := f.published().BranchThreads
+	for _, name := range []string{"main", "feature"} {
+		ref := repo.RefIDFor(f.loc.ID, "refs/heads/"+name)
+		thread, ok := threads[string(ref)]
+		if row := f.view.RowOfRef(ref); !ok || thread != window.Rows[row].ThreadID {
+			t.Errorf("%s: published thread %d (%v), its row's is %d", name, thread, ok, window.Rows[row].ThreadID)
+		}
+	}
+	if len(threads) != 2 {
+		t.Errorf("published %d threads, want only the local branches'", len(threads))
 	}
 }
 

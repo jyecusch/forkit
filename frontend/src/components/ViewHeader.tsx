@@ -4,6 +4,7 @@ import { baseName } from "@/lib/format"
 import { changeCount, headLabel } from "@/lib/worktree"
 import type { GraphView, Ref, Worktree, WorktreeOperation } from "@/model/model.gen"
 import { AheadBehind } from "./AheadBehind"
+import { emphasizedTint, laneColor } from "./RefBadge"
 import { WorktreeIcon } from "./WorktreeIcon"
 
 interface ViewHeaderProps {
@@ -30,15 +31,19 @@ interface ViewHeaderProps {
 export const ViewHeader = ({ worktree, refsById, headEmphasized, emphasizedOther, onClearEmphasis, view, checkingOut, detailsShown, onToggleDetails, onShowChanges }: ViewHeaderProps) => {
   const changes = worktree ? changeCount(worktree) : 0
   const head = worktree?.head.refId ? refsById.get(worktree.head.refId) : undefined
+  // A branch's chip takes its graph line's colour; anything else the accent.
+  const emphasizedId = headEmphasized ? head?.id : emphasizedOther?.id
+  const thread = emphasizedId === undefined ? undefined : view?.branchThreads[emphasizedId]
+  const line = thread === undefined ? "var(--primary)" : laneColor(thread)
   return (
     <div className="flex h-10 flex-none items-center gap-3 border-b px-3 text-[13px]">
       {worktree && (
-        <div className="flex min-w-0 items-center gap-1.5">
+        <div className="flex min-w-0 items-center gap-1.5" style={{ "--line": line } as React.CSSProperties}>
           <WorktreeIcon worktree={worktree} className="size-4 flex-none text-subtle-foreground" />
           <span className="truncate font-medium text-foreground" title={worktree.path}>
             {baseName(worktree.path)}
           </span>
-          <span className={cn(chip, headEmphasized ? emphasizedChip : "bg-foreground/[0.06] text-secondary-foreground")} aria-busy={checkingOut}>
+          <span className={cn(chip, headEmphasized ? emphasizedTint : "bg-foreground/[0.06] text-secondary-foreground")} aria-busy={checkingOut}>
             {checkingOut ? (
               <LoaderCircle aria-label="Checking out" className="size-3 flex-none animate-spin" />
             ) : (
@@ -49,7 +54,7 @@ export const ViewHeader = ({ worktree, refsById, headEmphasized, emphasizedOther
           </span>
           {emphasizedOther && (
             <span
-              className={cn(chip, emphasizedChip, "pr-0.5")}
+              className={cn(chip, emphasizedTint, "pr-0.5")}
               title="Emphasized history"
             >
               <RefKindIcon kind={emphasizedOther.kind} />
@@ -57,7 +62,7 @@ export const ViewHeader = ({ worktree, refsById, headEmphasized, emphasizedOther
               <button
                 aria-label="Stop emphasizing"
                 onClick={onClearEmphasis}
-                className="flex size-[18px] flex-none items-center justify-center rounded hover:bg-primary/20"
+                className="flex size-[18px] flex-none items-center justify-center rounded hover:bg-(--line)/20"
               >
                 <X className="size-3" />
               </button>
@@ -99,8 +104,6 @@ export const ViewHeader = ({ worktree, refsById, headEmphasized, emphasizedOther
 }
 
 const chip = "flex h-[22px] min-w-0 items-center gap-1 rounded-md px-1.5 text-xs"
-/** The accent marks the emphasized ref, as its badges do in the list. */
-const emphasizedChip = "bg-primary/12 text-primary shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--primary)_40%,transparent)]"
 
 /** Drawn like the ref's badge in the list: tags have a tag, branches nothing. */
 const RefKindIcon = ({ kind }: { kind: Ref["kind"] }) => (kind === "tag" ? <Tag aria-hidden className="size-3 flex-none" /> : null)

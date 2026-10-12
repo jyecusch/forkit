@@ -5,6 +5,10 @@ import { AheadBehind } from "./AheadBehind"
 
 export const laneColor = (thread: number) => `var(--lane-${thread % 8})`
 
+/** The emphasized ref's tint, in the colour set as `--line`. */
+export const emphasizedTint =
+  "bg-[color-mix(in_srgb,var(--line)_14%,transparent)] text-(--line) shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--line)_45%,transparent)]"
+
 interface RefBadgeProps {
   readonly badge: Badge
   readonly thread: number
@@ -16,12 +20,11 @@ interface RefBadgeProps {
 }
 
 /**
- * A ref on a commit row. Badges are neutral so that a branch never looks
- * like part of another's history. The accent means one thing everywhere:
- * the emphasized ref. The checked-out branch carries a check, local
- * branches a dot in their commit's lane colour and how far they are from
- * their upstream, remote branches an outline in the theme's remote colour
- * and tags a tag in its tag colour.
+ * A ref on a commit row. The emphasized ref is filled with its line's
+ * colour; other local branches carry a dot in it, so a label leads to its
+ * line. The checked-out branch carries a check, local branches how far they
+ * are from their upstream, remote branches an outline in the theme's remote
+ * colour and tags a tag in its tag colour.
  */
 export const RefBadge = ({ badge, thread, dim, selected, primary }: RefBadgeProps) => {
   const { ref, isHead, isEmphasized, inSync, sameOnOtherRemotes } = badge
@@ -38,8 +41,8 @@ export const RefBadge = ({ badge, thread, dim, selected, primary }: RefBadgeProp
     .join(" · ")
   const tone = isEmphasized
     ? selected
-      ? "bg-primary text-primary-foreground"
-      : "bg-primary/12 text-primary shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--primary)_40%,transparent)]"
+      ? "bg-(--line) text-background"
+      : emphasizedTint
     : {
         localBranch: cn("bg-foreground/[0.07]", dim ? "text-secondary-foreground" : "text-foreground"),
         remoteBranch: cn("border border-remote/35 text-remote", dim && "opacity-75"),
@@ -54,6 +57,7 @@ export const RefBadge = ({ badge, thread, dim, selected, primary }: RefBadgeProp
         primary ? "min-w-0 flex-[0_1_auto]" : "min-w-12 flex-[0_100_auto]",
         tone,
       )}
+      style={{ "--line": laneColor(thread) } as React.CSSProperties}
     >
       {isHead ? (
         <Check aria-label="checked out" className="size-3 flex-none" />
