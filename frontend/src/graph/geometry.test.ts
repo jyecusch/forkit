@@ -12,7 +12,7 @@ const row = (index: number, lane: number, onEmphasized: boolean, parents = 1): L
       onEmphasized,
       refIds: [],
       edges: [
-        { fromLane: lane, toLane: 0, threadId: lane, kind: lane === 0 ? "straight" : "merge", onEmphasized },
+        { fromLane: lane, toLane: 0, threadId: lane, kind: lane === 0 ? "straight" : "merge" },
       ],
     },
     commit: { oid: `c${index}`, parents: Array.from({ length: parents }, (_, i) => `p${i}`) },
@@ -28,12 +28,6 @@ describe("geometry", () => {
     rowAt: (i) => rows[i],
     activeHead: "c2",
     headOids: new Set(["c1", "c2"]),
-    anyEmphasis: true,
-  })
-
-  it("draws emphasized lines and dots last so they sit on top", () => {
-    expect(result.dots.map((d) => d.emphasized)).toEqual([false, true, true])
-    expect(result.segments.map((s) => s.emphasized)).toEqual([false, true, true])
   })
 
   it("positions rows relative to the canvas origin", () => {

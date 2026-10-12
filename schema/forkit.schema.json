@@ -178,12 +178,11 @@
     "GraphPreferences": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["order", "showRemoteBranches", "showTags", "dimmedOpacity"],
+      "required": ["order", "showRemoteBranches", "showTags"],
       "properties": {
         "order": { "$ref": "#/$defs/GraphOrder" },
         "showRemoteBranches": { "type": "boolean" },
-        "showTags": { "type": "boolean" },
-        "dimmedOpacity": { "type": "number", "minimum": 0.1, "maximum": 0.8, "description": "Opacity of threads outside the emphasized history." }
+        "showTags": { "type": "boolean" }
       }
     },
     "DiffLayout": { "enum": ["unified", "split"], "description": "One column of old and new lines, or old and new side by side." },
@@ -275,13 +274,12 @@
     "GraphEdge": {
       "type": "object",
       "description": "A line from a lane in this row to a lane in the next row.",
-      "required": ["fromLane", "toLane", "threadId", "kind", "onEmphasized"],
+      "required": ["fromLane", "toLane", "threadId", "kind"],
       "properties": {
         "fromLane": { "type": "integer" },
         "toLane": { "type": "integer" },
         "threadId": { "type": "integer" },
         "kind": { "$ref": "#/$defs/EdgeKind" },
-        "onEmphasized": { "type": "boolean", "description": "Part of the emphasized ref's first-parent history." },
         "uncommitted": { "type": "boolean", "description": "Part of the line from the active worktree's uncommitted changes, above the first row, to the commit they build on." }
       }
     },

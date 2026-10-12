@@ -308,10 +308,10 @@ const moveBetweenFiles = (event: React.KeyboardEvent<HTMLElement>) => {
 
 /**
  * A colour for an author that stays the same wherever they appear, from the
- * theme's lanes, leaving out the grey first lane and the red that reads as an error.
+ * theme's lanes, leaving out the red that reads as an error.
  */
 const authorColor = (email: string) => {
-  const lanes = [1, 2, 3, 4, 5, 7]
+  const lanes = [0, 1, 2, 3, 4, 5, 7]
   let hash = 0
   for (const char of email.toLowerCase()) hash = (hash * 31 + char.charCodeAt(0)) | 0
   return `var(--lane-${lanes[Math.abs(hash) % lanes.length]})`

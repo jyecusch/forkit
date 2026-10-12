@@ -253,11 +253,10 @@ func (v *View) row(g *Graph, row int, oid model.OID, edges []edge, emphasis []ui
 	}
 	for i, e := range edges {
 		graphRow.Edges[i] = model.GraphEdge{
-			FromLane:     int(e.fromLane),
-			ToLane:       int(e.toLane),
-			ThreadID:     int(e.thread),
-			Kind:         edgeKinds[e.kind],
-			OnEmphasized: hasBit(emphasis, e.firstParentOf),
+			FromLane: int(e.fromLane),
+			ToLane:   int(e.toLane),
+			ThreadID: int(e.thread),
+			Kind:     edgeKinds[e.kind],
 		}
 		if e.uncommitted {
 			graphRow.Edges[i].Uncommitted = &e.uncommitted

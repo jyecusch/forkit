@@ -46,8 +46,8 @@ func TestPartialFileKeepsDefaultsForMissingKeys(t *testing.T) {
 	if got.Graph.ShowTags {
 		t.Error("showTags from the file was not applied")
 	}
-	if got.Graph.DimmedOpacity != prefs.Defaults().Graph.DimmedOpacity {
-		t.Error("missing dimmedOpacity did not fall back to the default")
+	if got.Graph.Order != prefs.Defaults().Graph.Order {
+		t.Error("missing order did not fall back to the default")
 	}
 }
 
@@ -58,6 +58,15 @@ func TestSingleThemeBecomesAnAppearance(t *testing.T) {
 	got := openStore(t, dir).Get().Appearance
 	if got.Appearance != model.AppearanceLight || got.FontSize != 15 {
 		t.Errorf("got %+v, want light appearance and the file's font size", got)
+	}
+}
+
+func TestRemovedDimmedOpacityStillLoads(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, dir, `{"version": 1, "graph": {"showTags": false, "dimmedOpacity": 0.4}}`)
+
+	if openStore(t, dir).Get().Graph.ShowTags {
+		t.Error("the file was rejected for a preference that no longer exists")
 	}
 }
 
@@ -75,7 +84,7 @@ func TestSetValidatesAndPersists(t *testing.T) {
 	dir := t.TempDir()
 	store := openStore(t, dir)
 
-	if err := store.Set(ctx, "graph.dimmedOpacity", 5.0); err == nil {
+	if err := store.Set(ctx, "appearance.fontSize", 99); err == nil {
 		t.Error("out-of-range value was accepted")
 	}
 	if err := store.Set(ctx, "graph.nope", true); err == nil {

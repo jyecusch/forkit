@@ -4,15 +4,16 @@ import { rowHeight, type Dot, type Geometry, type Segment } from "./geometry"
 export interface GraphPalette {
   readonly lanes: ReadonlyArray<string>
   readonly background: string
-  /** Scales the toned-down strength so it reads the same in every theme. */
-  readonly dimScale: number
+  /** The uncommitted changes' line, which has no branch colour of its own. */
+  readonly uncommitted: string
 }
 
 export const readPalette = (element: Element): GraphPalette => {
   const style = getComputedStyle(element)
   const lanes = Array.from({ length: 8 }, (_, i) => style.getPropertyValue(`--lane-${i}`).trim())
-  const dimScale = Number(style.getPropertyValue("--graph-dim-scale")) || 1
-  return { lanes, background: style.getPropertyValue("--background").trim(), dimScale }
+  const background = style.getPropertyValue("--background").trim()
+  const uncommitted = mixHex(style.getPropertyValue("--highlight").trim(), background, uncommittedLine.strength)
+  return { lanes, background, uncommitted }
 }
 
 const lineWidth = 2
@@ -22,14 +23,12 @@ const lineWidth = 2
  * and dashed. Its pattern divides the row height, so every row's piece
  * continues the dashes of the one above.
  */
-export const uncommittedLine = { width: 1.25, dash: [2, 2] as const, strength: 0.65 }
+export const uncommittedLine = { width: 1.25, dash: [2, 2] as const, strength: 0.85 }
 const dotRadius = 4
 /** Radius of the bend where a line changes lane. */
 const elbowRadius = 8
 
 export interface DrawOptions {
-  /** How strongly history outside the emphasized one keeps its colour. */
-  readonly dimmedStrength: number
   readonly width: number
   readonly height: number
   /** Lanes continue past this edge, so it fades out. */
@@ -41,36 +40,23 @@ export interface DrawOptions {
 const fadeWidth = 16
 
 /**
- * Draws graph geometry. Every line and dot is drawn opaque at the same size,
- * whatever the history looks like; lines outside the emphasized history are
- * only toned down towards the background. Transparency would make
- * overlapping strokes and dot outlines show through each other.
+ * Draws graph geometry. Every line and dot is drawn opaque, in its thread's
+ * colour, at the same size; the emphasized history stands out through the
+ * rows' text rather than the lines.
  *
  * Where lanes continue past an edge the graph fades out, and a commit whose
  * dot is past it gets a marker on that edge, drawn after the fade so every
  * row still shows where its commit is.
  */
 export const drawGraph = (context: CanvasRenderingContext2D, geometry: Geometry, palette: GraphPalette, options: DrawOptions) => {
-  const { dimmedStrength, width, height } = options
-  const colors = new Map<string, string>()
-  const colorOf = (thread: number, emphasized: boolean) => {
-    const key = `${thread % palette.lanes.length}:${emphasized}`
-    let color = colors.get(key)
-    if (!color) {
-      const lane = palette.lanes[thread % palette.lanes.length]!
-      color = emphasized ? lane : mixHex(lane, palette.background, Math.min(dimmedStrength * palette.dimScale, 1))
-      colors.set(key, color)
-    }
-    return color
-  }
+  const { width, height } = options
+  const colorOf = (thread: number) => palette.lanes[thread % palette.lanes.length]!
 
   context.lineWidth = lineWidth
   context.lineCap = "butt"
   context.lineJoin = "round"
-  // The uncommitted changes' line has no branch colour of its own.
-  const uncommittedColor = mixHex(palette.lanes[0]!, palette.background, uncommittedLine.strength)
   for (const segment of geometry.segments) {
-    context.strokeStyle = segment.uncommitted ? uncommittedColor : colorOf(segment.thread, segment.emphasized)
+    context.strokeStyle = segment.uncommitted ? palette.uncommitted : colorOf(segment.thread)
     context.lineWidth = segment.uncommitted ? uncommittedLine.width : lineWidth
     context.setLineDash(segment.uncommitted ? [...uncommittedLine.dash] : [])
     context.beginPath()
@@ -83,7 +69,7 @@ export const drawGraph = (context: CanvasRenderingContext2D, geometry: Geometry,
   const clipped: Array<Dot> = []
   for (const dot of geometry.dots) {
     if (dot.x < 0 || dot.x > width) clipped.push(dot)
-    else drawDot(context, dot, colorOf(dot.thread, dot.emphasized), palette.background)
+    else drawDot(context, dot, colorOf(dot.thread), palette.background)
   }
 
   context.save()

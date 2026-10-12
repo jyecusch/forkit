@@ -33,7 +33,7 @@
   --warning: #e0af68;
   /* Marks where the user is in the navigator: Tokyo Night's yellow. */
   --highlight: #e0af68;
-  --lane-0: #9aa5ce;
+  --lane-0: #7aa2f7;
   --lane-1: #bb9af7;
   --lane-2: #7dcfff;
   --lane-3: #9ece6a;
@@ -42,7 +42,6 @@
   --lane-6: #f7768e;
   --lane-7: #73daca;
   /* How strongly toned-down history keeps its colour, relative to the setting. */
-  --graph-dim-scale: 1;
 }
 
 [data-theme="tokyo-night-day"] {
@@ -67,7 +66,7 @@
   --success: #587539;
   --warning: #8c6c3e;
   --highlight: #8c6c3e;
-  --lane-0: #6b7089;
+  --lane-0: #2e7de9;
   --lane-1: #9854f1;
   --lane-2: #007197;
   --lane-3: #587539;
@@ -75,7 +74,6 @@
   --lane-5: #b15c00;
   --lane-6: #f52a65;
   --lane-7: #118c74;
-  --graph-dim-scale: 1.4;
 }
 
 /* The other themes keep each one's own palette, mapped onto the same tokens. */
@@ -101,7 +99,7 @@
   --success: #327d22;
   --warning: #986114;
   --highlight: #b07017;
-  --lane-0: #6c6f85;
+  --lane-0: #1e66f5;
   --lane-1: #8839ef;
   --lane-2: #0494ce;
   --lane-3: #3f9e2b;
@@ -109,7 +107,6 @@
   --lane-5: #ec5d0a;
   --lane-6: #d20f39;
   --lane-7: #179299;
-  --graph-dim-scale: 1.4;
 }
 
 [data-theme="catppuccin-frappe"] {
@@ -134,7 +131,7 @@
   --success: #a6d189;
   --warning: #e5c890;
   --highlight: #e5c890;
-  --lane-0: #a5adce;
+  --lane-0: #8caaee;
   --lane-1: #ca9ee6;
   --lane-2: #99d1db;
   --lane-3: #a6d189;
@@ -142,7 +139,6 @@
   --lane-5: #ef9f76;
   --lane-6: #e78284;
   --lane-7: #81c8be;
-  --graph-dim-scale: 1;
 }
 
 [data-theme="catppuccin-macchiato"] {
@@ -167,7 +163,7 @@
   --success: #a6da95;
   --warning: #eed49f;
   --highlight: #eed49f;
-  --lane-0: #a5adcb;
+  --lane-0: #8aadf4;
   --lane-1: #c6a0f6;
   --lane-2: #91d7e3;
   --lane-3: #a6da95;
@@ -175,7 +171,6 @@
   --lane-5: #f5a97f;
   --lane-6: #ed8796;
   --lane-7: #8bd5ca;
-  --graph-dim-scale: 1;
 }
 
 [data-theme="catppuccin-mocha"] {
@@ -200,7 +195,7 @@
   --success: #a6e3a1;
   --warning: #f9e2af;
   --highlight: #f9e2af;
-  --lane-0: #a6adc8;
+  --lane-0: #89b4fa;
   --lane-1: #cba6f7;
   --lane-2: #89dceb;
   --lane-3: #a6e3a1;
@@ -208,7 +203,6 @@
   --lane-5: #fab387;
   --lane-6: #f38ba8;
   --lane-7: #94e2d5;
-  --graph-dim-scale: 1;
 }
 
 [data-theme="dracula"] {
@@ -233,7 +227,7 @@
   --success: #50fa7b;
   --warning: #f1fa8c;
   --highlight: #f1fa8c;
-  --lane-0: #a9adc1;
+  --lane-0: #8b9cf4;
   --lane-1: #bd93f9;
   --lane-2: #8be9fd;
   --lane-3: #50fa7b;
@@ -241,7 +235,6 @@
   --lane-5: #ffb86c;
   --lane-6: #ff5555;
   --lane-7: #ff79c6;
-  --graph-dim-scale: 1;
 }
 
 [data-theme="github-dark"] {
@@ -266,7 +259,7 @@
   --success: #3fb950;
   --warning: #d29922;
   --highlight: #d29922;
-  --lane-0: #8b949e;
+  --lane-0: #4493f8;
   --lane-1: #a371f7;
   --lane-2: #39c5cf;
   --lane-3: #3fb950;
@@ -274,7 +267,6 @@
   --lane-5: #db6d28;
   --lane-6: #f85149;
   --lane-7: #56d4dd;
-  --graph-dim-scale: 1;
 }
 
 [data-theme="github-light"] {
@@ -299,7 +291,7 @@
   --success: #1a7f37;
   --warning: #9a6700;
   --highlight: #9a6700;
-  --lane-0: #6e7781;
+  --lane-0: #0969da;
   --lane-1: #8250df;
   --lane-2: #1b7c83;
   --lane-3: #1a7f37;
@@ -307,7 +299,6 @@
   --lane-5: #bc4c00;
   --lane-6: #d1242f;
   --lane-7: #1b7c83;
-  --graph-dim-scale: 1.4;
 }
 
 [data-theme="gruvbox-dark"] {
@@ -332,7 +323,7 @@
   --success: #b8bb26;
   --warning: #fabd2f;
   --highlight: #fabd2f;
-  --lane-0: #a89984;
+  --lane-0: #83a598;
   --lane-1: #d3869b;
   --lane-2: #8ec07c;
   --lane-3: #b8bb26;
@@ -340,7 +331,6 @@
   --lane-5: #fe8019;
   --lane-6: #fb4934;
   --lane-7: #8ec07c;
-  --graph-dim-scale: 1;
 }
 
 [data-theme="gruvbox-light"] {
@@ -365,7 +355,7 @@
   --success: #746f0d;
   --warning: #966211;
   --highlight: #b07213;
-  --lane-0: #7c6f64;
+  --lane-0: #076678;
   --lane-1: #8f3f71;
   --lane-2: #427b58;
   --lane-3: #79740e;
@@ -373,7 +363,6 @@
   --lane-5: #af3a03;
   --lane-6: #9d0006;
   --lane-7: #427b58;
-  --graph-dim-scale: 1.4;
 }
 
 [data-theme="nord"] {
@@ -398,7 +387,7 @@
   --success: #a3be8c;
   --warning: #ebcb8b;
   --highlight: #ebcb8b;
-  --lane-0: #a6afc0;
+  --lane-0: #81a1c1;
   --lane-1: #b48ead;
   --lane-2: #88c0d0;
   --lane-3: #a3be8c;
@@ -406,7 +395,6 @@
   --lane-5: #d08770;
   --lane-6: #bf616a;
   --lane-7: #8fbcbb;
-  --graph-dim-scale: 1;
 }
 
 [data-theme="one-dark"] {
@@ -431,7 +419,7 @@
   --success: #98c379;
   --warning: #e5c07b;
   --highlight: #e5c07b;
-  --lane-0: #9da5b4;
+  --lane-0: #61afef;
   --lane-1: #c678dd;
   --lane-2: #56b6c2;
   --lane-3: #98c379;
@@ -439,7 +427,6 @@
   --lane-5: #d19a66;
   --lane-6: #e06c75;
   --lane-7: #56b6c2;
-  --graph-dim-scale: 1;
 }
 
 [data-theme="one-light"] {
@@ -464,7 +451,7 @@
   --success: #40813f;
   --warning: #9a6a01;
   --highlight: #b27901;
-  --lane-0: #696c77;
+  --lane-0: #4078f2;
   --lane-1: #a626a4;
   --lane-2: #0184bc;
   --lane-3: #50a14f;
@@ -472,7 +459,6 @@
   --lane-5: #986801;
   --lane-6: #e45649;
   --lane-7: #0997b3;
-  --graph-dim-scale: 1.4;
 }
 
 [data-theme="rose-pine"] {
@@ -497,7 +483,7 @@
   --success: #9ccfd8;
   --warning: #f6c177;
   --highlight: #f6c177;
-  --lane-0: #908caa;
+  --lane-0: #7e9cd8;
   --lane-1: #c4a7e7;
   --lane-2: #9ccfd8;
   --lane-3: #9ccfd8;
@@ -505,7 +491,6 @@
   --lane-5: #ebbcba;
   --lane-6: #eb6f92;
   --lane-7: #3e8fb0;
-  --graph-dim-scale: 1;
 }
 
 [data-theme="rose-pine-moon"] {
@@ -530,7 +515,7 @@
   --success: #9ccfd8;
   --warning: #f6c177;
   --highlight: #f6c177;
-  --lane-0: #908caa;
+  --lane-0: #7e9cd8;
   --lane-1: #c4a7e7;
   --lane-2: #9ccfd8;
   --lane-3: #9ccfd8;
@@ -538,7 +523,6 @@
   --lane-5: #ea9a97;
   --lane-6: #eb6f92;
   --lane-7: #3e8fb0;
-  --graph-dim-scale: 1;
 }
 
 [data-theme="rose-pine-dawn"] {
@@ -563,7 +547,7 @@
   --success: #467881;
   --warning: #986622;
   --highlight: #b07627;
-  --lane-0: #797593;
+  --lane-0: #4f6fa8;
   --lane-1: #907aa9;
   --lane-2: #56949f;
   --lane-3: #56949f;
@@ -571,7 +555,6 @@
   --lane-5: #c67874;
   --lane-6: #b4637a;
   --lane-7: #286983;
-  --graph-dim-scale: 1.4;
 }
 
 [data-theme="solarized-dark"] {
@@ -596,7 +579,7 @@
   --success: #859900;
   --warning: #b58900;
   --highlight: #b58900;
-  --lane-0: #839496;
+  --lane-0: #268bd2;
   --lane-1: #6c71c4;
   --lane-2: #2aa198;
   --lane-3: #859900;
@@ -604,7 +587,6 @@
   --lane-5: #cb4b16;
   --lane-6: #dc322f;
   --lane-7: #d33682;
-  --graph-dim-scale: 1;
 }
 
 [data-theme="solarized-light"] {
@@ -629,7 +611,7 @@
   --success: #687700;
   --warning: #8f6c00;
   --highlight: #a57d00;
-  --lane-0: #657b83;
+  --lane-0: #268bd2;
   --lane-1: #6c71c4;
   --lane-2: #299e95;
   --lane-3: #849700;
@@ -637,7 +619,6 @@
   --lane-5: #cb4b16;
   --lane-6: #dc322f;
   --lane-7: #d33682;
-  --graph-dim-scale: 1.4;
 }
 
 /* Code colours, from each theme's own palette and conventions. */
