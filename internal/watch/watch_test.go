@@ -23,8 +23,9 @@ var layout = watch.Layout{
 
 func TestClassify(t *testing.T) {
 	cases := map[string]watch.Change{
-		"/r/.git/refs/heads/main":      {Refs: true},
-		"/r/.git/packed-refs":          {Refs: true},
+		"/r/.git/refs/heads/main":      {Refs: true, Worktrees: true},
+		"/r/.git/refs/remotes/o/main":  {Refs: true},
+		"/r/.git/packed-refs":          {Refs: true, Worktrees: true},
 		"/r/.git/config":               {Refs: true, Remotes: true},
 		"/r/.git/HEAD":                 {Refs: true, Worktrees: true, Status: map[model.WorktreeID]bool{"main": true}},
 		"/r/.git/index":                {Status: map[model.WorktreeID]bool{"main": true}},

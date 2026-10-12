@@ -261,6 +261,11 @@ func classifyCommonDirPath(layout Layout, rel string, change *Change) {
 		return
 	case "refs", "packed-refs":
 		change.Refs = true
+		// A commit moves the checked-out branch without touching HEAD, so
+		// worktrees' heads are read again whenever a branch may have moved.
+		if rel == "packed-refs" || strings.HasPrefix(filepath.ToSlash(rel), "refs/heads/") {
+			change.Worktrees = true
+		}
 		return
 	case "config":
 		change.Remotes = true
