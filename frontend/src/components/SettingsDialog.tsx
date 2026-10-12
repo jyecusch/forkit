@@ -64,7 +64,7 @@ export const SettingsDialog = ({ open, onOpenChange, preferences: p }: SettingsD
 
           <Group title="Graph">
             <Row label="Order">
-              <Choice value={p.graph.order} options={{ topo: "Topological", date: "Date" }} onChange={(v) => set("graph.order", v)} />
+              <Choice value={p.graph.order} options={{ date: "Date", topo: "Topological" }} onChange={(v) => set("graph.order", v)} />
             </Row>
             <Row label="Show remote branches" end>
               <Switch checked={p.graph.showRemoteBranches} onCheckedChange={(v) => set("graph.showRemoteBranches", v)} />
