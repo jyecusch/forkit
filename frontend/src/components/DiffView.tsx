@@ -150,10 +150,13 @@ export const DiffView = ({ repo, target, revision, active, onClose }: DiffViewPr
   // corrected over the next few frames until it settles.
   const third = () => (scrollRef.current?.clientHeight ?? 0) / 3
   const settling = useRef(0)
+  // Scrolling caused by moving to a change, rather than by hand, until then.
+  const navigatingUntil = useRef(0)
   const reveal = (row: number) => {
     cancelAnimationFrame(settling.current)
     let frames = 0
     const place = () => {
+      navigatingUntil.current = performance.now() + 250
       const element = scrollRef.current
       const start = virtualizer.measurementsCache[row]?.start ?? row * lineHeight
       const target = Math.max(start - third(), 0)
@@ -182,6 +185,24 @@ export const DiffView = ({ repo, target, revision, active, onClose }: DiffViewPr
       : anchorRow()
   const passed = changes.filter((row) => row <= anchor).length
 
+  // The change last moved to with the arrows or the ruler. It is tracked
+  // rather than worked out from the scroll position, because changes near
+  // the top or bottom of a file cannot scroll to the anchor. Scrolling by
+  // hand hands back to the scroll position.
+  const [moved, setMoved] = useState<number>()
+  // At the very top, the first change on screen is the current one.
+  const atTop = scroller !== null && scroller.scrollTop <= 1 && !atEnd
+  const firstOnScreen = changes.length > 0 && scroller !== null && changes[0]! <= rowAt(scroller.clientHeight - 1)
+  const fromScroll = atTop ? (firstOnScreen ? 0 : -1) : passed - 1
+  const current = moved !== undefined && moved < changes.length ? moved : fromScroll
+  const moveTo = (index: number) => {
+    setMoved(index)
+    reveal(changes[index]!)
+  }
+  const onUserScroll = () => {
+    if (moved !== undefined && performance.now() > navigatingUntil.current) setMoved(undefined)
+  }
+
   const scrollToFraction = (fraction: number) => {
     const element = scrollRef.current
     if (!element) return
@@ -189,10 +210,8 @@ export const DiffView = ({ repo, target, revision, active, onClose }: DiffViewPr
   }
 
   const step = (direction: 1 | -1) => {
-    const anchor = anchorRow()
-    const next =
-      direction === 1 ? changes.find((row) => row > anchor) : [...changes].reverse().find((row) => row < anchor)
-    if (next !== undefined) reveal(next)
+    const next = current + direction
+    if (next >= 0 && next < changes.length) moveTo(next)
   }
 
   // After a layout switch, the line that was in view is brought back to the same place.
@@ -211,7 +230,7 @@ export const DiffView = ({ repo, target, revision, active, onClose }: DiffViewPr
   useEffect(() => {
     if (!diff || sameDiff(revealed.current, target)) return
     revealed.current = target
-    if (changes[0] !== undefined) reveal(changes[0])
+    if (changes[0] !== undefined) moveTo(0)
   })
 
   useEffect(() => {
@@ -293,7 +312,7 @@ export const DiffView = ({ repo, target, revision, active, onClose }: DiffViewPr
             {changes.length > 0 && (
               <span className="-mr-1.5 flex items-center">
                 <span className="mr-1 text-subtle-foreground tabular-nums">
-                  {passed > 0 ? `${passed} of ${changes.length}` : `${changes.length} ${changes.length === 1 ? "change" : "changes"}`}
+                  {current >= 0 ? `${current + 1} of ${changes.length}` : `${changes.length} ${changes.length === 1 ? "change" : "changes"}`}
                 </span>
                 <button aria-label="Previous change" title="Previous change (⌥↑)" onClick={() => step(-1)} className={navButton}>
                   <ChevronUp className="size-4" />
@@ -312,6 +331,7 @@ export const DiffView = ({ repo, target, revision, active, onClose }: DiffViewPr
         <div className="flex min-h-0 flex-1">
           <div
             ref={scrollRef}
+            onScroll={onUserScroll}
             tabIndex={0}
             aria-busy={!diff}
             className={cn(
@@ -358,7 +378,7 @@ export const DiffView = ({ repo, target, revision, active, onClose }: DiffViewPr
               rows={rows.length}
               viewTop={(virtualizer.scrollOffset ?? 0) / Math.max(virtualizer.getTotalSize(), 1)}
               viewHeight={(scrollRef.current?.clientHeight ?? 0) / Math.max(virtualizer.getTotalSize(), 1)}
-              onJump={reveal}
+              onJump={(row) => moveTo(changes.indexOf(row))}
               onScrollTo={scrollToFraction}
             />
           )}
