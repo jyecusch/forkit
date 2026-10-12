@@ -131,6 +131,7 @@ func TestBackendBudgets(t *testing.T) {
 	start := time.Now()
 	ready := deltas.expect(reposEvent, func(v json.RawMessage) bool { return strings.Contains(string(v), `"state":"ready"`) })
 	shown := deltas.expect(graphEvent, func(v json.RawMessage) bool { return !strings.Contains(string(v), `"totalRows":0`) })
+	complete := deltas.expect(graphEvent, func(v json.RawMessage) bool { return strings.Contains(string(v), `"complete":true`) })
 	if _, err := ws.Open(ctx, path); err != nil {
 		t.Fatal(err)
 	}
@@ -143,10 +144,8 @@ func TestBackendBudgets(t *testing.T) {
 		t.Fatal(err)
 	}
 	check(t, "open to first window", time.Since(start), firstWindowBudget)
+	t.Logf("full history loaded after %v", complete(t, start).Round(time.Millisecond))
 	ready(t, start)
-	complete := deltas.expect(graphEvent, func(v json.RawMessage) bool { return strings.Contains(string(v), `"complete":true`) })
-	complete(t, start)
-	t.Logf("full history loaded after %v", time.Since(start).Round(time.Millisecond))
 
 	var shape model.GraphView
 	deltas.mu.Lock()
@@ -169,6 +168,7 @@ func TestBackendBudgets(t *testing.T) {
 			t.Fatal(err)
 		}
 		check(t, "deep window", time.Since(start), emphasisBudget)
+		logSpans(t, spans, start)
 	})
 
 	t.Run("emphasis switch", func(t *testing.T) {
@@ -201,8 +201,9 @@ func TestBackendBudgets(t *testing.T) {
 		}
 		t.Cleanup(func() { deleteRefs(path, "refs/remotes/origin/forkit-perf/") })
 		waitIdle()
+		last := fmt.Sprintf("forkit-perf/%d", churn-1)
 		refsUpdated := deltas.expect(synchub.EventName("refs", string(loc.ID)), func(v json.RawMessage) bool {
-			return strings.Contains(string(v), "forkit-perf/")
+			return strings.Contains(string(v), last+`"`)
 		})
 		gitStdin(t, path, updates.String(), "update-ref", "--stdin")
 		since := time.Now()

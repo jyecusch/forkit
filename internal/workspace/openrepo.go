@@ -135,7 +135,9 @@ func (r *openRepo) onFilesChanged(ctx context.Context, change watch.Change) {
 	}
 }
 
-// refresh re-reads what change says is stale and publishes it.
+// refresh re-reads what change says is stale and publishes it. The graph is
+// requested as soon as refs are known, because status can be slow on large
+// worktrees and the graph does not depend on it.
 func (r *openRepo) refresh(ctx context.Context, change watch.Change) error {
 	r.refreshMu.Lock()
 	defer r.refreshMu.Unlock()
@@ -156,15 +158,16 @@ func (r *openRepo) refresh(ctx context.Context, change watch.Change) error {
 	}
 
 	worktreesChanged := change.Worktrees || len(change.Status) > 0
+	var newWorktrees []model.WorktreeID
 	if change.Worktrees {
 		added, removed, err := r.reloadWorktrees(ctx)
 		if err != nil {
 			return err
 		}
+		newWorktrees = added
 		for _, id := range added {
 			change.Status[id] = true
 		}
-		r.refreshIndexes(ctx, added)
 		for _, id := range removed {
 			channels.FileStatus.Drop(ctx, string(id))
 		}
@@ -180,7 +183,11 @@ func (r *openRepo) refresh(ctx context.Context, change watch.Change) error {
 			return err
 		}
 	}
+	if change.Refs || change.Worktrees {
+		r.requestGraphRefresh(ctx)
+	}
 
+	r.refreshIndexes(ctx, newWorktrees)
 	if err := r.reloadStatus(ctx, change.Status); err != nil {
 		return err
 	}
@@ -194,9 +201,6 @@ func (r *openRepo) refresh(ctx context.Context, change watch.Change) error {
 		if err := channels.Worktrees.Publish(ctx, scope, worktrees); err != nil {
 			return err
 		}
-	}
-	if change.Refs || change.Worktrees {
-		r.requestGraphRefresh(ctx)
 	}
 	return nil
 }
