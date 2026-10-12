@@ -143,8 +143,8 @@ func (r *openRepo) startWatching() error {
 	return err
 }
 
-func (r *openRepo) onFilesChanged(ctx context.Context, change watch.Change) {
-	ctx, span := r.ws.tracer.Start(ctx, "watch.batch", trace.WithAttributes(
+func (r *openRepo) onFilesChanged(change watch.Change) {
+	ctx, span := r.ws.tracer.Start(r.lifetime, "watch.batch", trace.WithAttributes(
 		attribute.String("repo.id", string(r.loc.ID)),
 		attribute.Bool("change.refs", change.Refs),
 		attribute.Int("change.status", len(change.Status)),

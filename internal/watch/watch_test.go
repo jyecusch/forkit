@@ -1,7 +1,6 @@
 package watch_test
 
 import (
-	"context"
 	"io"
 	"log/slog"
 	"path/filepath"
@@ -67,7 +66,7 @@ func TestWatcherReportsCommitsAndEdits(t *testing.T) {
 	w, err := watch.Start(watch.Layout{
 		CommonDir: filepath.Join(fixture.Dir, ".git"),
 		Worktrees: []watch.Worktree{{ID: "main", Path: fixture.Dir, GitDir: filepath.Join(fixture.Dir, ".git")}},
-	}, func(_ context.Context, c watch.Change) { changes <- c }, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	}, func(c watch.Change) { changes <- c }, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -122,6 +122,33 @@ func TestOpenPublishesRepositoryAndFollowsChanges(t *testing.T) {
 	}
 }
 
+func TestWorktreeAddedOutsideForkitIsPublished(t *testing.T) {
+	ctx := context.Background()
+	fixture := gittest.New(t)
+	fixture.Commit("initial")
+	ws, rec, _ := newWorkspace(t)
+
+	opened, err := ws.Open(ctx, fixture.Dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec.waitFor(t, synchub.EventName("repos", workspace.ReposScope), func(v json.RawMessage) bool {
+		return strings.Contains(string(v), `"state":"ready"`)
+	})
+
+	path := filepath.Join(tempDir(t), "outside")
+	if err := runGit(fixture.Dir, "worktree", "add", "-b", "outside", path); err != nil {
+		t.Fatal(err)
+	}
+	scope := string(opened.ID)
+	rec.waitFor(t, synchub.EventName("worktrees", scope), func(v json.RawMessage) bool {
+		return strings.Contains(string(v), path)
+	})
+	rec.waitFor(t, synchub.EventName("refs", scope), func(v json.RawMessage) bool {
+		return strings.Contains(string(v), "refs/heads/outside")
+	})
+}
+
 func TestClosingTheActiveRepositoryActivatesItsNeighbour(t *testing.T) {
 	ctx := context.Background()
 	ws, _, session := newWorkspace(t)
