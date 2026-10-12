@@ -290,9 +290,18 @@ type GraphPreferences struct {
 	DimmedOpacity float64 `json:"dimmedOpacity"`
 }
 
+// One column of old and new lines, or old and new side by side.
+type DiffLayout string
+
+const (
+	DiffLayoutUnified DiffLayout = "unified"
+	DiffLayoutSplit   DiffLayout = "split"
+)
+
 type DiffPreferences struct {
 	// Treat lines that differ only in spacing as unchanged.
-	IgnoreWhitespace bool `json:"ignoreWhitespace"`
+	IgnoreWhitespace bool       `json:"ignoreWhitespace"`
+	Layout           DiffLayout `json:"layout"`
 }
 
 type GitPreferences struct {

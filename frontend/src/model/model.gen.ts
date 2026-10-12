@@ -208,8 +208,13 @@ export const GraphPreferences = Schema.Struct({
 })
 export type GraphPreferences = typeof GraphPreferences.Type
 
+/** One column of old and new lines, or old and new side by side. */
+export const DiffLayout = Schema.Literals(["unified", "split"])
+export type DiffLayout = typeof DiffLayout.Type
+
 export const DiffPreferences = Schema.Struct({
   ignoreWhitespace: Schema.Boolean,
+  layout: DiffLayout,
 })
 export type DiffPreferences = typeof DiffPreferences.Type
 

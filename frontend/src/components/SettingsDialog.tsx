@@ -77,6 +77,9 @@ export const SettingsDialog = ({ open, onOpenChange, preferences: p }: SettingsD
           </Group>
 
           <Group title="Diffs">
+            <Row label="Layout">
+              <Choice value={p.diff.layout} options={{ unified: "Unified", split: "Side by side" }} onChange={(v) => set("diff.layout", v)} />
+            </Row>
             <Row label="Ignore whitespace" hint="Lines that differ only in spacing show as unchanged." end>
               <Switch checked={p.diff.ignoreWhitespace} onCheckedChange={(v) => set("diff.ignoreWhitespace", v)} />
             </Row>
