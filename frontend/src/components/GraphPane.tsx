@@ -1,6 +1,6 @@
 import { useVirtualizer } from "@tanstack/react-virtual"
 import { Effect } from "effect"
-import { Pencil } from "lucide-react"
+import { Asterisk } from "lucide-react"
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type KeyboardEvent } from "react"
 import { useForkedEffect, useResolvedTheme } from "@/app/hooks"
 import { useService } from "@/app/services"
@@ -433,8 +433,8 @@ const ChangesRow = ({ columns, count, selected, onSelect }: { columns: string; c
   >
     <span role="gridcell" />
     <span role="gridcell" className="flex min-w-0 items-center gap-2">
-      {/* The theme's yellow marks work in progress, rather than weight. */}
-      <Pencil aria-hidden className="size-3.5 flex-none text-highlight" />
+      {/* The theme's yellow marks work in progress, rather than weight, with the usual "modified" asterisk. */}
+      <Asterisk aria-hidden className="size-3 flex-none text-highlight" strokeWidth={2.5} />
       <span className="truncate text-foreground italic">Uncommitted changes</span>
       <span className="flex-none rounded bg-foreground/[0.07] px-1.5 text-[11px] leading-[18px] text-secondary-foreground tabular-nums">
         {count} {count === 1 ? "file" : "files"}
