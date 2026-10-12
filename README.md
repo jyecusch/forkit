@@ -4,7 +4,7 @@
 
 <h1 align="center">Forkit</h1>
 
-<p align="center">A fast, cross-platform git client that treats worktrees as first-class.<br>Built because every client we tried was too forking slow.</p>
+<p align="center">A fast forking git client</p>
 
 Forkit stays responsive on repositories with very long histories, thousands of branches and tags, and heavy daily activity: the kind that leave other clients staring at a spinner, reconsidering their forking life choices. History is laid out in Go and the window only ever receives the rows on screen. Every open repository is watched, so the UI keeps up with whatever changes on disk.
 
