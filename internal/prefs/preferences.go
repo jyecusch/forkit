@@ -42,7 +42,7 @@ func Defaults() model.Preferences {
 			DateFormat: model.DateFormatRelative,
 		},
 		Graph: model.GraphPreferences{
-			Order:              model.GraphOrderTopo,
+			Order:              model.GraphOrderDate,
 			ShowRemoteBranches: true,
 			ShowTags:           true,
 		},

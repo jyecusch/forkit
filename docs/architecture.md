@@ -17,11 +17,11 @@ Forkit is a [Wails](https://wails.io) app. A Go backend drives the system `git` 
 
 ## Graph layout
 
-`git log --topo-order --format="%H %P"` streams into a compact in-memory history. Oids are interned to integer IDs with a custom hash index, which keeps a 1.3-million-commit repository at about 80 MB.
+`git log --date-order --format="%H %P"` (or `--topo-order`, a preference) streams into a compact in-memory history. Oids are interned to integer IDs with a custom hash index, which keeps a 1.3-million-commit repository at about 80 MB.
 
 Lanes are assigned in a single pass. Only each row's lane and thread are stored, plus a checkpoint of the lane state every 512 rows. Edges for a window are replayed from the nearest checkpoint, so they never have to be stored for the whole history.
 
-When refs only move forward, new commits are read with the old tips excluded, prepended, and the whole history re-laid out in memory (about 30 ms for 1.3M commits). Anything else, such as a force push, triggers a streaming reload.
+When refs only move forward, new commits are read with the old tips excluded, prepended, and the whole history re-laid out in memory (about 30 ms for 1.3M commits). Git is asked first whether its own order would put them on top; in date order a fetched branch's older commits belong further down. Anything else, such as a force push, triggers a streaming reload.
 
 Emphasis is the first-parent chain from the emphasized ref's tip, computed as a bitset over rows and cached per layout version.
 
@@ -44,6 +44,7 @@ These answer the plan's open questions and record where the implementation diffe
 
 - **Wails v2.** v3 was still in beta when work started (v3.0.0-beta.28).
 - **JSON Schema with a small in-repo generator** (`tools/schemagen`) rather than TypeSpec. One dependency-free tool produces both the Go types and the Effect Schemas. The backend validates hand-edited preference files against the same schema at runtime.
+- **History is in date order by default**, so newer commits are above older ones; parents still come after their children. Topological order, which keeps each line of history together, is a preference.
 - **Emphasis is the first-parent line**, and the emphasized branch keeps its lane rather than moving left, so switching emphasis never re-lays out the graph.
 - **Worktrees are sub-tabs**, as in the design mockup.
 - **System git is required**, version 2.36 or newer. Forkit does not bundle git.
