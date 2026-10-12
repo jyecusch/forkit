@@ -49,7 +49,8 @@ export const layoutColumns = (paneWidth: number, lanes: number): Columns => {
   const fixedWidth = (c: Choice) => listInset * 2 + optional(c).reduce((sum, w) => sum + w + gap, gap)
   const choice = choices.find((c) => paneWidth - fixedWidth(c) >= minDescription + minGraph) ?? choices[choices.length - 1]!
   const budget = Math.min(Math.max(maxGraph, Math.round(paneWidth * graphShare)), paneWidth - fixedWidth(choice) - minDescription)
-  const graph = Math.max(graphWidthFor(1), Math.min(graphNeeds, budget))
+  // A graph narrower than it needs ends on a whole lane.
+  const graph = Math.max(graphWidthFor(1), graphNeeds <= budget ? graphNeeds : graphWidthFor(Math.floor((budget - gutter * 2) / laneWidth)))
   const template = [`${graph}px`, "minmax(0,1fr)", ...optional(choice).map((w) => `${w}px`)].join(" ")
   return { graph, graphNeeds, ...choice, template }
 }

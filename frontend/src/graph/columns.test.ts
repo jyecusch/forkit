@@ -9,17 +9,17 @@ describe("layoutColumns", () => {
 
   it("caps a wide graph so the description keeps its room", () => {
     const columns = layoutColumns(500, 70)
-    expect(columns.graph).toBe(76)
+    expect(columns.graph).toBe(60)
     expect(columns.graph).toBeLessThan(columns.graphNeeds)
   })
 
   it("keeps author while the graph has a few lanes, and drops it before going below", () => {
-    expect(layoutColumns(800, 20)).toMatchObject({ showAuthor: true, graph: 184 })
+    expect(layoutColumns(800, 20)).toMatchObject({ showAuthor: true, graph: 168 })
     expect(layoutColumns(660, 20)).toMatchObject({ showAuthor: false })
   })
 
   it("lets a wide graph take a quarter of a wide pane", () => {
-    expect(layoutColumns(1200, 30).graph).toBe(300)
+    expect(layoutColumns(1200, 30).graph).toBe(294)
   })
 
   it("drops author, then commit, then date as the pane narrows", () => {

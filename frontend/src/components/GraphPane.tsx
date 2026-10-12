@@ -14,7 +14,11 @@ import { formatDate, formatFullDate, shortOid } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import type { GraphView, Preferences, Ref, RefId, RepoId } from "@/model/model.gen"
 import { GraphData, type LoadedRow } from "@/services/GraphData"
+import { focusIsLost } from "./Chrome"
 import { RefBadge } from "./RefBadge"
+
+/** The text columns slide, rather than jump, when the graph changes width. */
+const columnsTransition = matchMedia("(prefers-reduced-motion: reduce)").matches ? undefined : "grid-template-columns 150ms ease-out"
 
 /** Rows rendered beyond the viewport on each side, for rows and graph alike. */
 const overscan = 30
@@ -89,21 +93,30 @@ export const GraphPane = (props: GraphPaneProps) => {
     [active, graphData, repo, view, emphasized, first, last],
   )
 
+  // The list takes focus when it first appears, if nothing else has it.
+  useEffect(() => {
+    if (active && focusIsLost()) scrollRef.current?.focus({ preventScroll: true })
+  }, [active])
+
   // Jumps (to a ref, to either end, back to this tab) re-size the graph for
   // where they land; scrolling only ever widens it.
-  const [jumps, setJumps] = useState(0)
-  const jump = () => setJumps((n) => n + 1)
+  // A jump records the first row it lands on, which the graph is sized
+  // from until the list has scrolled there.
+  const [jump, setJump] = useState<{ readonly nonce: number; readonly landing?: number }>({ nonce: 0 })
+  const jumpTo = (landing?: number) => setJump((last) => ({ nonce: last.nonce + 1, ...(landing !== undefined && { landing }) }))
+  const viewportRows = Math.ceil(viewportHeight / rowHeight)
   useEffect(() => {
-    if (active) setJumps((n) => n + 1)
+    if (active) setJump((last) => ({ nonce: last.nonce + 1 }))
   }, [active])
 
   // A row jumped to is centred, selected and brought into view sideways.
   useEffect(() => {
     if (!scrollRequest || scrollRequest.row < 0) return
-    virtualizer.scrollToOffset(Math.max(scrollRequest.row * rowHeight - (virtualizer.scrollRect?.height ?? 0) / 2 + rowHeight / 2, 0))
+    const top = Math.max(scrollRequest.row * rowHeight - (virtualizer.scrollRect?.height ?? 0) / 2 + rowHeight / 2, 0)
+    virtualizer.scrollToOffset(top)
     setPendingSelect(scrollRequest.row)
     setPanToRow(scrollRequest.row)
-    setJumps((n) => n + 1)
+    setJump((last) => ({ nonce: last.nonce + 1, landing: Math.floor(top / rowHeight) }))
   }, [scrollRequest, virtualizer])
 
   const theme = useResolvedTheme()
@@ -111,15 +124,14 @@ export const GraphPane = (props: GraphPaneProps) => {
     setPalette(readPalette(document.documentElement))
   }, [theme])
 
-  // The graph is sized for the lanes on screen, plus one spare. While
-  // scrolling it only widens, and only once the reader has paused with rows
-  // clipped, so text does not move under a moving list.
-  const scrolling = useScrolling(scrollRef)
-  const viewportFirst = Math.floor((virtualizer.scrollOffset ?? 0) / rowHeight)
-  const viewportWidest = widestLane(viewportFirst - 3, viewportFirst + Math.ceil(viewportHeight / rowHeight) + 3, (index) =>
-    graphData.peek(repo, index),
-  )
-  const lanes = useRatchet(viewportWidest < 0 ? 0 : Math.max(viewportWidest + 2, 2), scrolling, jumps)
+  // The graph is sized for the lanes on screen, plus one spare. It never
+  // changes under a moving list: it widens once the reader pauses with rows
+  // clipped, narrows after a longer rest, and starts afresh after a jump.
+  const scrolling = useScrolling(scrollRef, pauseAfter)
+  const resting = !useScrolling(scrollRef, restAfter)
+  const viewportFirst = jump.landing ?? Math.floor((virtualizer.scrollOffset ?? 0) / rowHeight)
+  const viewportWidest = widestLane(viewportFirst - 3, viewportFirst + viewportRows + 3, (index) => graphData.peek(repo, index))
+  const lanes = useRatchet(viewportWidest < 0 ? 0 : Math.max(viewportWidest + 2, 2), { scrolling, resting, reset: jump.nonce })
   const columns = layoutColumns(paneWidth, lanes)
   const maxOffset = Math.max(laneX(viewportWidest) + gutter - columns.graph, 0)
 
@@ -264,14 +276,15 @@ export const GraphPane = (props: GraphPaneProps) => {
     const next = Math.min(target, view.totalRows - 1)
     virtualizer.scrollToIndex(next)
     setPendingSelect(next)
-    if (event.key === "Home" || event.key === "End") jump()
+    if (event.key === "Home") jumpTo(0)
+    if (event.key === "End") jumpTo(Math.max(view.totalRows - viewportRows, 0))
   }
 
   return (
     <section ref={sectionRef} className="flex min-h-0 min-w-0 flex-1 flex-col" aria-label="History">
       <div
         className="grid h-8 flex-none items-center gap-3 overflow-y-hidden border-b text-xs font-medium whitespace-nowrap text-subtle-foreground [scrollbar-gutter:stable]"
-        style={{ gridTemplateColumns: columns.template, paddingInline: listInset }}
+        style={{ gridTemplateColumns: columns.template, paddingInline: listInset, transition: columnsTransition }}
       >
         <span />
         <span>Description</span>
@@ -287,6 +300,7 @@ export const GraphPane = (props: GraphPaneProps) => {
         tabIndex={0}
         onKeyDown={onKeyDown}
         onWheel={onWheel}
+        onScroll={() => jump.landing !== undefined && setJump(({ nonce }) => ({ nonce }))}
         className="group/grid relative flex-1 overflow-y-auto outline-none [scrollbar-gutter:stable]"
       >
         <div className="relative overflow-hidden" style={{ height: virtualizer.getTotalSize() }}>
@@ -326,23 +340,28 @@ const copySha = (oid: string) =>
   void navigator.clipboard.writeText(oid).then(() => notify({ tone: "info", message: `Copied ${shortOid(oid)}`, duration: 1500 }))
 
 /**
- * Follows a value that only grows, and only once scrolling has stopped. A
- * new reset starts it again from the next value.
+ * Follows a value without moving while scrolling: it grows once scrolling
+ * pauses, shrinks by two or more once it has rested, and a new reset takes
+ * the next value at once.
  */
-const useRatchet = (value: number, scrolling: boolean, reset: number) => {
+const useRatchet = (value: number, { scrolling, resting, reset }: { scrolling: boolean; resting: boolean; reset: number }) => {
   const [settled, setSettled] = useState({ value, reset })
   const current = settled.reset === reset ? settled.value : 0
   useEffect(() => {
-    if (value > current && (current === 0 || !scrolling)) setSettled({ value, reset })
-  }, [value, current, scrolling, reset])
+    const grow = value > current && (current === 0 || !scrolling)
+    const shrink = value <= current - 2 && resting
+    if (grow || shrink) setSettled({ value, reset })
+  }, [value, current, scrolling, resting, reset])
   return current === 0 ? value : current
 }
 
 /** How long scrolling must pause before the reader is taken to be reading. */
-const idleAfter = 600
+const pauseAfter = 600
+/** How long the list must rest before a wider graph than needed narrows. */
+const restAfter = 1500
 
-/** Whether an element has scrolled recently. */
-const useScrolling = (ref: React.RefObject<HTMLElement | null>) => {
+/** Whether an element has scrolled within the last idleAfter milliseconds. */
+const useScrolling = (ref: React.RefObject<HTMLElement | null>, idleAfter: number) => {
   const [scrolling, setScrolling] = useState(false)
   useEffect(() => {
     const element = ref.current
@@ -412,7 +431,7 @@ const CommitRow = memo(function CommitRow({
   now,
   onSelect,
 }: CommitRowProps) {
-  const style = { top, height: rowHeight, gridTemplateColumns: columns, paddingInline: listInset }
+  const style = { top, height: rowHeight, gridTemplateColumns: columns, paddingInline: listInset, transition: columnsTransition }
   if (!loaded) {
     return (
       <div role="row" aria-rowindex={index + 1} aria-busy className="absolute inset-x-0 grid items-center gap-3" style={style}>

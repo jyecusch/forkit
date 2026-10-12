@@ -2,6 +2,7 @@ import { useLiveQuery } from "@tanstack/react-db"
 import { Outlet, useNavigate } from "@tanstack/react-router"
 import { useEffect, useLayoutEffect, useMemo, useState } from "react"
 import { usePreferences, useResolvedTheme, useSession } from "@/app/hooks"
+import { dismissActions } from "@/app/notifications"
 import { setPreferencesOpen, usePreferencesOpen } from "@/app/preferencesDialog"
 import { useService } from "@/app/services"
 import { useShortcuts } from "@/app/useShortcuts"
@@ -43,6 +44,7 @@ export const AppShell = () => {
   const openRepos = useMemo(() => session?.openRepos.map((open) => open.id) ?? [], [session])
   useEffect(() => graphData.retain(openRepos), [graphData, openRepos])
   useShortcuts(openRepos, activeRepo)
+  useEffect(dismissActions, [activeRepo])
   const preferencesOpen = usePreferencesOpen()
 
   return (
@@ -69,19 +71,21 @@ export const RepoRoute = ({ repoId }: { repoId: RepoId }) => {
   // A repository is mounted when first shown, then kept.
   const [shown, setShown] = useState<ReadonlySet<RepoId>>(new Set([repoId]))
   if (!shown.has(repoId)) setShown(new Set([...shown, repoId]))
-  if (!byId.has(repoId) || !preferences) {
-    return (
-      <Chrome sidebar={<SidebarSkeleton />} tabs={<RepoTabs />}>
-        <div className="h-10 flex-none border-b" />
-      </Chrome>
-    )
-  }
+  // The kept repositories stay mounted even while the active one loads.
+  const loading = !byId.has(repoId) || !preferences
   return (
-    <Chrome tabs={<RepoTabs />}>
-      {session?.openRepos.map((open) => {
-        const repo = byId.get(open.id)
-        return repo && shown.has(repo.id) && <RepoView key={repo.id} repo={repo} openRepo={open} preferences={preferences} active={open.id === repoId} />
-      })}
+    <Chrome tabs={<RepoTabs />} sidebar={loading && <SidebarSkeleton />}>
+      {loading && <div className="h-10 flex-none border-b" />}
+      {preferences &&
+        session?.openRepos.map((open) => {
+          const repo = byId.get(open.id)
+          return (
+            repo &&
+            shown.has(repo.id) && (
+              <RepoView key={repo.id} repo={repo} openRepo={open} preferences={preferences} active={!loading && open.id === repoId} />
+            )
+          )
+        })}
     </Chrome>
   )
 }

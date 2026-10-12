@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Input } from "@/components/ui/input"
 import type { Ref, Repo } from "@/model/model.gen"
 import { Commands } from "@/services/Commands"
+import { useRestoreFocus } from "./Chrome"
 
 interface NewWorktreeDialogProps {
   readonly repo: Repo
@@ -22,6 +23,7 @@ export const NewWorktreeDialog = ({ repo, base, onClose }: NewWorktreeDialogProp
   const [parent, setParent] = useState<string>()
   const [busy, setBusy] = useState(false)
   const branchInput = useRef<HTMLInputElement>(null)
+  const restoreFocus = useRestoreFocus()
   useEffect(() => {
     setBranch("")
     setParent(undefined)
@@ -51,6 +53,10 @@ export const NewWorktreeDialog = ({ repo, base, onClose }: NewWorktreeDialogProp
         <DialogContent
           className="sm:max-w-[480px]"
           aria-describedby={undefined}
+          onCloseAutoFocus={(event) => {
+            event.preventDefault()
+            restoreFocus()
+          }}
           onOpenAutoFocus={(event) => {
             event.preventDefault()
             branchInput.current?.focus()

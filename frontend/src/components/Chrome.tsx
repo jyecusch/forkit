@@ -1,4 +1,4 @@
-import { createContext, use, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react"
+import { createContext, use, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react"
 import { createPortal } from "react-dom"
 import { dragRegion, isMac, isWindows } from "@/lib/platform"
 import { cn } from "@/lib/utils"
@@ -75,18 +75,28 @@ interface ChromeLayerProps {
  */
 export const ChromeLayer = ({ active, sidebar, children }: ChromeLayerProps) => {
   const hosts = use(Hosts)
+  const sidebarRef = useRef<HTMLDivElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
   const lastFocused = useRef<HTMLElement | null>(null)
   const remember = (event: React.FocusEvent) => {
     lastFocused.current = event.target as HTMLElement
   }
-  useEffect(() => {
-    if (!active || document.activeElement !== document.body) return
+  const restore = () => {
     const target = lastFocused.current?.isConnected ? lastFocused.current : panelRef.current?.querySelector<HTMLElement>("[role=grid]")
     target?.focus({ preventScroll: true })
+  }
+
+  // A layer being hidden lets go of focus before the next one takes it.
+  useLayoutEffect(() => {
+    if (active) return
+    const focused = document.activeElement
+    if (focused instanceof HTMLElement && (sidebarRef.current?.contains(focused) || panelRef.current?.contains(focused))) focused.blur()
+  }, [active])
+  useEffect(() => {
+    if (active && focusIsLost()) restore()
   }, [active])
 
-  const layer = (content: ReactNode, ref?: React.Ref<HTMLDivElement>) => (
+  const layer = (content: ReactNode, ref: React.Ref<HTMLDivElement>) => (
     <div
       ref={ref}
       className={cn("absolute inset-0 flex flex-col", !active && "invisible")}
@@ -98,8 +108,22 @@ export const ChromeLayer = ({ active, sidebar, children }: ChromeLayerProps) => 
   )
   return (
     <>
-      {hosts.sidebar && createPortal(layer(sidebar), hosts.sidebar)}
-      {hosts.panel && createPortal(layer(children, panelRef), hosts.panel)}
+      {hosts.sidebar && createPortal(layer(sidebar, sidebarRef), hosts.sidebar)}
+      {hosts.panel && createPortal(<LayerFocus value={restore}>{layer(children, panelRef)}</LayerFocus>, hosts.panel)}
     </>
   )
 }
+
+/** Whether keyboard focus is nowhere useful: on the page itself or in a hidden layer. */
+export const focusIsLost = () => {
+  const focused = document.activeElement
+  return !focused || focused === document.body || focused.closest("[inert]") !== null
+}
+
+const LayerFocus = createContext<() => void>(() => {})
+
+/**
+ * Puts focus back where it last was in the current layer, or on its commit
+ * list. For dialogs opened from menus, whose own return target is gone.
+ */
+export const useRestoreFocus = () => use(LayerFocus)

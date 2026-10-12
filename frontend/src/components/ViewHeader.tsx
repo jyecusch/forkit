@@ -81,9 +81,9 @@ export const ViewHeader = ({ worktree, refsById, headEmphasized, emphasizedOther
           </span>
         )}
         <button
-          aria-label={detailsShown ? "Hide details" : "Show details"}
+          aria-label="Details"
           aria-pressed={detailsShown}
-          title={detailsShown ? "Hide details" : "Show details"}
+          title={`${detailsShown ? "Hide" : "Show"} details (⌥⌘I)`}
           onClick={onToggleDetails}
           className={cn(
             "-mr-1.5 flex size-7 items-center justify-center rounded-md hover:bg-foreground/[0.05] hover:text-foreground",

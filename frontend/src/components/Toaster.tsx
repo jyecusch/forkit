@@ -1,5 +1,6 @@
 import { CircleAlert, X } from "lucide-react"
 import { useEffect, useState } from "react"
+import { createPortal } from "react-dom"
 import { dismiss, useNotice, type Notice } from "@/app/notifications"
 import { cn } from "@/lib/utils"
 
@@ -10,7 +11,8 @@ const visibleWithActionFor = 12000
 /** Shows the latest notice in the window's bottom-right corner. */
 export const Toaster = () => {
   const notice = useNotice()
-  return notice ? <Toast key={notice.id} notice={notice} /> : null
+  // Rendered outside the app root so it stays visible and clickable over dialogs.
+  return notice ? createPortal(<Toast key={notice.id} notice={notice} />, document.body) : null
 }
 
 const Toast = ({ notice }: { notice: Notice }) => {
@@ -26,7 +28,7 @@ const Toast = ({ notice }: { notice: Notice }) => {
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       className={cn(
-        "fixed right-5 bottom-5 z-50 flex max-w-[min(320px,calc(100vw-40px))] items-start gap-2.5 rounded-lg border bg-popover py-2.5 pr-2 pl-3 text-[13px] shadow-xl select-text",
+        "pointer-events-auto fixed right-5 bottom-5 z-[60] flex max-w-[min(320px,calc(100vw-40px))] items-start gap-2.5 rounded-lg border bg-popover py-2.5 pr-2 pl-3 text-[13px] shadow-xl select-text",
         notice.tone === "error" && "border-destructive/40",
       )}
     >

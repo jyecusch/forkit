@@ -21,6 +21,11 @@ const publish = (notice: Notice | undefined) => {
 
 export const notify = (notice: Omit<Notice, "id">) => publish({ ...notice, id: ++nextId })
 
+/** Drops a notice offering an action, which belongs to the view it came from. */
+export const dismissActions = () => {
+  if (current?.action) publish(undefined)
+}
+
 export const dismiss = (id: number) => {
   if (current?.id === id) publish(undefined)
 }
