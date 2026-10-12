@@ -20,9 +20,8 @@ const dragRegion = { "--wails-draggable": "drag" } as CSSProperties
 const noDrag = { "--wails-draggable": "no-drag" } as CSSProperties
 
 /**
- * On macOS the window controls sit inside this bar, centred 14.5 pt from
- * the top. The bar is twice that tall so the controls have equal space above
- * and below, and the tabs start clear of them.
+ * On macOS the window controls sit inside this bar, near its top, so the
+ * tabs start clear of them.
  */
 const isMac = navigator.userAgent.includes("Mac")
 
@@ -43,7 +42,7 @@ export const RepoTabs = ({ repos, active, onSelect, onClose, onOpen, onReorder }
     <div
       role="tablist"
       aria-label="Repositories"
-      className={cn("flex h-[30px] flex-none items-end gap-0.5 border-b bg-sidebar pr-3", isMac ? "pl-[84px]" : "pl-2")}
+      className={cn("flex h-[36px] flex-none items-end gap-0.5 border-b bg-sidebar pr-3", isMac ? "pl-[84px]" : "pl-2")}
       style={dragRegion}
     >
       {repos.map((repo) => {
@@ -65,7 +64,7 @@ export const RepoTabs = ({ repos, active, onSelect, onClose, onOpen, onReorder }
             className={cn(
               // The active tab opens into the content below: it covers the
               // bar's bottom border with the content's background.
-              "group -mb-px flex h-[26px] cursor-default items-center gap-2 rounded-t-lg border border-transparent pr-1 pl-3",
+              "group -mb-px flex h-[30px] cursor-default items-center gap-2 rounded-t-lg border border-transparent pr-1 pl-3",
               on
                 ? "border-border border-b-background bg-background font-medium text-foreground"
                 : "text-secondary-foreground hover:bg-accent/40 hover:text-foreground",
@@ -90,7 +89,7 @@ export const RepoTabs = ({ repos, active, onSelect, onClose, onOpen, onReorder }
         aria-label="Open repository"
         onClick={onOpen}
         style={noDrag}
-        className="mb-0.5 flex size-[22px] items-center justify-center rounded-md text-secondary-foreground hover:bg-accent/50 hover:text-foreground"
+        className="mb-1 flex size-[22px] items-center justify-center rounded-md text-secondary-foreground hover:bg-accent/50 hover:text-foreground"
       >
         <Plus className="size-3.5" />
       </button>
