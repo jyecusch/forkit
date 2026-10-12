@@ -14,7 +14,9 @@ type fseventsSource struct {
 	done   chan struct{}
 }
 
-func newSource(roots []string) (source, error) {
+// newSource watches roots. FSEvents costs nothing for directories nobody
+// changes, so skipDir is not needed.
+func newSource(roots []string, _ func(dir string, created bool) bool) (source, error) {
 	stream := &fsevents.EventStream{
 		Paths:   roots,
 		Latency: 5 * time.Millisecond,

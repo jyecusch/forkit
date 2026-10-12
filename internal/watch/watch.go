@@ -71,6 +71,7 @@ type source interface {
 
 // Watcher reports changes to one repository until closed.
 type Watcher struct {
+	ignores  Ignores
 	onChange func(Change)
 	logger   *slog.Logger
 
@@ -81,9 +82,10 @@ type Watcher struct {
 }
 
 // Start watches layout and calls onChange, never concurrently, after each
-// burst of filesystem activity.
-func Start(layout Layout, onChange func(Change), logger *slog.Logger) (*Watcher, error) {
-	w := &Watcher{onChange: onChange, logger: logger}
+// burst of filesystem activity. Directories that ignores reports are left
+// out; ignores may be nil to watch everything.
+func Start(layout Layout, ignores Ignores, onChange func(Change), logger *slog.Logger) (*Watcher, error) {
+	w := &Watcher{ignores: ignores, onChange: onChange, logger: logger}
 	if err := w.Update(layout); err != nil {
 		return nil, err
 	}
@@ -93,7 +95,13 @@ func Start(layout Layout, onChange func(Change), logger *slog.Logger) (*Watcher,
 // Update re-targets the watcher after worktrees are added or removed. If the
 // new layout cannot be watched, the old one stays in place.
 func (w *Watcher) Update(layout Layout) error {
-	src, err := newSource(roots(layout))
+	return w.start(layout, Change{Status: map[model.WorktreeID]bool{}})
+}
+
+// start watches layout, first reporting pending if it is not empty.
+func (w *Watcher) start(layout Layout, pending Change) error {
+	ignored := newIgnoreSet(w.ignores, layout, w.logger)
+	src, err := newSource(roots(layout), ignored.skipDir)
 	if err != nil {
 		return err
 	}
@@ -105,8 +113,22 @@ func (w *Watcher) Update(layout Layout) error {
 	if unwatched := src.Unwatched(); len(unwatched) > 0 {
 		w.logger.Warn("too many directories to watch, polling worktree status instead", "roots", unwatched)
 	}
-	go w.run(ctx, layout, src)
+	go w.run(ctx, layout, src, ignored, pending)
 	return nil
+}
+
+// rewatch starts again from git's list of ignored directories after the
+// rules changed, still reporting pending.
+func (w *Watcher) rewatch(pending Change) {
+	w.mu.Lock()
+	layout, running := w.layout, w.source != nil
+	w.mu.Unlock()
+	if !running {
+		return
+	}
+	if err := w.start(layout, pending); err != nil {
+		w.logger.Warn("rewatching after ignore rules changed failed", "error", err)
+	}
 }
 
 // Degraded reports whether some worktrees are polled because the system's
@@ -146,9 +168,11 @@ func roots(layout Layout) []string {
 	return paths
 }
 
-func (w *Watcher) run(ctx context.Context, layout Layout, src source) {
-	pending := Change{Status: map[model.WorktreeID]bool{}}
+func (w *Watcher) run(ctx context.Context, layout Layout, src source, ignored *ignoreSet, pending Change) {
 	var quiet, deadline <-chan time.Time
+	if !pending.empty() {
+		quiet = time.After(quietPeriod)
+	}
 	poll := time.NewTicker(pollInterval)
 	defer poll.Stop()
 	for {
@@ -157,6 +181,14 @@ func (w *Watcher) run(ctx context.Context, layout Layout, src source) {
 			return
 		case paths, ok := <-src.Events():
 			if !ok {
+				return
+			}
+			paths = ignored.drop(paths)
+			if slices.ContainsFunc(paths, func(path string) bool { return changesIgnoreRules(layout, path) }) {
+				// The ignored directories are found again, and this batch is
+				// reported by the watcher that replaces this one.
+				pending.merge(Classify(layout, paths))
+				go w.rewatch(pending)
 				return
 			}
 			change := Classify(layout, paths)
