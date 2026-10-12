@@ -240,11 +240,9 @@ export const GraphPane = (props: GraphPaneProps) => {
         rowAt: (index) => graphData.peek(repo, index),
         activeHead: props.activeHead,
         headOids: props.headOids,
-        anyEmphasis: emphasized !== undefined,
       }),
       palette,
       {
-        dimmedStrength: preferences.graph.dimmedOpacity,
         width: columns.graph,
         height: canvasHeight,
         fadeLeft: clampedOffsetX > 0,
@@ -264,10 +262,8 @@ export const GraphPane = (props: GraphPaneProps) => {
     columns.graph,
     palette,
     dataVersion,
-    emphasized,
     props.headOids,
     props.activeHead,
-    preferences.graph.dimmedOpacity,
     view.totalRows,
   ])
 
@@ -464,7 +460,7 @@ const ChangesNode = ({ x, width, joinsFirstRow }: { x: number; width: number; jo
       className="pointer-events-none absolute top-0"
       style={{ left: listInset, width, height: end }}
       fill="none"
-      stroke="var(--lane-0)"
+      stroke="var(--highlight)"
       strokeOpacity={uncommittedLine.strength}
       strokeWidth={uncommittedLine.width}
     >

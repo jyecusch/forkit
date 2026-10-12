@@ -6,6 +6,8 @@ import { buildNavRows, revealedNodes, type NavRow } from "@/lib/navTree"
 import { cn } from "@/lib/utils"
 import { changeCount, headLabel } from "@/lib/worktree"
 import type { Ref, RefId, Remote, Worktree, WorktreeId } from "@/model/model.gen"
+import { AheadBehind } from "./AheadBehind"
+import { laneColor } from "./RefBadge"
 import { WorktreeIcon } from "./WorktreeIcon"
 
 /** Rows are 28 px; section headers add 8 px of space above. */
@@ -29,6 +31,8 @@ interface RepoNavProps {
   readonly worktrees: ReadonlyArray<Worktree>
   readonly activeWorktree: WorktreeId | undefined
   readonly emphasized: RefId | undefined
+  /** The graph thread of each local branch, which colours its icon like its line. */
+  readonly branchThreads: Readonly<Record<string, number>> | undefined
   /** Refs whose folders stay open, such as the checked-out branch. */
   readonly reveal: ReadonlyArray<RefId>
   readonly onEmphasize: (ref: Ref) => void
@@ -183,7 +187,7 @@ export const RepoNav = (props: RepoNavProps) => {
             onClick={() => setOpen(row.id, row.collapsed)}
             aria-expanded={!row.collapsed}
             title={row.remote.fetchUrl}
-            icon={<Server aria-hidden className="size-3.5" />}
+            icon={<Server aria-hidden className="size-3.5 text-remote" />}
           >
             <span className="truncate">{row.remote.name}</span>
             <span className="min-w-0 flex-1 truncate text-xs text-subtle-foreground">{showHosts && host !== "local" ? host : ""}</span>
@@ -226,14 +230,14 @@ export const RepoNav = (props: RepoNavProps) => {
                 open()
               }
             }}
-            icon={<RefIcon kind={row.ref.kind} />}
+            icon={<RefIcon kind={row.ref.kind} selected={row.ref.id === emphasized} thread={props.branchThreads?.[row.ref.id]} />}
           >
             <span className="min-w-0 flex-1 truncate">
               <Highlight text={row.name} query={filter} />
             </span>
             {current && <Check aria-label="Checked out here" className="size-3.5 flex-none text-secondary-foreground" />}
             {elsewhere && <Meta title={`Checked out in ${worktreeNames.get(elsewhere.id)}`}>{worktreeNames.get(elsewhere.id)}</Meta>}
-            <AheadBehind ahead={row.ref.ahead} behind={row.ref.behind} />
+            <AheadBehind ahead={row.ref.ahead} behind={row.ref.behind} className="text-[11px]" />
           </NavButton>
         )
         return (
@@ -359,7 +363,11 @@ const WorktreeRow = ({
       <span className="truncate">{row.name}</span>
       <span className="min-w-0 flex-1 truncate text-xs text-subtle-foreground">{headLabel(worktree, refsById)}</span>
       {worktree.operation !== "none" && <span aria-label="Operation in progress" className="size-1.5 flex-none rounded-full bg-warning" />}
-      {changes > 0 && <Meta title={`${changes} uncommitted ${changes === 1 ? "change" : "changes"}`}>{changes}</Meta>}
+      {changes > 0 && (
+        <span title={`${changes} uncommitted ${changes === 1 ? "change" : "changes"}`} className="flex-none text-[11px] text-highlight tabular-nums">
+          {changes}
+        </span>
+      )}
     </NavButton>
   )
   return (
@@ -386,17 +394,6 @@ const Meta = ({ children, title }: { children: ReactNode; title?: string }) => (
   </span>
 )
 
-const AheadBehind = ({ ahead, behind }: { ahead: number | undefined; behind: number | undefined }) => {
-  if (!ahead && !behind) return null
-  return (
-    <Meta title={[ahead && `${ahead} ahead of upstream`, behind && `${behind} behind upstream`].filter(Boolean).join(", ")}>
-      {ahead ? `↑${ahead}` : ""}
-      {ahead && behind ? " " : ""}
-      {behind ? `↓${behind}` : ""}
-    </Meta>
-  )
-}
-
 /**
  * The disclosure for sections and remotes, which have their own icon: at
  * the row's end, faint while closed and shown on hover while open.
@@ -415,16 +412,20 @@ const Chevron = ({ open }: { open: boolean }) => (
   <ChevronRight aria-hidden className={cn("size-3.5 flex-none transition-transform", open && "rotate-90")} />
 )
 
-const RefIcon = ({ kind }: { kind: Ref["kind"] }) => {
+/**
+ * A ref's icon, in its kind's colour unless the row is selected, which takes
+ * the highlight. A local branch's is always the colour of its graph line.
+ */
+const RefIcon = ({ kind, selected, thread }: { kind: Ref["kind"]; selected: boolean; thread: number | undefined }) => {
   switch (kind) {
     case "tag":
-      return <Tag aria-hidden className="size-3.5" />
+      return <Tag aria-hidden className={cn("size-3.5", !selected && "text-tag")} />
     case "stash":
       return <Archive aria-hidden className="size-3.5" />
     case "remoteBranch":
-      return <GitBranch aria-hidden className="size-3.5 opacity-60" />
+      return <GitBranch aria-hidden className={cn("size-3.5", !selected && "text-remote")} />
     case "localBranch":
-      return <GitBranch aria-hidden className="size-3.5" />
+      return <GitBranch aria-hidden className="size-3.5" style={thread === undefined ? undefined : { color: laneColor(thread) }} />
   }
 }
 

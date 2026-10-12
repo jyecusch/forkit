@@ -13,6 +13,7 @@ const view = (version: number, firstChangedRow = 0): GraphView => ({
   laneCount: 1,
   complete: true,
   firstChangedRow,
+  branchThreads: {},
 })
 
 /** Answers graph window requests and records which starts were asked for. */

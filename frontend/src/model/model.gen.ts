@@ -204,7 +204,6 @@ export const GraphPreferences = Schema.Struct({
   order: GraphOrder,
   showRemoteBranches: Schema.Boolean,
   showTags: Schema.Boolean,
-  dimmedOpacity: Schema.Finite.pipe(Schema.check(Schema.isBetween({ minimum: 0.1, maximum: 0.8 }))),
 })
 export type GraphPreferences = typeof GraphPreferences.Type
 
@@ -282,7 +281,6 @@ export const GraphEdge = Schema.Struct({
   toLane: Schema.Int,
   threadId: Schema.Int,
   kind: EdgeKind,
-  onEmphasized: Schema.Boolean,
   uncommitted: Schema.optionalKey(Schema.Boolean),
 })
 export type GraphEdge = typeof GraphEdge.Type
@@ -305,6 +303,7 @@ export const GraphView = Schema.Struct({
   laneCount: Schema.Int,
   complete: Schema.Boolean,
   firstChangedRow: Schema.Int,
+  branchThreads: Schema.Record(Schema.String, Schema.Int),
 })
 export type GraphView = typeof GraphView.Type
 

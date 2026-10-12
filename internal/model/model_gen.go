@@ -286,8 +286,6 @@ type GraphPreferences struct {
 	Order              GraphOrder `json:"order"`
 	ShowRemoteBranches bool       `json:"showRemoteBranches"`
 	ShowTags           bool       `json:"showTags"`
-	// Opacity of threads outside the emphasized history.
-	DimmedOpacity float64 `json:"dimmedOpacity"`
 }
 
 // One column of old and new lines, or old and new side by side.
@@ -368,8 +366,6 @@ type GraphEdge struct {
 	ToLane   int      `json:"toLane"`
 	ThreadID int      `json:"threadId"`
 	Kind     EdgeKind `json:"kind"`
-	// Part of the emphasized ref's first-parent history.
-	OnEmphasized bool `json:"onEmphasized"`
 	// Part of the line from the active worktree's uncommitted changes, above the first row, to the commit they build on.
 	Uncommitted *bool `json:"uncommitted,omitempty"`
 }
@@ -393,6 +389,8 @@ type GraphView struct {
 	Complete bool `json:"complete"`
 	// Rows before this index are unchanged since the previous version.
 	FirstChangedRow int `json:"firstChangedRow"`
+	// The thread of each local branch's commit, by ref ID, so a branch can be shown in its line's colour.
+	BranchThreads map[string]int `json:"branchThreads"`
 }
 
 type GraphWindow struct {

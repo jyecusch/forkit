@@ -191,6 +191,7 @@ export const RepoView = ({ repo, openRepo, preferences, active }: RepoViewProps)
         worktrees={worktrees}
         activeWorktree={activeWorktree?.id}
         emphasized={emphasized}
+        branchThreads={view?.branchThreads}
         reveal={reveal}
         onEmphasize={emphasize}
         onCheckout={(ref) => checkout(ref, activeWorktree)}

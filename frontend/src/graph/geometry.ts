@@ -16,8 +16,7 @@ export interface Segment {
   readonly y2: number
   readonly kind: EdgeKind
   readonly thread: number
-  readonly emphasized: boolean
-  /** Part of the line from uncommitted changes, drawn dashed in the neutral lane colour. */
+  /** Part of the line from uncommitted changes, drawn dashed in the highlight colour. */
   readonly uncommitted: boolean
 }
 
@@ -32,14 +31,11 @@ export interface Dot {
   readonly x: number
   readonly y: number
   readonly thread: number
-  readonly emphasized: boolean
   readonly shape: DotShape
 }
 
 export interface Geometry {
-  /** Ordered so emphasized lines are drawn over the rest. */
   readonly segments: ReadonlyArray<Segment>
-  /** Ordered so emphasized dots are drawn over the rest. */
   readonly dots: ReadonlyArray<Dot>
 }
 
@@ -58,10 +54,8 @@ export const geometry = (options: {
   readonly activeHead: string | undefined
   /** Every worktree's checked-out commit. */
   readonly headOids: ReadonlySet<string>
-  /** With no emphasized history, everything is drawn at full strength. */
-  readonly anyEmphasis: boolean
 }): Geometry => {
-  const { first, last, originY, offsetX, rowAt, activeHead, headOids, anyEmphasis } = options
+  const { first, last, originY, offsetX, rowAt, activeHead, headOids } = options
   const centerY = (index: number) => index * rowHeight + rowHeight / 2 - originY
   const x = (lane: number) => laneX(lane) - offsetX
   const segments: Array<Segment> = []
@@ -80,8 +74,6 @@ export const geometry = (options: {
         y2: centerY(index + 1),
         kind: edge.kind,
         thread: edge.threadId,
-        // The uncommitted changes' line is never toned down.
-        emphasized: !anyEmphasis || edge.onEmphasized || edge.uncommitted === true,
         uncommitted: edge.uncommitted === true,
       })
     }
@@ -89,14 +81,11 @@ export const geometry = (options: {
       x: x(row.lane),
       y: centerY(index),
       thread: row.threadId,
-      emphasized: !anyEmphasis || row.onEmphasized,
       shape:
         row.oid === activeHead ? "head" : headOids.has(row.oid) ? "worktree" : commit.parents.length > 1 ? "merge" : "commit",
     })
   }
-  const emphasizedLast = <T extends { readonly emphasized: boolean }>(items: Array<T>) =>
-    items.sort((a, b) => Number(a.emphasized) - Number(b.emphasized))
-  return { segments: emphasizedLast(segments), dots: emphasizedLast(dots) }
+  return { segments, dots }
 }
 
 /** The widest lane any loaded row in [first, last] draws on, or -1 if none. */

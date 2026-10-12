@@ -45,7 +45,6 @@ func Defaults() model.Preferences {
 			Order:              model.GraphOrderTopo,
 			ShowRemoteBranches: true,
 			ShowTags:           true,
-			DimmedOpacity:      0.4,
 		},
 		Diff:      model.DiffPreferences{Layout: model.DiffLayoutUnified},
 		Git:       model.GitPreferences{MaintainCommitGraph: true},
@@ -117,7 +116,7 @@ func (s *Store) Get() model.Preferences {
 }
 
 // Set changes the preference at a dot-separated path such as
-// "graph.dimmedOpacity", rejecting values the schema does not allow.
+// "graph.showTags", rejecting values the schema does not allow.
 func (s *Store) Set(ctx context.Context, path string, value any) error {
 	s.mu.Lock()
 	tree, err := toTree(s.current)
@@ -236,6 +235,10 @@ func (s *Store) readFile() (model.Preferences, error) {
 		return model.Preferences{}, fmt.Errorf("unsupported preferences version %v", file["version"])
 	}
 	migrateTheme(file)
+	if graph, ok := file["graph"].(map[string]any); ok {
+		// Lines outside the emphasized history are no longer dimmed.
+		delete(graph, "dimmedOpacity")
+	}
 	tree, err := toTree(Defaults())
 	if err != nil {
 		return model.Preferences{}, err

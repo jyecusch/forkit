@@ -10,7 +10,7 @@ type lane struct {
 	expect int32 // id of the commit the lane leads to; -1 when the lane is free
 	thread int32
 	// firstParentOf is the row whose first-parent link this lane draws, or
-	// noRow when it draws a merge's other parent. Emphasis follows these.
+	// noRow when it draws a merge's other parent, so a branch keeps its lane.
 	firstParentOf int32
 	// forkedAt is the row whose commit opened this lane for a non-first
 	// parent, so no line enters it from above at that row.
@@ -29,7 +29,6 @@ type edge struct {
 	fromLane, toLane int32
 	thread           int32
 	kind             edgeKind
-	firstParentOf    int32
 	uncommitted      bool
 }
 
@@ -141,11 +140,11 @@ func (l *layout) appendEdgesInto(id, target int32, edges *[]edge) {
 		if to != lane {
 			kind = edgeMerge
 		}
-		*edges = append(*edges, edge{fromLane: lane, toLane: to, thread: ln.thread, kind: kind, firstParentOf: ln.firstParentOf, uncommitted: ln.uncommitted})
+		*edges = append(*edges, edge{fromLane: lane, toLane: to, thread: ln.thread, kind: kind, uncommitted: ln.uncommitted})
 	}
 	for _, forkLane := range l.forks {
 		to := destination(forkLane)
-		*edges = append(*edges, edge{fromLane: l.prevLane, toLane: to, thread: l.lanes[forkLane].thread, kind: edgeFork, firstParentOf: noRow})
+		*edges = append(*edges, edge{fromLane: l.prevLane, toLane: to, thread: l.lanes[forkLane].thread, kind: edgeFork})
 	}
 }
 
@@ -155,7 +154,7 @@ func (l *layout) appendTrailingEdges(edges *[]edge) {
 	for i, ln := range l.lanes {
 		if ln.expect >= 0 {
 			lane := int32(i)
-			*edges = append(*edges, edge{fromLane: lane, toLane: lane, thread: ln.thread, kind: edgeStraight, firstParentOf: ln.firstParentOf, uncommitted: ln.uncommitted})
+			*edges = append(*edges, edge{fromLane: lane, toLane: lane, thread: ln.thread, kind: edgeStraight, uncommitted: ln.uncommitted})
 		}
 	}
 }

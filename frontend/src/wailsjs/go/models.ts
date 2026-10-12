@@ -247,7 +247,6 @@ export namespace model {
 	    toLane: number;
 	    threadId: number;
 	    kind: string;
-	    onEmphasized: boolean;
 	    uncommitted?: boolean;
 	
 	    static createFrom(source: any = {}) {
@@ -260,7 +259,6 @@ export namespace model {
 	        this.toLane = source["toLane"];
 	        this.threadId = source["threadId"];
 	        this.kind = source["kind"];
-	        this.onEmphasized = source["onEmphasized"];
 	        this.uncommitted = source["uncommitted"];
 	    }
 	}

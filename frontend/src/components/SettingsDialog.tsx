@@ -3,7 +3,6 @@ import { useRun } from "@/app/hooks"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Slider } from "@/components/ui/slider"
 import { Switch } from "@/components/ui/switch"
 import type { Preferences as PreferencesData } from "@/model/model.gen"
 import { Preferences, type PreferencePath, type PreferenceValue } from "@/services/Preferences"
@@ -70,9 +69,6 @@ export const SettingsDialog = ({ open, onOpenChange, preferences: p }: SettingsD
             </Row>
             <Row label="Show tags" end>
               <Switch checked={p.graph.showTags} onCheckedChange={(v) => set("graph.showTags", v)} />
-            </Row>
-            <Row label="Visibility of other branches">
-              <OpacitySlider value={p.graph.dimmedOpacity} onCommit={(v) => set("graph.dimmedOpacity", v)} />
             </Row>
           </Group>
 
@@ -208,27 +204,5 @@ const TextInput = ({ value, placeholder, onCommit }: { value: string; placeholde
       onBlur={commit}
       onKeyDown={(event) => event.key === "Enter" && commit()}
     />
-  )
-}
-
-/** A slider that follows the pointer while dragging and saves on release. */
-const OpacitySlider = ({ value, onCommit }: { value: number; onCommit: (value: number) => void }) => {
-  const [draft, setDraft] = useState<number>()
-  return (
-    <div className="flex w-full items-center gap-3">
-      <Slider
-        className="flex-1"
-        min={0.1}
-        max={0.8}
-        step={0.05}
-        value={[draft ?? value]}
-        onValueChange={([v]) => setDraft(v)}
-        onValueCommit={([v]) => {
-          setDraft(undefined)
-          if (v !== undefined && v !== value) onCommit(v)
-        }}
-      />
-      <span className="w-9 text-right text-xs text-subtle-foreground tabular-nums">{Math.round((draft ?? value) * 100)}%</span>
-    </div>
   )
 }

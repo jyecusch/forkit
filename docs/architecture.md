@@ -50,7 +50,6 @@ These answer the plan's open questions and record where the implementation diffe
 - **One window.** Tearing tabs into their own windows is not in v0.1.
 - **The session stores `{id, commonDir}` per open repository**, not just IDs, because an ID is a hash and the repository must be found again on restart.
 - **`GraphView` omits `emphasizedRefId` and `includedRefs`.** Emphasis is a parameter of each window request, so switching it never invalidates the layout. Which refs are drawn comes from the graph preferences.
-- **`GraphEdge` carries `onEmphasized`**, so emphasized lines can be drawn thicker without the frontend knowing the topology.
 - **The sync package is `synchub`**, to avoid shadowing Go's `sync`.
 - **Commit text is read per window** through one long-running `git cat-file --batch` process, rather than kept in memory.
 - **Layouts are not cached on disk yet.** With a commit-graph file the first window arrives in about 40 ms even on very large repositories, so the cache was deferred.

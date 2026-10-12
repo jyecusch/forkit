@@ -193,7 +193,7 @@ const RepoStatus = ({ repo }: { repo: Repo }) => {
         : worktrees.some((wt) => wt.operation !== "none")
           ? { color: "bg-warning animate-pulse", label: "A merge or rebase is in progress" }
           : worktrees.some((wt) => changeCount(wt) > 0)
-            ? { color: "bg-primary", label: "Uncommitted changes" }
+            ? { color: "bg-highlight", label: "Uncommitted changes" }
             : undefined
   if (!status) return null
   return (
