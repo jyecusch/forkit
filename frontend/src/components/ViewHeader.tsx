@@ -1,8 +1,9 @@
-import { Check, Folder, LoaderCircle, PanelRight, Tag, X } from "lucide-react"
+import { Check, LoaderCircle, PanelRight, Tag, X } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { baseName } from "@/lib/format"
 import { changeCount, headLabel } from "@/lib/worktree"
 import type { GraphView, Ref, Worktree, WorktreeOperation } from "@/model/model.gen"
+import { WorktreeIcon } from "./WorktreeIcon"
 
 interface ViewHeaderProps {
   readonly worktree: Worktree | undefined
@@ -30,7 +31,7 @@ export const ViewHeader = ({ worktree, refsById, headEmphasized, emphasizedOther
     <div className="flex h-10 flex-none items-center gap-3 border-b px-3 text-[13px]">
       {worktree && (
         <div className="flex min-w-0 items-center gap-1.5">
-          <Folder aria-hidden className="size-4 flex-none text-subtle-foreground" />
+          <WorktreeIcon worktree={worktree} className="size-4 flex-none text-subtle-foreground" />
           <span className="truncate font-medium text-foreground" title={worktree.path}>
             {baseName(worktree.path)}
           </span>

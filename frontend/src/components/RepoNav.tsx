@@ -1,11 +1,12 @@
 import { useVirtualizer } from "@tanstack/react-virtual"
-import { Archive, Check, ChevronRight, Folder, GitBranch, Plus, Search, Server, Tag, X } from "lucide-react"
+import { Archive, Check, ChevronRight, GitBranch, Plus, Search, Server, Tag, X } from "lucide-react"
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react"
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu"
 import { buildNavRows, revealedNodes, type NavRow } from "@/lib/navTree"
 import { cn } from "@/lib/utils"
 import { changeCount, headLabel } from "@/lib/worktree"
 import type { Ref, RefId, Remote, Worktree, WorktreeId } from "@/model/model.gen"
+import { WorktreeIcon } from "./WorktreeIcon"
 
 /** Rows are 28 px; section headers add 8 px of space above. */
 const rowHeight = 28
@@ -352,7 +353,7 @@ const WorktreeRow = ({
   const changes = changeCount(worktree)
   const refsById = useMemo(() => new Map<string, Ref>(refs.map((ref) => [ref.id, ref])), [refs])
   const item = (
-    <NavButton {...tree} depth={0} current={active} aria-current={active} title={worktree.path} onClick={() => onSelectWorktree(worktree)} icon={<Folder className="size-3.5" />}>
+    <NavButton {...tree} depth={0} current={active} aria-current={active} title={worktree.path} onClick={() => onSelectWorktree(worktree)} icon={<WorktreeIcon worktree={worktree} className="size-3.5" />}>
       <span className="truncate">{row.name}</span>
       <span className="min-w-0 flex-1 truncate text-xs text-subtle-foreground">{headLabel(worktree, refsById)}</span>
       {worktree.operation !== "none" && <span aria-label="Operation in progress" className="size-1.5 flex-none rounded-full bg-warning" />}
