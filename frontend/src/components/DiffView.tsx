@@ -7,6 +7,7 @@ import { highlight } from "@/highlight/client"
 import { syntaxStyles, tokenStride } from "@/highlight/styles"
 import { shortOid } from "@/lib/format"
 import { cn } from "@/lib/utils"
+import { wordDiff, type Range } from "@/lib/wordDiff"
 import type { DiffHunk, DiffLine, DiffRequest, FileDiff, RepoId } from "@/model/model.gen"
 import { Rpc } from "@/services/Rpc"
 
@@ -79,7 +80,24 @@ export const DiffView = ({ repo, target, revision, active, onClose }: DiffViewPr
 
   const scrollRef = useRef<HTMLDivElement>(null)
 
-  const { rows, texts } = useMemo(() => flatten(diff), [diff])
+  const { rows, texts, partners } = useMemo(() => flatten(diff), [diff])
+
+  // What changed within each edited line, worked out as lines come on screen.
+  const wordChanges = useMemo(() => {
+    const cache = new Map<number, ReturnType<typeof wordDiff>>()
+    return (row: number): ReadonlyArray<Range> | undefined => {
+      const partner = partners[row]!
+      if (partner < 0) return undefined
+      const removed = Math.min(row, partner)
+      let diff = cache.get(removed)
+      if (diff === undefined) {
+        const [before, after] = [rows[removed], rows[Math.max(row, partner)]]
+        diff = before?.type === "line" && after?.type === "line" ? wordDiff(before.line.text, after.line.text) : null
+        cache.set(removed, diff)
+      }
+      return diff ? (row === removed ? diff.before : diff.after) : undefined
+    }
+  }, [rows, partners])
 
   // Highlighting arrives after the plain text, from a worker.
   const [highlighted, setHighlighted] = useState<{ readonly texts: unknown; readonly sides: ReadonlyArray<LineTokens> }>()
@@ -220,7 +238,12 @@ export const DiffView = ({ repo, target, revision, active, onClose }: DiffViewPr
                     {row.type === "hunk" ? (
                       <HunkHeader hunk={row.hunk} />
                     ) : row.type === "line" ? (
-                      <Line line={row.line} gutter={gutter} tokens={sides?.[row.side]?.(row.index)} />
+                      <Line
+                        line={row.line}
+                        gutter={gutter}
+                        tokens={sides?.[row.side]?.(row.index)}
+                        changed={wordChanges(item.index)}
+                      />
                     ) : (
                       <p className="flex h-full items-center px-3 font-sans text-subtle-foreground">
                         The rest of this file's changes are too long to show.
@@ -282,7 +305,15 @@ const lineTones: Record<DiffLine["kind"], { row: string; marker: string; symbol:
   removed: { row: "bg-destructive/10", marker: "text-destructive", symbol: "−" },
 }
 
-const Line = ({ line, gutter, tokens }: { line: DiffLine; gutter: string; tokens: Int32Array | undefined }) => {
+interface LineProps {
+  readonly line: DiffLine
+  readonly gutter: string
+  readonly tokens: Int32Array | undefined
+  /** The parts of an edited line that changed, marked more strongly than the line. */
+  readonly changed: ReadonlyArray<Range> | undefined
+}
+
+const Line = ({ line, gutter, tokens, changed }: LineProps) => {
   const tone = lineTones[line.kind]
   return (
     <div className={cn("flex h-full items-center pl-1 whitespace-pre", tone.row)}>
@@ -295,7 +326,7 @@ const Line = ({ line, gutter, tokens }: { line: DiffLine; gutter: string; tokens
       <span aria-hidden className={cn("w-4 flex-none text-center select-none", tone.marker)}>
         {tone.symbol}
       </span>
-      <span className="pr-4 text-foreground">{tokens && tokens.length > 0 ? colour(line.text, tokens) : line.text}</span>
+      <span className="pr-4 text-foreground">{paint(line.text, tokens, changed, changedTones[line.kind])}</span>
       {line.noNewline && (
         <span title="No newline at end of file" className="ml-1 font-sans text-[11px] text-subtle-foreground select-none">
           no newline at end
@@ -309,16 +340,30 @@ const Line = ({ line, gutter, tokens }: { line: DiffLine; gutter: string; tokens
  * Lays the diff out as rows, and rebuilds the old and new file texts from
  * it so each can be highlighted whole.
  */
-const flatten = (diff: FileDiff | undefined): { rows: Array<Row>; texts: [string, string] } => {
-  if (!diff) return { rows: [], texts: ["", ""] }
+const flatten = (diff: FileDiff | undefined): { rows: Array<Row>; texts: [string, string]; partners: Int32Array } => {
+  if (!diff) return { rows: [], texts: ["", ""], partners: new Int32Array() }
   const rows: Array<Row> = []
   const old: Array<string> = []
   const next: Array<string> = []
+  // Removed and added lines in one change are paired in order, as edits of
+  // each other, so their changed words can be marked.
+  const pairs: Array<[number, number]> = []
+  let removedRun: Array<number> = []
+  let addedRun: Array<number> = []
+  const closeRun = () => {
+    for (let k = 0; k < Math.min(removedRun.length, addedRun.length); k++) pairs.push([removedRun[k]!, addedRun[k]!])
+    removedRun = []
+    addedRun = []
+  }
   // The whole file comes back as one hunk, whose header says nothing new.
   const headers = diff.hunks.length > 1
   for (const hunk of diff.hunks) {
     if (headers) rows.push({ type: "hunk", hunk })
     for (const line of hunk.lines) {
+      if (line.kind === "context") closeRun()
+      else if (line.kind === "removed" && addedRun.length > 0) closeRun()
+      if (line.kind === "removed") removedRun.push(rows.length)
+      if (line.kind === "added") addedRun.push(rows.length)
       if (line.kind === "removed") {
         rows.push({ type: "line", line, side: 0, index: old.length })
         old.push(line.text)
@@ -328,9 +373,15 @@ const flatten = (diff: FileDiff | undefined): { rows: Array<Row>; texts: [string
         next.push(line.text)
       }
     }
+    closeRun()
   }
   if (diff.truncated) rows.push({ type: "truncated" })
-  return { rows, texts: [old.join("\n"), next.join("\n")] }
+  const partners = new Int32Array(rows.length).fill(-1)
+  for (const [removed, added] of pairs) {
+    partners[removed] = added
+    partners[added] = removed
+  }
+  return { rows, texts: [old.join("\n"), next.join("\n")], partners }
 }
 
 /** Finds the tokens of one line of highlighted text. */
@@ -351,22 +402,36 @@ const indexByLine = (tokens: Int32Array): LineTokens => {
   }
 }
 
-/** Splits a line into its highlighted tokens and the plain text between them. */
-const colour = (text: string, tokens: Int32Array) => {
+const changedTones: Record<DiffLine["kind"], string> = {
+  context: "",
+  added: "rounded-[2px] bg-success/30",
+  removed: "rounded-[2px] bg-destructive/30",
+}
+
+/**
+ * Splits a line at every boundary of its highlighted tokens and its changed
+ * ranges, so each piece carries its syntax colour and, if it changed, a mark.
+ */
+const paint = (text: string, tokens: Int32Array | undefined, changed: ReadonlyArray<Range> | undefined, changedClass: string) => {
+  if (!tokens?.length && !changed?.length) return text
+  const cuts = new Set([0, text.length])
+  for (let i = 0; tokens && i < tokens.length; i += tokenStride) cuts.add(tokens[i + 1]!).add(tokens[i + 2]!)
+  for (const [from, to] of changed ?? []) cuts.add(from).add(to)
+  const points = [...cuts].sort((a, b) => a - b)
+
   const parts: Array<React.ReactNode> = []
-  let at = 0
-  for (let i = 0; i < tokens.length; i += tokenStride) {
-    const from = tokens[i + 1]!
-    const to = tokens[i + 2]!
-    if (from > at) parts.push(text.slice(at, from))
-    parts.push(
-      <span key={from} className={`syn-${syntaxStyles[tokens[i + 3]!]}`}>
-        {text.slice(from, to)}
-      </span>,
-    )
-    at = to
+  let token = 0
+  let range = 0
+  for (let p = 0; p + 1 < points.length; p++) {
+    const [from, to] = [points[p]!, points[p + 1]!]
+    if (from === to) continue
+    while (tokens && token < tokens.length && tokens[token + 2]! <= from) token += tokenStride
+    while (changed && range < changed.length && changed[range]![1] <= from) range++
+    const style = tokens && token < tokens.length && tokens[token + 1]! <= from ? `syn-${syntaxStyles[tokens[token + 3]!]}` : ""
+    const isChanged = changed !== undefined && range < changed.length && changed[range]![0] <= from
+    const className = cn(style, isChanged && changedClass)
+    parts.push(className ? <span key={from} className={className}>{text.slice(from, to)}</span> : text.slice(from, to))
   }
-  if (at < text.length) parts.push(text.slice(at))
   return parts
 }
 
