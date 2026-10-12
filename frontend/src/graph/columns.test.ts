@@ -8,15 +8,18 @@ describe("layoutColumns", () => {
   })
 
   it("caps a wide graph so the description keeps its room", () => {
-    const columns = layoutColumns(1400, 70)
-    expect(columns.graph).toBe(160)
+    const columns = layoutColumns(500, 70)
+    expect(columns.graph).toBe(144)
     expect(columns.graph).toBeLessThan(columns.graphNeeds)
   })
 
-  it("drops author before squeezing the graph below a few lanes", () => {
-    const columns = layoutColumns(740, 8)
-    expect(columns.showAuthor).toBe(false)
-    expect(columns.graph).toBeGreaterThanOrEqual(84)
+  it("keeps author while the graph has a few lanes, and drops it before going below", () => {
+    expect(layoutColumns(800, 20)).toMatchObject({ showAuthor: true, graph: 128 })
+    expect(layoutColumns(720, 20)).toMatchObject({ showAuthor: false })
+  })
+
+  it("lets a wide graph take a quarter of a wide pane", () => {
+    expect(layoutColumns(1200, 30).graph).toBe(300)
   })
 
   it("drops author, then commit, then date as the pane narrows", () => {

@@ -26,7 +26,8 @@ describe("geometry", () => {
     originY: rowHeight,
     offsetX: 0,
     rowAt: (i) => rows[i],
-    headOids: new Set(["c2"]),
+    activeHead: "c2",
+    headOids: new Set(["c1", "c2"]),
     anyEmphasis: true,
   })
 
@@ -39,8 +40,8 @@ describe("geometry", () => {
     expect(result.dots.find((d) => d.x === laneX(1))).toMatchObject({ y: rowHeight / 2 })
   })
 
-  it("tells merges and checked-out commits apart from ordinary ones", () => {
+  it("tells merges and checked-out commits apart, the active worktree's from the rest", () => {
     const shapes = Object.fromEntries(result.dots.map((d) => [d.y, d.shape]))
-    expect(Object.values(shapes).sort()).toEqual(["commit", "head", "merge"])
+    expect(Object.values(shapes).sort()).toEqual(["head", "merge", "worktree"])
   })
 })

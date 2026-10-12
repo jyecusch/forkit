@@ -27,7 +27,7 @@ export const SettingsDialog = ({ open, onOpenChange, preferences: p }: SettingsD
         <DialogHeader className="px-5 pt-5 pb-3">
           <DialogTitle>Preferences</DialogTitle>
         </DialogHeader>
-        <div className="flex flex-col gap-4 overflow-y-auto px-5 pb-5">
+        <div className="flex flex-col gap-4 overflow-y-auto px-5 pb-5 [mask-image:linear-gradient(to_bottom,black_calc(100%-16px),transparent)]">
           <Group title="Appearance">
             <Row label="Theme">
               <Choice

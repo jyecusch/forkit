@@ -20,10 +20,11 @@ export interface Segment {
 }
 
 /**
- * How a commit is drawn: ordinary commits are solid, merges are rings, and
- * the commit a worktree has checked out is solid with an outer ring.
+ * How a commit is drawn: ordinary commits are solid and merges are rings.
+ * The active worktree's checked-out commit is solid with an outer ring;
+ * other worktrees' are solid with a fainter, thinner one.
  */
-export type DotShape = "commit" | "merge" | "head"
+export type DotShape = "commit" | "merge" | "head" | "worktree"
 
 export interface Dot {
   readonly x: number
@@ -51,11 +52,14 @@ export const geometry = (options: {
   readonly originY: number
   readonly offsetX: number
   readonly rowAt: (index: number) => LoadedRow | undefined
+  /** The active worktree's checked-out commit. */
+  readonly activeHead: string | undefined
+  /** Every worktree's checked-out commit. */
   readonly headOids: ReadonlySet<string>
   /** With no emphasized history, everything is drawn at full strength. */
   readonly anyEmphasis: boolean
 }): Geometry => {
-  const { first, last, originY, offsetX, rowAt, headOids, anyEmphasis } = options
+  const { first, last, originY, offsetX, rowAt, activeHead, headOids, anyEmphasis } = options
   const centerY = (index: number) => index * rowHeight + rowHeight / 2 - originY
   const x = (lane: number) => laneX(lane) - offsetX
   const segments: Array<Segment> = []
@@ -82,10 +86,23 @@ export const geometry = (options: {
       y: centerY(index),
       thread: row.threadId,
       emphasized: !anyEmphasis || row.onEmphasized,
-      shape: headOids.has(row.oid) ? "head" : commit.parents.length > 1 ? "merge" : "commit",
+      shape:
+        row.oid === activeHead ? "head" : headOids.has(row.oid) ? "worktree" : commit.parents.length > 1 ? "merge" : "commit",
     })
   }
   const emphasizedLast = <T extends { readonly emphasized: boolean }>(items: Array<T>) =>
     items.sort((a, b) => Number(a.emphasized) - Number(b.emphasized))
   return { segments: emphasizedLast(segments), dots: emphasizedLast(dots) }
+}
+
+/** The widest lane any loaded row in [first, last] draws on, or -1 if none. */
+export const widestLane = (first: number, last: number, rowAt: (index: number) => LoadedRow | undefined): number => {
+  let widest = -1
+  for (let index = Math.max(0, first - 1); index <= last; index++) {
+    const loaded = rowAt(index)
+    if (!loaded) continue
+    widest = Math.max(widest, loaded.row.lane)
+    for (const edge of loaded.row.edges) widest = Math.max(widest, edge.fromLane, edge.toLane)
+  }
+  return widest
 }

@@ -21,6 +21,8 @@ interface TreeItemProps {
 }
 
 interface RepoNavProps {
+  /** Whether this repository is on screen, so its shortcuts apply. */
+  readonly active: boolean
   readonly refs: ReadonlyArray<Ref>
   readonly remotes: ReadonlyArray<Remote>
   readonly worktrees: ReadonlyArray<Worktree>
@@ -44,7 +46,7 @@ interface RepoNavProps {
  * guide 8 px after it. Selection backgrounds reach 8 px past both edges.
  */
 export const RepoNav = (props: RepoNavProps) => {
-  const { refs, remotes, worktrees, activeWorktree, emphasized, reveal } = props
+  const { active, refs, remotes, worktrees, activeWorktree, emphasized, reveal } = props
   const [filter, setFilter] = useState("")
   // Open and closed choices made while filtering are forgotten with the filter.
   const [choices, setChoices] = useState<ReadonlyMap<string, boolean>>(new Map())
@@ -71,17 +73,19 @@ export const RepoNav = (props: RepoNavProps) => {
 
   // "/" jumps to the filter from anywhere outside a text field or dialog.
   useEffect(() => {
+    if (!active) return
     const onKey = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement
       const modalOpen = document.querySelector("[role=dialog][data-state=open]") !== null
       if (event.key === "/" && !modalOpen && !["INPUT", "TEXTAREA"].includes(target.tagName)) {
         event.preventDefault()
         filterRef.current?.focus()
+        filterRef.current?.select()
       }
     }
     window.addEventListener("keydown", onKey)
     return () => window.removeEventListener("keydown", onKey)
-  }, [])
+  }, [active])
 
   const scrollRef = useRef<HTMLDivElement>(null)
   const virtualizer = useVirtualizer({
@@ -119,6 +123,14 @@ export const RepoNav = (props: RepoNavProps) => {
         .reverse()
         .find((other) => Number(other.getAttribute("aria-level")) < level)
     const action = {
+      Home: () => items[0]?.focus(),
+      End: () => items[items.length - 1]?.focus(),
+      Escape: filtering
+        ? () => {
+            changeFilter("")
+            filterRef.current?.focus()
+          }
+        : undefined,
       ArrowDown: () => items[current + 1]?.focus(),
       ArrowUp: () => (current === 0 ? filterRef.current : items[current - 1])?.focus(),
       ArrowRight: () => (expanded === "false" ? item.click() : expanded === "true" ? items[current + 1]?.focus() : undefined),
@@ -138,17 +150,13 @@ export const RepoNav = (props: RepoNavProps) => {
               {...treeItem(row, 1)}
               onClick={() => setOpen(row.id, row.collapsed)}
               aria-expanded={!row.collapsed}
-              className="group/section flex h-6 flex-1 items-center gap-1 rounded-md px-2 text-xs font-medium text-subtle-foreground hover:text-secondary-foreground"
+              className="group flex h-6 flex-1 items-center gap-1 rounded-md px-2 text-xs font-medium text-subtle-foreground hover:text-secondary-foreground"
             >
               {row.title}
-              <ChevronRight
-                aria-hidden
-                className={cn(
-                  "size-3 transition",
-                  row.collapsed ? "opacity-60" : "rotate-90 opacity-0 group-hover/section:opacity-100 group-focus-visible/section:opacity-100",
-                )}
-              />
-              {row.collapsed && <span className="ml-auto text-[11px] tabular-nums">{row.count}</span>}
+              <span className="ml-auto flex items-center gap-2">
+                {row.collapsed && <span className="text-[11px] tabular-nums">{row.count}</span>}
+                <TrailingChevron open={!row.collapsed} />
+              </span>
             </button>
             {row.id === "worktrees" && (
               <button
@@ -179,7 +187,7 @@ export const RepoNav = (props: RepoNavProps) => {
             <span className="truncate">{row.remote.name}</span>
             <span className="min-w-0 flex-1 truncate text-xs text-subtle-foreground">{showHosts && host !== "local" ? host : ""}</span>
             {row.collapsed && <Meta>{row.count}</Meta>}
-            <Chevron open={!row.collapsed} />
+            <TrailingChevron open={!row.collapsed} />
           </NavButton>
         )
       }
@@ -199,7 +207,9 @@ export const RepoNav = (props: RepoNavProps) => {
         )
       case "ref": {
         const current = row.ref.checkedOutInWorktreeId === activeWorktree && activeWorktree !== undefined
-        const elsewhere = row.ref.checkedOutInWorktreeId && !current ? worktreeNames.get(row.ref.checkedOutInWorktreeId) : undefined
+        const elsewhere = current ? undefined : worktrees.find((wt) => wt.id === row.ref.checkedOutInWorktreeId)
+        // A branch checked out in another worktree is opened there instead.
+        const open = () => (elsewhere ? props.onSelectWorktree(elsewhere) : props.onCheckout(row.ref))
         const item = (
           <NavButton
             {...treeItem(row, row.depth + 2)}
@@ -208,14 +218,20 @@ export const RepoNav = (props: RepoNavProps) => {
             aria-selected={row.ref.id === emphasized}
             title={row.ref.shortName}
             onClick={() => props.onEmphasize(row.ref)}
-            onDoubleClick={() => props.onCheckout(row.ref)}
+            onDoubleClick={open}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+                event.preventDefault()
+                open()
+              }
+            }}
             icon={<RefIcon kind={row.ref.kind} />}
           >
             <span className="min-w-0 flex-1 truncate">
               <Highlight text={row.name} query={filter} />
             </span>
             {current && <Check aria-label="Checked out here" className="size-3.5 flex-none text-primary" />}
-            {elsewhere && <Meta title={`Checked out in ${elsewhere}`}>{elsewhere}</Meta>}
+            {elsewhere && <Meta title={`Checked out in ${worktreeNames.get(elsewhere.id)}`}>{worktreeNames.get(elsewhere.id)}</Meta>}
             <AheadBehind ahead={row.ref.ahead} behind={row.ref.behind} />
           </NavButton>
         )
@@ -223,8 +239,13 @@ export const RepoNav = (props: RepoNavProps) => {
           <ContextMenu>
             <ContextMenuTrigger asChild>{item}</ContextMenuTrigger>
             <ContextMenuContent className="w-56">
-              <ContextMenuItem disabled={current} onSelect={() => props.onCheckout(row.ref)}>
-                {row.ref.kind === "remoteBranch" ? "Check out as local branch…" : "Check out"}
+              <ContextMenuItem disabled={current} onSelect={open}>
+                {elsewhere
+                  ? `Switch to ${worktreeNames.get(elsewhere.id)}`
+                  : row.ref.kind === "remoteBranch"
+                    ? "Check out as local branch…"
+                    : "Check out"}
+                <span className="ml-auto text-xs text-subtle-foreground">⌘↩</span>
               </ContextMenuItem>
               {row.ref.kind !== "stash" && (
                 <ContextMenuItem onSelect={() => props.onNewWorktree(row.ref)}>New worktree from here…</ContextMenuItem>
@@ -303,7 +324,7 @@ const NavButton = ({ depth, icon, selected = false, current = false, children, c
   <button
     {...rest}
     className={cn(
-      "flex h-full w-full items-center gap-2 rounded-md pr-2 text-left",
+      "group flex h-full w-full items-center gap-2 rounded-md pr-2 text-left",
       "focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring",
       "data-[state=open]:shadow-[inset_0_0_0_1px_var(--ring)]",
       selected ? "bg-foreground/[0.08] text-foreground" : "text-secondary-foreground hover:bg-foreground/[0.05] hover:text-foreground",
@@ -372,6 +393,20 @@ const AheadBehind = ({ ahead, behind }: { ahead: number | undefined; behind: num
     </Meta>
   )
 }
+
+/**
+ * The disclosure for sections and remotes, which have their own icon: at
+ * the row's end, faint while closed and shown on hover while open.
+ */
+const TrailingChevron = ({ open }: { open: boolean }) => (
+  <ChevronRight
+    aria-hidden
+    className={cn(
+      "size-3 flex-none transition",
+      open ? "rotate-90 opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100" : "opacity-60",
+    )}
+  />
+)
 
 const Chevron = ({ open }: { open: boolean }) => (
   <ChevronRight aria-hidden className={cn("size-3.5 flex-none transition-transform", open && "rotate-90")} />

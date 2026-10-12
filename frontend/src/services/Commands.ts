@@ -22,6 +22,8 @@ export class Commands extends Context.Service<
      * tip, or None when that commit is not shown.
      */
     readonly emphasize: (repo: RepoId, ref: RefId) => Effect.Effect<Option.Option<number>, RpcFailure>
+    /** The graph row of the commit a ref points at, if it is in the graph. */
+    readonly locate: (repo: RepoId, ref: RefId) => Effect.Effect<Option.Option<number>, RpcFailure>
     /** Checks out ref in a worktree and then emphasizes the branch it lands on. */
     readonly checkout: (
       repo: RepoId,
@@ -63,6 +65,10 @@ export class Commands extends Context.Service<
           return worktree.head.refId ? yield* emphasize(repo, worktree.head.refId) : Option.none()
         }),
         emphasize,
+        locate: Effect.fn("command.locate")(function* (repo: RepoId, ref: RefId) {
+          const row = yield* rpc.rowOfRef(repo, ref)
+          return row >= 0 ? Option.some(row) : Option.none()
+        }),
         checkout: Effect.fn("command.checkout")(function* (repo: RepoId, worktree: WorktreeId, ref: RefId, mode: CheckoutMode) {
           const result = yield* rpc.checkout(worktree, ref, mode)
           yield* rpc.setEmphasizedRef(repo, result.branch ?? ref)

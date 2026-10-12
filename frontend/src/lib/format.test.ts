@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { baseName, formatDate, initials } from "./format"
+import { baseName, formatDate, initials, reflow } from "./format"
 
 describe("formatDate", () => {
   const now = Date.UTC(2026, 9, 12, 12, 0, 0)
@@ -22,5 +22,16 @@ describe("names and paths", () => {
     expect(initials("Priya Nair")).toBe("PN")
     expect(baseName("/home/ada/repos/forkit/")).toBe("forkit")
     expect(baseName("C:\\code\\forkit")).toBe("forkit")
+  })
+})
+
+describe("reflow", () => {
+  it("joins wrapped lines into paragraphs and keeps blank lines", () => {
+    expect(reflow("one two\nthree\n\nfour\nfive")).toBe("one two three\n\nfour five")
+  })
+
+  it("keeps list items, their wrapped text joined, and code as written", () => {
+    const message = ["- first item", "  continues", "- second", "wraps here", "", "```", "a", "b", "```", "    indented", "    code"].join("\n")
+    expect(reflow(message)).toBe(["- first item", "  continues", "- second wraps here", "", "```", "a", "b", "```", "    indented", "    code"].join("\n"))
   })
 })

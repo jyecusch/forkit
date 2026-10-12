@@ -1,6 +1,6 @@
 import { useLiveQuery } from "@tanstack/react-db"
 import { Option } from "effect"
-import { useCallback, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useMediaQuery, useRun } from "@/app/hooks"
 import {
   graphViewsCollection,
@@ -29,10 +29,12 @@ interface RepoViewProps {
   readonly repo: Repo
   readonly openRepo: OpenRepo | undefined
   readonly preferences: Preferences
+  /** Whether this is the repository on screen; the others are kept, hidden. */
+  readonly active: boolean
 }
 
 /** Everything below the repository tabs for one repository. */
-export const RepoView = ({ repo, openRepo, preferences }: RepoViewProps) => {
+export const RepoView = ({ repo, openRepo, preferences, active }: RepoViewProps) => {
   const run = useRun()
   const id: RepoId = repo.id
   const { data: worktrees } = useLiveQuery({ query: (q) => q.from({ worktree: worktreesCollection(id) }) })
@@ -79,6 +81,15 @@ export const RepoView = ({ repo, openRepo, preferences }: RepoViewProps) => {
   const selectWorktree = (worktree: Worktree) =>
     void run(Commands.use((commands) => commands.selectWorktree(id, worktree))).then(scrollTo)
 
+  // Open on the checked-out commit, wherever it is in the history.
+  const viewLoaded = view !== undefined
+  const located = useRef(false)
+  useEffect(() => {
+    if (located.current || !viewLoaded || !headRef) return
+    located.current = true
+    void run(Commands.use((commands) => commands.locate(id, headRef))).then(scrollTo)
+  }, [viewLoaded, headRef, id, run, scrollTo])
+
   const checkout = useCheckout({
     repo: id,
     refs,
@@ -112,6 +123,7 @@ export const RepoView = ({ repo, openRepo, preferences }: RepoViewProps) => {
   const sidebar = (
     <>
       <RepoNav
+        active={active}
         refs={refs}
         remotes={remotes}
         worktrees={worktrees}
@@ -134,6 +146,7 @@ export const RepoView = ({ repo, openRepo, preferences }: RepoViewProps) => {
       <ViewHeader
         worktree={activeWorktree}
         refsById={refsById}
+        headEmphasized={emphasized !== undefined && emphasized === headRef}
         emphasizedOther={emphasizedOther}
         onClearEmphasis={() => headBranch && emphasize(headBranch)}
         view={view}
@@ -152,7 +165,7 @@ export const RepoView = ({ repo, openRepo, preferences }: RepoViewProps) => {
               headOids={headOids}
               headRef={headRef}
               selected={selected}
-              defaultSelection={activeWorktree?.head.oid}
+              activeHead={activeWorktree?.head.oid}
               onSelect={setSelected}
               scrollRequest={scrollRequest}
               preferences={preferences}

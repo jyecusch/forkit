@@ -32,7 +32,7 @@ export const Chrome = ({ sidebar, tabs, children }: ChromeProps) => (
     style={{ "--panel-radius": `${panelRadius}px` } as CSSProperties}
   >
     <div className="col-start-1 row-start-1" style={dragRegion} />
-    <div className="col-start-2 row-start-1 flex items-end pl-[var(--panel-radius)]" style={{ ...dragRegion, paddingRight: inset }}>
+    <div className="col-start-2 row-start-1 flex items-end pl-[calc(var(--panel-radius)+10px)]" style={{ ...dragRegion, paddingRight: inset }}>
       {tabs}
     </div>
     <div className="col-start-1 row-start-2 flex min-h-0 flex-col">{sidebar}</div>

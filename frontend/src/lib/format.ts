@@ -56,3 +56,26 @@ export const shortOid = (oid: string): string => oid.slice(0, 7)
 
 /** The last path segment, for showing a worktree by its folder name. */
 export const baseName = (path: string): string => path.split(/[\\/]/).filter(Boolean).pop() ?? path
+
+/**
+ * Joins the hard-wrapped lines of a commit message into paragraphs, so the
+ * text wraps to the space it is shown in. Blank lines, list items, quotes,
+ * indented lines and fenced code keep their line breaks.
+ */
+export const reflow = (text: string): string => {
+  const lines: Array<string> = []
+  let fenced = false
+  let joinable = false
+  for (const line of text.split("\n")) {
+    if (/^\s*```/.test(line)) fenced = !fenced
+    const verbatim = fenced || /^\s*```/.test(line) || /^(\s|>)/.test(line)
+    const blank = line.trim() === ""
+    if (joinable && !verbatim && !blank && !/^([-*+]|\d+[.)])\s/.test(line)) {
+      lines[lines.length - 1] += ` ${line.trim()}`
+    } else {
+      lines.push(line)
+    }
+    joinable = !verbatim && !blank
+  }
+  return lines.join("\n")
+}

@@ -26,7 +26,13 @@ const elbowRadius = 8
  * only toned down towards the background. Transparency would make
  * overlapping strokes and dot outlines show through each other.
  */
-export const drawGraph = (context: CanvasRenderingContext2D, geometry: Geometry, palette: GraphPalette, dimmedStrength: number) => {
+export const drawGraph = (
+  context: CanvasRenderingContext2D,
+  geometry: Geometry,
+  palette: GraphPalette,
+  dimmedStrength: number,
+  width: number,
+) => {
   const colors = new Map<string, string>()
   const colorOf = (thread: number, emphasized: boolean) => {
     const key = `${thread % palette.lanes.length}:${emphasized}`
@@ -49,8 +55,11 @@ export const drawGraph = (context: CanvasRenderingContext2D, geometry: Geometry,
     context.stroke()
   }
 
+  // A dot panned out of view is pinned half-visible to the edge it left by,
+  // so every row still shows where its commit is.
   for (const dot of geometry.dots) {
-    drawDot(context, dot, colorOf(dot.thread, dot.emphasized), palette.background)
+    const pinned = { ...dot, x: Math.min(Math.max(dot.x, 0), width) }
+    drawDot(context, pinned, colorOf(dot.thread, dot.emphasized), palette.background)
   }
 }
 
@@ -79,7 +88,7 @@ const drawDot = (context: CanvasRenderingContext2D, dot: Dot, color: string, bac
     context.beginPath()
     context.arc(dot.x, dot.y, radius, 0, Math.PI * 2)
   }
-  const outer = dot.shape === "head" ? dotRadius + 2 : dotRadius
+  const outer = dot.shape === "head" || dot.shape === "worktree" ? dotRadius + 2 : dotRadius
   if (dot.shape !== "commit") {
     // Rings are hollow, so clear the lines that run into them.
     context.fillStyle = background
@@ -100,12 +109,13 @@ const drawDot = (context: CanvasRenderingContext2D, dot: Dot, color: string, bac
       context.stroke()
       break
     case "head":
+    case "worktree":
       context.fillStyle = color
       circle(dotRadius - 1)
       context.fill()
-      context.strokeStyle = color
-      context.lineWidth = 1.5
-      circle(outer - 0.75)
+      context.strokeStyle = dot.shape === "head" ? color : mixHex(color, background, 0.5)
+      context.lineWidth = dot.shape === "head" ? 1.5 : 1
+      circle(outer - context.lineWidth / 2)
       context.stroke()
       break
   }

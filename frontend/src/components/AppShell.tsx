@@ -2,14 +2,18 @@ import { useLiveQuery } from "@tanstack/react-db"
 import { Outlet, useNavigate } from "@tanstack/react-router"
 import { useEffect, useLayoutEffect, useMemo } from "react"
 import { usePreferences, useResolvedTheme, useSession } from "@/app/hooks"
+import { setPreferencesOpen, usePreferencesOpen } from "@/app/preferencesDialog"
 import { useService } from "@/app/services"
+import { useShortcuts } from "@/app/useShortcuts"
 import { GraphData } from "@/services/GraphData"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { reposCollection } from "@/data/collections"
 import type { Repo, RepoId } from "@/model/model.gen"
+import { cn } from "@/lib/utils"
 import { Chrome } from "./Chrome"
 import { RepoTabs } from "./RepoTabs"
 import { RepoView } from "./RepoView"
+import { SettingsDialog } from "./SettingsDialog"
 import { Toaster } from "./Toaster"
 
 /** Applies the session and preferences to the window and shows the active view. */
@@ -39,31 +43,52 @@ export const AppShell = () => {
   const graphData = useService(GraphData)
   const openRepos = useMemo(() => session?.openRepos.map((open) => open.id) ?? [], [session])
   useEffect(() => graphData.retain(openRepos), [graphData, openRepos])
+  useShortcuts(openRepos, activeRepo)
+  const preferencesOpen = usePreferencesOpen()
 
   return (
     <TooltipProvider>
       <div className="relative flex h-full flex-col">
         <Outlet />
         <Toaster />
+        {preferences && <SettingsDialog open={preferencesOpen} onOpenChange={setPreferencesOpen} preferences={preferences} />}
       </div>
     </TooltipProvider>
   )
 }
 
-/** Shows one repository, once its entities have arrived. */
+/**
+ * Shows one repository, once its entities have arrived. Every open
+ * repository stays mounted, hidden behind the active one, so switching tabs
+ * keeps each one's scroll position, selection and sidebar as they were.
+ */
 export const RepoRoute = ({ repoId }: { repoId: RepoId }) => {
   const session = useSession()
   const preferences = usePreferences()
   const { data: repos } = useLiveQuery({ query: (q) => q.from({ repo: reposCollection }) })
-  const repo: Repo | undefined = repos.find((r) => r.id === repoId)
-  if (!repo || !preferences) {
+  const byId = new Map<string, Repo>(repos.map((repo) => [repo.id, repo]))
+  if (!byId.has(repoId) || !preferences) {
     return (
       <Chrome sidebar={<SidebarSkeleton />} tabs={<RepoTabs />}>
         <div className="h-10 flex-none border-b" />
       </Chrome>
     )
   }
-  return <RepoView key={repo.id} repo={repo} openRepo={session?.openRepos.find((open) => open.id === repo.id)} preferences={preferences} />
+  return (
+    <div className="relative flex min-h-0 flex-1">
+      {session?.openRepos.map((open) => {
+        const repo = byId.get(open.id)
+        const active = open.id === repoId
+        return (
+          repo && (
+            <div key={repo.id} className={cn("absolute inset-0 flex", !active && "invisible")} aria-hidden={!active}>
+              <RepoView repo={repo} openRepo={open} preferences={preferences} active={active} />
+            </div>
+          )
+        )
+      })}
+    </div>
+  )
 }
 
 /** Placeholder rows on the navigator's guides while a repository loads. */

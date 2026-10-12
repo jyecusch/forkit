@@ -11,9 +11,9 @@
 :root,
 [data-theme="tokyo-night"] {
   --background: #1a1b26;
-  --sidebar: #121219;
+  --sidebar: #0e0e14;
   --card: #24283b;
-  --popover: #24283b;
+  --popover: #2c3149;
   --foreground: #c0caf5;
   --secondary-foreground: #a9b1d6;
   --muted-foreground: #6f77a3;
@@ -54,7 +54,7 @@
   --border: #d3d5df;
   --input: #d3d5df;
   --ring: #1f63c6;
-  --selection: #d3ddf7;
+  --selection: #cbd7f6;
   --accent: #dfe0e8;
   --muted: #e4e5ec;
   --secondary: #dfe0e8;

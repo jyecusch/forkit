@@ -7,6 +7,8 @@ import type { GraphView, Ref, Worktree, WorktreeOperation } from "@/model/model.
 interface ViewHeaderProps {
   readonly worktree: Worktree | undefined
   readonly refsById: ReadonlyMap<string, Ref>
+  /** Whether the checked-out branch is the emphasized ref. */
+  readonly headEmphasized: boolean
   /** Set when a ref other than the checked-out branch is emphasized. */
   readonly emphasizedOther: Ref | undefined
   readonly onClearEmphasis: () => void
@@ -21,28 +23,36 @@ interface ViewHeaderProps {
  * The panel's second header level: which worktree and branch the view is
  * about, and what the graph is showing.
  */
-export const ViewHeader = ({ worktree, refsById, emphasizedOther, onClearEmphasis, view, checkingOut, detailsShown, onToggleDetails }: ViewHeaderProps) => {
+export const ViewHeader = ({ worktree, refsById, headEmphasized, emphasizedOther, onClearEmphasis, view, checkingOut, detailsShown, onToggleDetails }: ViewHeaderProps) => {
   const changes = worktree ? changeCount(worktree) : 0
+  const head = worktree?.head.refId ? refsById.get(worktree.head.refId) : undefined
   return (
     <div className="flex h-10 flex-none items-center gap-3 border-b px-3 text-[13px]">
       {worktree && (
-        <div className="flex min-w-0 items-center gap-2">
+        <div className="flex min-w-0 items-center gap-1.5">
           <Folder aria-hidden className="size-4 flex-none text-subtle-foreground" />
           <span className="truncate font-medium text-foreground" title={worktree.path}>
             {baseName(worktree.path)}
           </span>
-          <span className={cn(chip, "bg-foreground/[0.06] text-secondary-foreground")} aria-busy={checkingOut}>
+          <span className={cn(chip, headEmphasized ? emphasizedChip : "bg-foreground/[0.06] text-secondary-foreground")} aria-busy={checkingOut}>
             {checkingOut ? (
               <LoaderCircle aria-label="Checking out" className="size-3 flex-none animate-spin" />
             ) : (
               <GitBranch aria-hidden className="size-3 flex-none" />
             )}
             <span className="truncate">{headLabel(worktree, refsById)}</span>
+            {head && Boolean(head.ahead || head.behind) && (
+              <span className="flex-none opacity-70 tabular-nums" title="Ahead of and behind its upstream">
+                {head.ahead ? `↑${head.ahead}` : ""}
+                {head.ahead && head.behind ? " " : ""}
+                {head.behind ? `↓${head.behind}` : ""}
+              </span>
+            )}
           </span>
           {emphasizedOther && (
             <span
-              className={cn(chip, "bg-primary/12 pr-0.5 text-primary")}
-              title="Emphasized: its history is drawn at full strength and the rest is toned down"
+              className={cn(chip, emphasizedChip, "pr-0.5")}
+              title="Emphasized history"
             >
               <RefKindIcon kind={emphasizedOther.kind} />
               <span className="max-w-48 truncate">{emphasizedOther.shortName}</span>
@@ -88,6 +98,8 @@ export const ViewHeader = ({ worktree, refsById, emphasizedOther, onClearEmphasi
 }
 
 const chip = "flex h-[22px] min-w-0 items-center gap-1 rounded-md px-1.5 text-xs"
+/** The accent marks the emphasized ref, as its badges do in the list. */
+const emphasizedChip = "bg-primary/12 text-primary shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--primary)_40%,transparent)]"
 
 const RefKindIcon = ({ kind }: { kind: Ref["kind"] }) =>
   kind === "tag" ? <Tag aria-hidden className="size-3 flex-none" /> : <GitBranch aria-hidden className="size-3 flex-none" />

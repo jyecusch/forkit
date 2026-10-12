@@ -29,7 +29,7 @@ export const NewWorktreeDialog = ({ repo, base, onClose }: NewWorktreeDialogProp
 
   const canUseBase = base?.kind === "localBranch" && !base.checkedOutInWorktreeId
   const effectiveBranch = branch.trim() || (canUseBase ? base.shortName : "")
-  const folder = `${repo.name}-${effectiveBranch.replace(/[^A-Za-z0-9._-]+/g, "-")}`
+  const folder = `${repo.name}-${(effectiveBranch || "branch").replace(/[^A-Za-z0-9._-]+/g, "-")}`
   const path = parent ? `${parent}/${folder}` : ""
 
   const create = async () => {
@@ -69,19 +69,17 @@ export const NewWorktreeDialog = ({ repo, base, onClose }: NewWorktreeDialogProp
               onKeyDown={(event) => event.key === "Enter" && void create()}
             />
           </label>
-          {effectiveBranch && (
-            <div className="flex flex-col gap-1.5">
-              <span>Location</span>
-              <div className="flex h-7 items-center gap-2">
-                <span className="min-w-0 flex-1 truncate font-mono text-xs text-secondary-foreground" title={path || `Next to the main worktree, in ${folder}`}>
-                  {path || `…/${folder}`}
-                </span>
-                <Button variant="ghost" size="sm" className="text-primary" onClick={() => void choose()}>
-                  Choose…
-                </Button>
-              </div>
+          <div className="flex flex-col gap-1.5">
+            <span>Location</span>
+            <div className="flex h-7 items-center gap-2">
+              <span className="min-w-0 flex-1 truncate font-mono text-xs text-secondary-foreground" title={path || `Next to the main worktree, in ${folder}`}>
+                {path || `…/${folder}`}
+              </span>
+              <Button variant="ghost" size="sm" className="text-primary" onClick={() => void choose()}>
+                Choose…
+              </Button>
             </div>
-          )}
+          </div>
           <DialogFooter>
             <Button variant="ghost" onClick={onClose}>
               Cancel

@@ -93,7 +93,7 @@ export const RepoTabs = () => {
             className={cn(
               // Tabs share one width, like a browser's, so labels line up and
               // the close button and status sit in the right padding of every tab.
-              "group relative flex h-8 w-44 min-w-12 shrink cursor-default items-center rounded-t-[10px] border border-b-0 pr-8 pl-4",
+              "group relative flex h-8 w-44 min-w-12 shrink cursor-default items-center rounded-t-[10px] border border-b-0 pr-8 pl-3",
               "focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring",
               on
                 ? "z-10 -mb-px h-[33px] bg-background text-foreground"
@@ -103,7 +103,7 @@ export const RepoTabs = () => {
           >
             {on ? (
               <>
-                {index > 0 && <Flare side="left" />}
+                <Flare side="left" />
                 <Flare side="right" />
               </>
             ) : (
@@ -139,7 +139,7 @@ export const RepoTabs = () => {
         title="Open repository"
         onClick={() => void run(Commands.use((commands) => commands.openRepository()))}
         style={noDrag}
-        className="mb-0.5 ml-1 flex size-7 flex-none items-center justify-center rounded-md text-subtle-foreground hover:bg-foreground/[0.05] hover:text-foreground"
+        className="mb-1 ml-1 flex size-6 flex-none items-center justify-center rounded-md text-subtle-foreground hover:bg-foreground/[0.05] hover:text-foreground"
       >
         <Plus className="size-4" />
       </button>

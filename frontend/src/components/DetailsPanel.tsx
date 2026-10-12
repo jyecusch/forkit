@@ -5,7 +5,7 @@ import { useEffect, useState, type ReactNode } from "react"
 import { useForkedEffect } from "@/app/hooks"
 import { useNow } from "@/app/useNow"
 import { fileStatusesCollection } from "@/data/collections"
-import { formatDate, formatFullDate, initials, shortOid } from "@/lib/format"
+import { formatDate, formatFullDate, initials, reflow, shortOid } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import type { CommitDetail, FileChangeStatus, FileStatus, Preferences, RepoId, StatusCode, WorktreeId } from "@/model/model.gen"
 import type { LoadedRow } from "@/services/GraphData"
@@ -31,7 +31,18 @@ export const DetailsPanel = ({ repo, selected, worktree, changes, preferences }:
   const setTab = (next: Tab) => setChosen({ tab: next, oid })
   return (
     <aside aria-label="Details" className="flex w-[clamp(260px,26vw,340px)] flex-none flex-col border-l">
-      <div role="tablist" aria-label="Details" className="flex h-8 flex-none items-center gap-0.5 border-b px-2">
+      <div
+        role="tablist"
+        aria-label="Details"
+        className="flex h-8 flex-none items-center gap-0.5 border-b px-2"
+        onKeyDown={(event) => {
+          if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return
+          event.preventDefault()
+          setTab(tab === "commit" ? "changes" : "commit")
+          const list = event.currentTarget
+          requestAnimationFrame(() => list.querySelector<HTMLElement>("[aria-selected=true]")?.focus())
+        }}
+      >
         <TabButton active={tab === "commit"} onClick={() => setTab("commit")}>
           Commit
         </TabButton>
@@ -57,10 +68,11 @@ const TabButton = ({ active, onClick, children }: { active: boolean; onClick: ()
   <button
     role="tab"
     aria-selected={active}
+    tabIndex={active ? 0 : -1}
     onClick={onClick}
     className={cn(
       "flex h-6 items-center rounded-md px-2 text-xs font-medium",
-      active ? "bg-accent text-foreground" : "text-subtle-foreground hover:bg-accent/50 hover:text-foreground",
+      active ? "bg-foreground/[0.08] text-foreground" : "text-subtle-foreground hover:bg-foreground/[0.05] hover:text-foreground",
     )}
   >
     {children}
@@ -91,7 +103,7 @@ const CommitTab = ({ repo, selected, preferences }: { repo: RepoId; selected: Lo
   }
   const { commit } = selected
   const [subject, ...rest] = (detail?.body ?? commit.subject).split("\n")
-  const body = rest.join("\n").trim()
+  const body = reflow(rest.join("\n").trim())
   return (
     <div className="flex flex-col">
       <div className="flex flex-col gap-2.5 border-b p-4">
@@ -111,9 +123,9 @@ const CommitTab = ({ repo, selected, preferences }: { repo: RepoId; selected: Lo
             </span>
           </div>
         </div>
-        <dl className="grid grid-cols-[64px_minmax(0,1fr)] gap-x-2 gap-y-1 text-xs">
+        <dl className="grid grid-cols-[64px_minmax(0,1fr)] items-center gap-x-2 gap-y-1 text-xs [&>dd]:flex [&>dd]:h-5 [&>dd]:items-center">
           <dt className="text-subtle-foreground">Commit</dt>
-          <dd className="flex min-w-0 items-center gap-1 font-mono text-secondary-foreground">
+          <dd className="min-w-0 gap-1 font-mono text-secondary-foreground">
             <span title={commit.oid}>{commit.oid.slice(0, 12)}</span>
             <CopyButton text={commit.oid} label="Copy full SHA" />
           </dd>
@@ -122,7 +134,9 @@ const CommitTab = ({ repo, selected, preferences }: { repo: RepoId; selected: Lo
           {detail && detail.committerName !== commit.authorName && (
             <>
               <dt className="text-subtle-foreground">Committer</dt>
-              <dd className="truncate text-secondary-foreground">{detail.committerName}</dd>
+              <dd className="text-secondary-foreground">
+                <span className="truncate">{detail.committerName}</span>
+              </dd>
             </>
           )}
         </dl>
@@ -131,6 +145,7 @@ const CommitTab = ({ repo, selected, preferences }: { repo: RepoId; selected: Lo
         <span>Changed files</span>
         <span>{detail?.files.length ?? ""}</span>
       </div>
+      {detail && detail.files.length === 0 && <p className="px-4 text-xs text-subtle-foreground">No files changed</p>}
       <ul className="flex flex-col px-2 pb-2">
         {detail?.files.map((file) => (
           <li key={file.path} className={fileRow}>

@@ -4,7 +4,7 @@ import { useForkedEffect, useResolvedTheme } from "@/app/hooks"
 import { useService } from "@/app/services"
 import { layoutColumns, listInset } from "@/graph/columns"
 import { drawGraph, readPalette, type GraphPalette } from "@/graph/draw"
-import { geometry, gutter, laneX, rowHeight } from "@/graph/geometry"
+import { geometry, gutter, laneWidth, laneX, rowHeight, widestLane } from "@/graph/geometry"
 import { notify } from "@/app/notifications"
 import { useNow } from "@/app/useNow"
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu"
@@ -36,8 +36,8 @@ interface GraphPaneProps {
   /** The active worktree's branch, labelled HEAD. */
   readonly headRef: RefId | undefined
   readonly selected: LoadedRow | undefined
-  /** The commit selected until the user picks one, such as the checked-out one. */
-  readonly defaultSelection: string | undefined
+  /** The active worktree's checked-out commit: ringed, and selected until the user picks one. */
+  readonly activeHead: string | undefined
   readonly onSelect: (row: LoadedRow) => void
   readonly scrollRequest: ScrollRequest | undefined
   readonly preferences: Preferences
@@ -95,21 +95,34 @@ export const GraphPane = (props: GraphPaneProps) => {
     setPalette(readPalette(document.documentElement))
   }, [theme])
 
-  const columns = layoutColumns(paneWidth, view.laneCount)
-  const maxOffset = Math.max(columns.graphNeeds - columns.graph, 0)
+  // The graph is sized for the lanes seen so far, plus one spare. It widens
+  // only once scrolling stops, and never narrows, so text holds still.
+  const scrolling = useScrolling(scrollRef)
+  const visibleWidest = widestLane(first, last, (index) => graphData.peek(repo, index))
+  const lanes = useRatchet(visibleWidest < 0 ? 0 : Math.max(visibleWidest + 2, 2), scrolling)
+  const columns = layoutColumns(paneWidth, lanes)
+  const maxOffset = Math.max(laneX(visibleWidest) + gutter - columns.graph, 0)
   const clampedOffsetX = Math.min(offsetX, maxOffset)
 
   // Bring a row the user jumped to into view sideways once it has loaded.
   // Select a row the keyboard moved to once it has loaded.
   const pendingRow = pendingSelect === undefined ? undefined : graphData.peek(repo, pendingSelect)
-  const { onSelect } = props
+  const { onSelect: selectRow } = props
+  // Selecting a row brings its lane into view if it is panned away.
+  const onSelect = useCallback(
+    (loaded: LoadedRow) => {
+      selectRow(loaded)
+      setPanToRow(loaded.row.index)
+    },
+    [selectRow],
+  )
   useEffect(() => {
     if (!pendingRow) return
     onSelect(pendingRow)
     setPendingSelect(undefined)
   }, [pendingRow, onSelect])
 
-  const defaultRow = items.find((item) => graphData.peek(repo, item.index)?.row.oid === props.defaultSelection)
+  const defaultRow = items.find((item) => graphData.peek(repo, item.index)?.row.oid === props.activeHead)
   const defaultLoaded = props.selected || !defaultRow ? undefined : graphData.peek(repo, defaultRow.index)
   useEffect(() => {
     if (defaultLoaded) onSelect(defaultLoaded)
@@ -152,11 +165,13 @@ export const GraphPane = (props: GraphPaneProps) => {
         originY: canvasTop,
         offsetX: clampedOffsetX,
         rowAt: (index) => graphData.peek(repo, index),
+        activeHead: props.activeHead,
         headOids: props.headOids,
         anyEmphasis: emphasized !== undefined,
       }),
       palette,
       preferences.graph.dimmedOpacity,
+      columns.graph,
     )
   }, [
     graphData,
@@ -171,6 +186,7 @@ export const GraphPane = (props: GraphPaneProps) => {
     dataVersion,
     emphasized,
     props.headOids,
+    props.activeHead,
     preferences.graph.dimmedOpacity,
     view.totalRows,
   ])
@@ -191,6 +207,12 @@ export const GraphPane = (props: GraphPaneProps) => {
   const onKeyDown = (event: KeyboardEvent) => {
     if ((event.metaKey || event.ctrlKey) && event.key === "c" && props.selected) {
       copySha(props.selected.row.oid)
+      return
+    }
+    if (event.shiftKey && (event.key === "ArrowLeft" || event.key === "ArrowRight")) {
+      event.preventDefault()
+      const step = event.key === "ArrowLeft" ? -laneWidth : laneWidth
+      setOffsetX((x) => Math.min(Math.max(Math.min(x, maxOffset) + step, 0), maxOffset))
       return
     }
     const current = selectedIndex()
@@ -226,7 +248,7 @@ export const GraphPane = (props: GraphPaneProps) => {
         <span>Description</span>
         {columns.showAuthor && <span>Author</span>}
         {columns.showDate && <span>Date</span>}
-        {columns.showCommit && <span>Commit</span>}
+        {columns.showCommit && <span>SHA</span>}
       </div>
       <div
         ref={scrollRef}
@@ -256,7 +278,7 @@ export const GraphPane = (props: GraphPaneProps) => {
               emphasized={emphasized}
               dateFormat={preferences.appearance.dateFormat}
               now={now}
-              onSelect={props.onSelect}
+              onSelect={onSelect}
             />
           ))}
           <canvas
@@ -273,6 +295,39 @@ export const GraphPane = (props: GraphPaneProps) => {
 
 const copySha = (oid: string) =>
   void navigator.clipboard.writeText(oid).then(() => notify({ tone: "info", message: `Copied ${shortOid(oid)}`, duration: 1500 }))
+
+/**
+ * Follows a value that only ever grows: the first value applies at once,
+ * later increases wait until the user has stopped scrolling.
+ */
+const useRatchet = (value: number, scrolling: boolean) => {
+  const [settled, setSettled] = useState(value)
+  useEffect(() => {
+    if (value > settled && (settled === 0 || !scrolling)) setSettled(value)
+  }, [value, settled, scrolling])
+  return settled === 0 ? value : settled
+}
+
+/** Whether an element has scrolled within the last quarter second. */
+const useScrolling = (ref: React.RefObject<HTMLElement | null>) => {
+  const [scrolling, setScrolling] = useState(false)
+  useEffect(() => {
+    const element = ref.current
+    if (!element) return
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const onScroll = () => {
+      setScrolling(true)
+      clearTimeout(timer)
+      timer = setTimeout(() => setScrolling(false), 250)
+    }
+    element.addEventListener("scroll", onScroll, { passive: true })
+    return () => {
+      clearTimeout(timer)
+      element.removeEventListener("scroll", onScroll)
+    }
+  }, [ref])
+  return scrolling
+}
 
 /** Tracks an element's size as it is resized. */
 const useSize = (ref: React.RefObject<HTMLElement | null>) => {
@@ -360,7 +415,7 @@ const CommitRow = memo(function CommitRow({
             {badges.length > 0 && (
               <span className="flex max-w-[60%] min-w-0 flex-none items-center gap-1 overflow-hidden">
                 {badges.slice(0, maxBadges).map((badge, i) => (
-                  <RefBadge key={badge.ref.id} badge={badge} thread={row.threadId} dim={dim} primary={i === 0} />
+                  <RefBadge key={badge.ref.id} badge={badge} thread={row.threadId} dim={dim} selected={selected} primary={i === 0} />
                 ))}
                 {badges.length > maxBadges && (
                   <span
@@ -375,7 +430,10 @@ const CommitRow = memo(function CommitRow({
                 )}
               </span>
             )}
-            <span className={cn("min-w-0 flex-1 truncate", dim ? "text-subtle-foreground" : "text-foreground")} title={commit.subject}>
+            <span
+              className={cn("min-w-0 flex-1 truncate", !dim ? "text-foreground" : selected ? "text-secondary-foreground" : "text-subtle-foreground")}
+              title={commit.subject}
+            >
               {commit.subject}
             </span>
           </span>

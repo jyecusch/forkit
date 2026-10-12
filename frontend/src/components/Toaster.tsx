@@ -1,24 +1,32 @@
 import { CircleAlert, X } from "lucide-react"
-import { useEffect } from "react"
-import { dismiss, useNotice } from "@/app/notifications"
+import { useEffect, useState } from "react"
+import { dismiss, useNotice, type Notice } from "@/app/notifications"
 import { cn } from "@/lib/utils"
 
 const visibleFor = 8000
+/** Notices with an action stay longer, so there is time to take it. */
+const visibleWithActionFor = 12000
 
 /** Shows the latest notice in the window's bottom-right corner. */
 export const Toaster = () => {
   const notice = useNotice()
+  return notice ? <Toast key={notice.id} notice={notice} /> : null
+}
+
+const Toast = ({ notice }: { notice: Notice }) => {
+  const [hovered, setHovered] = useState(false)
   useEffect(() => {
-    if (!notice || notice.action) return
-    const timer = setTimeout(() => dismiss(notice.id), notice.duration ?? visibleFor)
+    if (hovered) return
+    const timer = setTimeout(() => dismiss(notice.id), notice.duration ?? (notice.action ? visibleWithActionFor : visibleFor))
     return () => clearTimeout(timer)
-  }, [notice])
-  if (!notice) return null
+  }, [notice, hovered])
   return (
     <div
       role={notice.tone === "error" ? "alert" : "status"}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
       className={cn(
-        "fixed right-5 bottom-5 z-50 flex max-w-[min(420px,calc(100vw-40px))] items-start gap-2.5 rounded-lg border bg-card py-2.5 pr-2 pl-3 text-[13px] shadow-xl select-text",
+        "fixed right-5 bottom-5 z-50 flex max-w-[min(320px,calc(100vw-40px))] items-start gap-2.5 rounded-lg border bg-popover py-2.5 pr-2 pl-3 text-[13px] shadow-xl select-text",
         notice.tone === "error" && "border-destructive/40",
       )}
     >
@@ -35,13 +43,15 @@ export const Toaster = () => {
           {notice.action.label}
         </button>
       )}
-      <button
-        aria-label="Dismiss"
-        onClick={() => dismiss(notice.id)}
-        className="-my-0.5 flex size-6 flex-none items-center justify-center rounded text-subtle-foreground hover:bg-foreground/[0.06] hover:text-foreground"
-      >
-        <X className="size-3.5" />
-      </button>
+      {(notice.duration ?? visibleFor) >= 3000 && (
+        <button
+          aria-label="Dismiss"
+          onClick={() => dismiss(notice.id)}
+          className="-my-0.5 flex size-6 flex-none items-center justify-center rounded text-subtle-foreground hover:bg-foreground/[0.06] hover:text-foreground"
+        >
+          <X className="size-3.5" />
+        </button>
+      )}
     </div>
   )
 }
