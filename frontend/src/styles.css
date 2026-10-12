@@ -109,6 +109,7 @@
     @apply h-full;
   }
   body {
-    @apply bg-background text-foreground font-sans text-[13px] antialiased select-none overflow-hidden;
+    @apply bg-background text-foreground font-sans antialiased select-none overflow-hidden;
+    font-size: var(--app-font-size, 13px);
   }
 }

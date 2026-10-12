@@ -31,6 +31,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -118,9 +119,14 @@ func (s *stream) spanTime(period time.Duration, commits int) {
 
 func (s *stream) now() time.Time { return s.clock }
 
+// tick advances the clock, never past the end of the period, since the
+// number of commits a profile makes is only estimated up front.
 func (s *stream) tick() {
 	jitter := time.Duration(s.rng.Int64N(int64(s.step) + 1))
 	s.clock = s.clock.Add(s.step/2 + jitter)
+	if s.clock.After(s.end) {
+		s.clock = s.end
+	}
 }
 
 func filePath(n int) string {
@@ -283,7 +289,7 @@ func busyBranches(s *stream, scale float64) {
 			if b.left <= 0 {
 				active = append(active[:i], active[i+1:]...)
 				if b.base < 0 && s.rng.IntN(10) < 7 {
-					trunk = s.commit("refs/heads/main", "Squash merge "+b.name, []int{trunk}, edit())
+					trunk = s.commit("refs/heads/main", "Squash merge "+strings.TrimPrefix(b.name, "refs/heads/"), []int{trunk}, edit())
 					trunkCount++
 				}
 			}

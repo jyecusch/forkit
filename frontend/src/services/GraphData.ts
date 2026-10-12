@@ -31,6 +31,8 @@ class RepoCache {
   /** Invalidated blocks, still drawn until their replacements arrive. */
   readonly stale = new Map<number, Block>()
   readonly pending = new Set<number>()
+  /** Increases whenever rows arrive. */
+  revision = 0
   readonly listeners = new Set<() => void>()
 
   /**
@@ -63,6 +65,7 @@ class RepoCache {
       const oldest = this.blocks.keys().next().value!
       this.blocks.delete(oldest)
     }
+    this.revision++
     for (const listener of this.listeners) listener()
   }
 }
@@ -86,6 +89,8 @@ export class GraphData extends Context.Service<
     readonly peek: (repo: RepoId, index: number) => LoadedRow | undefined
     /** Calls listener whenever new rows arrive for repo. */
     readonly subscribe: (repo: RepoId, listener: () => void) => () => void
+    /** A number that changes whenever new rows arrive for repo. */
+    readonly revision: (repo: RepoId) => number
   }
 >()("forkit/GraphData") {
   static readonly layer = Layer.effect(
@@ -151,7 +156,9 @@ export class GraphData extends Context.Service<
         return () => cache.listeners.delete(listener)
       }
 
-      return GraphData.of({ ensure, peek, subscribe })
+      const revision = (repo: RepoId) => caches.get(repo)?.revision ?? 0
+
+      return GraphData.of({ ensure, peek, subscribe, revision })
     }),
   )
 }
