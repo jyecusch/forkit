@@ -103,7 +103,8 @@ export const DiffView = ({ repo, target, revision, active, onClose }: DiffViewPr
   useEffect(() => virtualizer.measure(), [rows, virtualizer])
   const { gutter, width } = useMemo(() => measure(diff), [diff])
   const stats = useMemo(() => count(diff), [diff])
-  const changes = useMemo(() => changeStarts(rows), [rows])
+  const blocks = useMemo(() => changeBlocks(rows), [rows])
+  const changes = useMemo(() => blocks.map((block) => block.start), [blocks])
 
   // Scrolls a change to a third of the way down, with context above it.
   const third = () => (scrollRef.current?.clientHeight ?? 0) / 3
@@ -113,6 +114,16 @@ export const DiffView = ({ repo, target, revision, active, onClose }: DiffViewPr
   }
   // Changes are counted from the row a third of the way down.
   const anchorRow = () => virtualizer.getVirtualItemForOffset((virtualizer.scrollOffset ?? 0) + third())?.index ?? 0
+  // How many changes start at or above the anchor, for "2 of 7".
+  const anchor = diff ? anchorRow() : 0
+  const passed = changes.filter((row) => row <= anchor).length
+
+  const scrollToFraction = (fraction: number) => {
+    const element = scrollRef.current
+    if (!element) return
+    virtualizer.scrollToOffset(Math.max(fraction * virtualizer.getTotalSize() - element.clientHeight / 2, 0))
+  }
+
   const step = (direction: 1 | -1) => {
     const anchor = anchorRow()
     const next =
@@ -173,7 +184,7 @@ export const DiffView = ({ repo, target, revision, active, onClose }: DiffViewPr
             {changes.length > 0 && (
               <span className="-mr-1.5 flex items-center">
                 <span className="mr-1 text-subtle-foreground tabular-nums">
-                  {changes.length} {changes.length === 1 ? "change" : "changes"}
+                  {passed > 0 ? `${passed} of ${changes.length}` : `${changes.length} ${changes.length === 1 ? "change" : "changes"}`}
                 </span>
                 <button aria-label="Previous change" title="Previous change (⌥↑)" onClick={() => step(-1)} className={navButton}>
                   <ChevronUp className="size-4" />
@@ -189,30 +200,47 @@ export const DiffView = ({ repo, target, revision, active, onClose }: DiffViewPr
       {message ? (
         <p className="flex flex-1 items-center justify-center p-6 text-center text-subtle-foreground">{message}</p>
       ) : (
-        <div
-          ref={scrollRef}
-          tabIndex={0}
-          aria-busy={!diff}
-          className="relative flex-1 overflow-auto font-mono text-xs outline-none select-text [tab-size:4]"
-        >
-          <div className="relative" style={{ height: virtualizer.getTotalSize(), minWidth: `max(100%, ${width})` }}>
-            {virtualizer.getVirtualItems().map((item) => {
-              const row = rows[item.index]!
-              return (
-                <div key={item.key} className="absolute inset-x-0" style={{ top: item.start, height: item.size }}>
-                  {row.type === "hunk" ? (
-                    <HunkHeader hunk={row.hunk} />
-                  ) : row.type === "line" ? (
-                    <Line line={row.line} gutter={gutter} tokens={sides?.[row.side]?.(row.index)} />
-                  ) : (
-                    <p className="flex h-full items-center px-3 font-sans text-subtle-foreground">
-                      The rest of this file's changes are too long to show.
-                    </p>
-                  )}
-                </div>
-              )
-            })}
+        <div className="flex min-h-0 flex-1">
+          <div
+            ref={scrollRef}
+            tabIndex={0}
+            aria-busy={!diff}
+            className={cn(
+              "relative min-w-0 flex-1 overflow-auto font-mono text-xs outline-none select-text [tab-size:4]",
+              // The overview ruler is the vertical scrollbar; long lines keep a slim horizontal one.
+              "[&::-webkit-scrollbar]:h-2 [&::-webkit-scrollbar]:w-0 [&::-webkit-scrollbar-corner]:bg-transparent",
+              "[&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-foreground/15",
+            )}
+          >
+            <div className="relative" style={{ height: virtualizer.getTotalSize(), minWidth: `max(100%, ${width})` }}>
+              {virtualizer.getVirtualItems().map((item) => {
+                const row = rows[item.index]!
+                return (
+                  <div key={item.key} className="absolute inset-x-0" style={{ top: item.start, height: item.size }}>
+                    {row.type === "hunk" ? (
+                      <HunkHeader hunk={row.hunk} />
+                    ) : row.type === "line" ? (
+                      <Line line={row.line} gutter={gutter} tokens={sides?.[row.side]?.(row.index)} />
+                    ) : (
+                      <p className="flex h-full items-center px-3 font-sans text-subtle-foreground">
+                        The rest of this file's changes are too long to show.
+                      </p>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
           </div>
+          {diff && rows.length > 0 && (
+            <OverviewRuler
+              blocks={blocks}
+              rows={rows.length}
+              viewTop={(virtualizer.scrollOffset ?? 0) / Math.max(virtualizer.getTotalSize(), 1)}
+              viewHeight={(scrollRef.current?.clientHeight ?? 0) / Math.max(virtualizer.getTotalSize(), 1)}
+              onJump={reveal}
+              onScrollTo={scrollToFraction}
+            />
+          )}
         </div>
       )}
     </section>
@@ -342,16 +370,87 @@ const colour = (text: string, tokens: Int32Array) => {
   return parts
 }
 
-/** The rows where each run of changed lines begins. */
-const changeStarts = (rows: ReadonlyArray<Row>) => {
-  const starts: Array<number> = []
+/** A run of changed lines: where it starts and ends, and what it changes. */
+interface ChangeBlock {
+  readonly start: number
+  end: number
+  added: boolean
+  removed: boolean
+}
+
+const changeBlocks = (rows: ReadonlyArray<Row>) => {
+  const blocks: Array<ChangeBlock> = []
+  let current: ChangeBlock | undefined
   rows.forEach((row, index) => {
-    const changed = row.type === "line" && row.line.kind !== "context"
-    const previous = rows[index - 1]
-    const previousChanged = previous?.type === "line" && previous.line.kind !== "context"
-    if (changed && !previousChanged) starts.push(index)
+    if (row.type !== "line" || row.line.kind === "context") {
+      current = undefined
+      return
+    }
+    if (!current) {
+      current = { start: index, end: index, added: false, removed: false }
+      blocks.push(current)
+    }
+    current.end = index
+    if (row.line.kind === "added") current.added = true
+    else current.removed = true
   })
-  return starts
+  return blocks
+}
+
+interface OverviewRulerProps {
+  readonly blocks: ReadonlyArray<ChangeBlock>
+  readonly rows: number
+  /** The visible part of the file, as fractions of its height. */
+  readonly viewTop: number
+  readonly viewHeight: number
+  readonly onJump: (row: number) => void
+  readonly onScrollTo: (fraction: number) => void
+}
+
+/**
+ * The whole file in a strip beside the diff, which is also its scrollbar: a
+ * mark for every change and a thumb for the part on screen. Clicking a mark
+ * jumps to that change; clicking or dragging anywhere else scrolls there.
+ */
+const OverviewRuler = ({ blocks, rows, viewTop, viewHeight, onJump, onScrollTo }: OverviewRulerProps) => {
+  const fractionAt = (event: React.PointerEvent<HTMLDivElement>) => {
+    const rect = event.currentTarget.getBoundingClientRect()
+    return Math.min(Math.max((event.clientY - rect.top) / rect.height, 0), 1)
+  }
+  return (
+    <div
+      aria-hidden
+      className="relative w-4 flex-none cursor-pointer border-l bg-foreground/[0.02] select-none"
+      onPointerDown={(event) => {
+        const mark = (event.target as HTMLElement).dataset.row
+        if (mark !== undefined) {
+          onJump(Number(mark))
+          return
+        }
+        event.currentTarget.setPointerCapture(event.pointerId)
+        onScrollTo(fractionAt(event))
+      }}
+      onPointerMove={(event) => {
+        if (event.currentTarget.hasPointerCapture(event.pointerId)) onScrollTo(fractionAt(event))
+      }}
+    >
+      <div
+        className="pointer-events-none absolute inset-x-px rounded-[3px] bg-foreground/[0.12]"
+        style={{ top: `${viewTop * 100}%`, height: `max(${viewHeight * 100}%, 12px)` }}
+      />
+      {blocks.map((block) => (
+        <div
+          key={block.start}
+          data-row={block.start}
+          className="absolute inset-x-[3px] flex min-h-[3px] overflow-hidden rounded-[1px]"
+          style={{ top: `${(block.start / rows) * 100}%`, height: `${((block.end - block.start + 1) / rows) * 100}%` }}
+        >
+          {block.removed && <span data-row={block.start} className="flex-1 bg-destructive" />}
+          {block.added && <span data-row={block.start} className="flex-1 bg-success" />}
+        </div>
+      ))}
+    </div>
+  )
 }
 
 /** The line-number column width and the width the longest line needs. */
