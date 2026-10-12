@@ -16,6 +16,7 @@ import type { OpenRepo, OperationKind, Preferences, Ref, Repo, RepoId, Worktree 
 import { Commands } from "@/services/Commands"
 import type { LoadedRow } from "@/services/GraphData"
 import { DetailsPanel } from "./DetailsPanel"
+import { DiffView, type DiffTarget } from "./DiffView"
 import { GraphPane, type ScrollRequest } from "./GraphPane"
 import { RepoNav } from "./RepoNav"
 import { ChromeLayer } from "./Chrome"
@@ -63,6 +64,22 @@ export const RepoView = ({ repo, openRepo, preferences, active }: RepoViewProps)
   const [prompt, setPrompt] = useState<PromptSpec>()
   const [newWorktreeBase, setNewWorktreeBase] = useState<Ref>()
   const [scrollRequest, setScrollRequest] = useState<ScrollRequest>()
+  // A file's diff, shown in place of the history until closed.
+  const [openDiff, setOpenDiff] = useState<DiffTarget>()
+  // Escape returns to the history from anywhere in the repository, unless a
+  // dialog or menu is open or a field is being typed in.
+  useEffect(() => {
+    if (!active || !openDiff) return
+    const onKey = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement
+      if (event.key !== "Escape" || event.defaultPrevented || ["INPUT", "TEXTAREA"].includes(target.tagName)) return
+      if (document.querySelector("[role=dialog][data-state=open], [role=menu]")) return
+      setOpenDiff(undefined)
+    }
+    window.addEventListener("keydown", onKey)
+    return () => window.removeEventListener("keydown", onKey)
+  }, [active, openDiff])
+  const diffRevision = worktrees.find((wt) => wt.id === openDiff?.request.worktreeId)?.statusSummary.revision ?? 0
   // Dialogs belong to the repository on screen.
   useEffect(() => {
     if (active) return
@@ -71,9 +88,13 @@ export const RepoView = ({ repo, openRepo, preferences, active }: RepoViewProps)
   }, [active])
   const showDetails = useDetailsShown()
 
+  // Jumping to a ref or worktree returns from a diff to the history.
   const scrollTo = useCallback((row: Option.Option<Option.Option<number>>) => {
     const index = Option.flatten(row)
-    if (Option.isSome(index)) setScrollRequest({ row: index.value, nonce: Date.now() })
+    if (Option.isSome(index)) {
+      setScrollRequest({ row: index.value, nonce: Date.now() })
+      setOpenDiff(undefined)
+    }
   }, [])
 
   const emphasize = useCallback(
@@ -158,26 +179,37 @@ export const RepoView = ({ repo, openRepo, preferences, active }: RepoViewProps)
         onToggleDetails={toggleDetails}
       />
       <div className="flex min-h-0 flex-1">
-        <main className="flex min-h-0 min-w-0 flex-1 flex-col">
+        <main className="relative flex min-h-0 min-w-0 flex-1 flex-col">
           {view ? (
-            <GraphPane
-              repo={id}
-              view={view}
-              emphasized={emphasized}
-              refsById={refsById}
-              headOids={headOids}
-              headRef={headRef}
-              selected={selected}
-              activeHead={activeWorktree?.head.oid}
-              onSelect={setSelected}
-              scrollRequest={scrollRequest}
-              active={active}
-              preferences={preferences}
-            />
+            <div className="flex min-h-0 flex-1 flex-col" inert={openDiff !== undefined}>
+              <GraphPane
+                repo={id}
+                view={view}
+                emphasized={emphasized}
+                refsById={refsById}
+                headOids={headOids}
+                headRef={headRef}
+                selected={selected}
+                activeHead={activeWorktree?.head.oid}
+                onSelect={setSelected}
+                scrollRequest={scrollRequest}
+                active={active}
+                preferences={preferences}
+              />
+            </div>
           ) : (
             <div className="flex flex-1 items-center justify-center text-subtle-foreground">
               {repo.state === "error" ? repo.error : "Reading history…"}
             </div>
+          )}
+          {openDiff && (
+            <DiffView
+              repo={id}
+              target={openDiff}
+              revision={diffRevision}
+              active={active}
+              onClose={() => setOpenDiff(undefined)}
+            />
           )}
         </main>
         {showDetails && (
@@ -187,6 +219,8 @@ export const RepoView = ({ repo, openRepo, preferences, active }: RepoViewProps)
             worktree={activeWorktree?.id}
             changes={activeWorktree ? changeCount(activeWorktree) : 0}
             preferences={preferences}
+            openDiff={openDiff}
+            onOpenDiff={setOpenDiff}
           />
         )}
       </div>

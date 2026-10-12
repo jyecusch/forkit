@@ -120,7 +120,126 @@ export namespace model {
 		    return a;
 		}
 	}
+	export class DiffLine {
+	    kind: string;
+	    oldLine?: number;
+	    newLine?: number;
+	    text: string;
+	    noNewline?: boolean;
 	
+	    static createFrom(source: any = {}) {
+	        return new DiffLine(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.kind = source["kind"];
+	        this.oldLine = source["oldLine"];
+	        this.newLine = source["newLine"];
+	        this.text = source["text"];
+	        this.noNewline = source["noNewline"];
+	    }
+	}
+	export class DiffHunk {
+	    oldStart: number;
+	    oldLines: number;
+	    newStart: number;
+	    newLines: number;
+	    section: string;
+	    lines?: DiffLine[];
+	
+	    static createFrom(source: any = {}) {
+	        return new DiffHunk(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.oldStart = source["oldStart"];
+	        this.oldLines = source["oldLines"];
+	        this.newStart = source["newStart"];
+	        this.newLines = source["newLines"];
+	        this.section = source["section"];
+	        this.lines = this.convertValues(source["lines"], DiffLine);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	
+	export class DiffRequest {
+	    kind: string;
+	    oid?: string;
+	    worktreeId?: string;
+	    path: string;
+	    oldPath?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new DiffRequest(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.kind = source["kind"];
+	        this.oid = source["oid"];
+	        this.worktreeId = source["worktreeId"];
+	        this.path = source["path"];
+	        this.oldPath = source["oldPath"];
+	    }
+	}
+	
+	export class FileDiff {
+	    path: string;
+	    oldPath?: string;
+	    binary: boolean;
+	    truncated: boolean;
+	    hunks?: DiffHunk[];
+	
+	    static createFrom(source: any = {}) {
+	        return new FileDiff(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.path = source["path"];
+	        this.oldPath = source["oldPath"];
+	        this.binary = source["binary"];
+	        this.truncated = source["truncated"];
+	        this.hunks = this.convertValues(source["hunks"], DiffHunk);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class GraphEdge {
 	    fromLane: number;
 	    toLane: number;
@@ -252,6 +371,7 @@ export namespace model {
 	    unstaged: number;
 	    untracked: number;
 	    conflicted: number;
+	    revision: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new StatusSummary(source);
@@ -263,6 +383,7 @@ export namespace model {
 	        this.unstaged = source["unstaged"];
 	        this.untracked = source["untracked"];
 	        this.conflicted = source["conflicted"];
+	        this.revision = source["revision"];
 	    }
 	}
 	export class SyncSnapshot {

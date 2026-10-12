@@ -55,8 +55,9 @@ These answer the plan's open questions and record where the implementation diffe
 - **Commit text is read per window** through one long-running `git cat-file --batch` process, rather than kept in memory.
 - **Layouts are not cached on disk yet.** With a commit-graph file the first window arrives in about 40 ms even on very large repositories, so the cache was deferred.
 - **Reads run with `GIT_OPTIONAL_LOCKS=0`**, so Forkit never contends with your own git commands. As a result, `git status` cannot save its refreshed stat cache, so Forkit refreshes each worktree's index once when the repository opens.
+- **Diffs are read one file at a time** when a file is opened, by streaming `git diff` (or `diff-tree` for a commit) with the whole file as context, so changes are shown where they sit. Reading stops at 50,000 lines, and the diff says so. A worktree's status summary carries a revision that counts up on every status read, so an open diff of uncommitted changes reloads when its file changes.
 - **Frontend spans reach the backend** through Effect's OTLP tracer with a custom HttpClient that calls a Wails binding. Backend and frontend spans share one exporter: a rotating local file by default, or OTLP when configured.
 
 ## Not yet built
 
-From the roadmap: the diff viewer, staging and commit composer; fetch, pull, push and auth; merge, rebase, conflict resolution, stash management, search, blame and reflog undo; signing, notarization, installers and auto-update; the diagnostics panel, command palette and an accessibility pass.
+From the roadmap: staging and the commit composer; fetch, pull, push and auth; merge, rebase, conflict resolution, stash management, search, blame and reflog undo; signing, notarization, installers and auto-update; the diagnostics panel, command palette and an accessibility pass.

@@ -7,9 +7,10 @@ import { useNow } from "@/app/useNow"
 import { fileStatusesCollection } from "@/data/collections"
 import { formatDate, formatFullDate, initials, reflow, shortOid } from "@/lib/format"
 import { cn } from "@/lib/utils"
-import type { CommitDetail, FileChangeStatus, FileStatus, Preferences, RepoId, StatusCode, WorktreeId } from "@/model/model.gen"
+import type { CommitDetail, DiffKind, FileChangeStatus, FileStatus, Preferences, RepoId, StatusCode, WorktreeId } from "@/model/model.gen"
 import type { LoadedRow } from "@/services/GraphData"
 import { Rpc } from "@/services/Rpc"
+import { sameDiff, type DiffTarget } from "./DiffView"
 
 interface DetailsPanelProps {
   readonly repo: RepoId
@@ -18,12 +19,15 @@ interface DetailsPanelProps {
   /** Uncommitted changes in the worktree, shown on the Changes tab. */
   readonly changes: number
   readonly preferences: Preferences
+  /** The file whose diff is open, highlighted in the lists. */
+  readonly openDiff: DiffTarget | undefined
+  readonly onOpenDiff: (target: DiffTarget) => void
 }
 
 type Tab = "commit" | "changes"
 
 /** The selected commit's details, or the active worktree's uncommitted changes. */
-export const DetailsPanel = ({ repo, selected, worktree, changes, preferences }: DetailsPanelProps) => {
+export const DetailsPanel = ({ repo, selected, worktree, changes, preferences, openDiff, onOpenDiff }: DetailsPanelProps) => {
   // Selecting another commit shows its details, whichever tab was open.
   const oid = selected?.row.oid
   const [chosen, setChosen] = useState<{ readonly tab: Tab; readonly oid: string | undefined }>({ tab: "commit", oid })
@@ -51,11 +55,11 @@ export const DetailsPanel = ({ repo, selected, worktree, changes, preferences }:
           {changes > 0 && <span className="ml-1.5 text-subtle-foreground tabular-nums">{changes}</span>}
         </TabButton>
       </div>
-      <div className="flex-1 overflow-y-auto select-text">
+      <div className="flex-1 overflow-y-auto select-text" onKeyDown={moveBetweenFiles}>
         {tab === "commit" ? (
-          <CommitTab repo={repo} selected={selected} preferences={preferences} />
+          <CommitTab repo={repo} selected={selected} preferences={preferences} openDiff={openDiff} onOpenDiff={onOpenDiff} />
         ) : worktree ? (
-          <ChangesTab worktree={worktree} />
+          <ChangesTab worktree={worktree} openDiff={openDiff} onOpenDiff={onOpenDiff} />
         ) : (
           <Empty>No worktree selected</Empty>
         )}
@@ -83,7 +87,18 @@ const Empty = ({ children }: { children: string }) => (
   <p className="flex h-full items-center justify-center p-6 text-center text-subtle-foreground">{children}</p>
 )
 
-const CommitTab = ({ repo, selected, preferences }: { repo: RepoId; selected: LoadedRow | undefined; preferences: Preferences }) => {
+interface FileListProps {
+  readonly openDiff: DiffTarget | undefined
+  readonly onOpenDiff: (target: DiffTarget) => void
+}
+
+const CommitTab = ({
+  repo,
+  selected,
+  preferences,
+  openDiff,
+  onOpenDiff,
+}: { repo: RepoId; selected: LoadedRow | undefined; preferences: Preferences } & FileListProps) => {
   const [detail, setDetail] = useState<CommitDetail>()
   const now = useNow()
   const oid = selected?.row.oid
@@ -147,39 +162,51 @@ const CommitTab = ({ repo, selected, preferences }: { repo: RepoId; selected: Lo
       </div>
       {detail && detail.files.length === 0 && <p className="px-4 text-xs text-subtle-foreground">No files changed</p>}
       <ul className="flex flex-col px-2 pb-2">
-        {detail?.files.map((file) => (
-          <li key={file.path} className={fileRow}>
-            <StatusBadge letter={changeLetters[file.status]} tone={changeTones[file.status]} />
-            <FilePath path={file.path} title={file.oldPath ? `${file.oldPath} → ${file.path}` : file.path} />
-            {file.binary ? (
-              <span className="text-[11px] text-subtle-foreground">binary</span>
-            ) : (
-              <span className="grid grid-cols-[4ch_4ch] gap-1 text-right font-mono text-[11px] tabular-nums">
-                <span className="text-success">+{file.additions}</span>
-                <span className="text-destructive">−{file.deletions}</span>
-              </span>
-            )}
-          </li>
-        ))}
+        {detail?.files.map((file) => {
+          const target: DiffTarget = {
+            request: { kind: "commit", oid: detail.oid, path: file.path, ...(file.oldPath && { oldPath: file.oldPath }) },
+            conflicted: false,
+          }
+          return (
+            <li key={file.path}>
+              <FileButton target={target} openDiff={openDiff} onOpenDiff={onOpenDiff}>
+                <StatusBadge letter={changeLetters[file.status]} tone={changeTones[file.status]} />
+                <FilePath path={file.path} title={file.oldPath ? `${file.oldPath} → ${file.path}` : file.path} />
+                {file.binary ? (
+                  <span className="text-[11px] text-subtle-foreground">binary</span>
+                ) : (
+                  <span className="grid grid-cols-[4ch_4ch] gap-1 text-right font-mono text-[11px] tabular-nums">
+                    <span className="text-success">+{file.additions}</span>
+                    <span className="text-destructive">−{file.deletions}</span>
+                  </span>
+                )}
+              </FileButton>
+            </li>
+          )
+        })}
       </ul>
     </div>
   )
 }
 
-const ChangesTab = ({ worktree }: { worktree: WorktreeId }) => {
+const ChangesTab = ({ worktree, openDiff, onOpenDiff }: { worktree: WorktreeId } & FileListProps) => {
   const { data: files } = useLiveQuery({ query: (q) => q.from({ file: fileStatusesCollection(worktree) }) })
   if (files.length === 0) {
     return <Empty>No uncommitted changes</Empty>
   }
-  const groups: Array<[string, (file: FileStatus) => StatusCode | undefined]> = [
-    ["Conflicted", (f) => (f.index === "unmerged" ? f.index : undefined)],
-    ["Staged", (f) => (f.index !== "unmodified" && f.index !== "untracked" && f.index !== "unmerged" ? f.index : undefined)],
-    ["Unstaged", (f) => (f.workTree !== "unmodified" && f.workTree !== "untracked" && f.workTree !== "unmerged" ? f.workTree : undefined)],
-    ["Untracked", (f) => (f.index === "untracked" ? f.index : undefined)],
+  const groups: Array<[string, DiffKind, (file: FileStatus) => StatusCode | undefined]> = [
+    ["Conflicted", "unstaged", (f) => (f.index === "unmerged" ? f.index : undefined)],
+    ["Staged", "staged", (f) => (f.index !== "unmodified" && f.index !== "untracked" && f.index !== "unmerged" ? f.index : undefined)],
+    [
+      "Unstaged",
+      "unstaged",
+      (f) => (f.workTree !== "unmodified" && f.workTree !== "untracked" && f.workTree !== "unmerged" ? f.workTree : undefined),
+    ],
+    ["Untracked", "untracked", (f) => (f.index === "untracked" ? f.index : undefined)],
   ]
   return (
     <div className="flex flex-col pb-2">
-      {groups.map(([title, statusOf]) => {
+      {groups.map(([title, kind, statusOf]) => {
         const entries = files.flatMap((file) => {
           const status = statusOf(file)
           return status ? [{ file, status }] : []
@@ -194,12 +221,20 @@ const ChangesTab = ({ worktree }: { worktree: WorktreeId }) => {
             <ul className="flex flex-col px-2">
               {entries
                 .sort((a, b) => a.file.path.localeCompare(b.file.path))
-                .map(({ file, status }) => (
-                  <li key={file.id} className={fileRow}>
-                    <StatusBadge letter={statusLetters[status]} tone={statusTones[status]} />
-                    <FilePath path={file.path} title={file.path} />
-                  </li>
-                ))}
+                .map(({ file, status }) => {
+                  const target: DiffTarget = {
+                    request: { kind, worktreeId: worktree, path: file.path, ...(file.oldPath && { oldPath: file.oldPath }) },
+                    conflicted: status === "unmerged",
+                  }
+                  return (
+                    <li key={file.id}>
+                      <FileButton target={target} openDiff={openDiff} onOpenDiff={onOpenDiff}>
+                        <StatusBadge letter={statusLetters[status]} tone={statusTones[status]} />
+                        <FilePath path={file.path} title={file.path} />
+                      </FileButton>
+                    </li>
+                  )
+                })}
             </ul>
           </section>
         )
@@ -208,7 +243,38 @@ const ChangesTab = ({ worktree }: { worktree: WorktreeId }) => {
   )
 }
 
-const fileRow = "flex h-7 items-center gap-2 px-2"
+/** A file in a list, which opens its diff. */
+const FileButton = ({ target, openDiff, onOpenDiff, children }: { target: DiffTarget; children: ReactNode } & FileListProps) => {
+  const open = sameDiff(target, openDiff)
+  return (
+    <button
+      data-file
+      aria-current={open}
+      onClick={() => onOpenDiff(target)}
+      className={cn(
+        "flex h-7 w-full items-center gap-2 rounded-md px-2 text-left",
+        "focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring",
+        open ? "bg-selection" : "hover:bg-foreground/[0.05]",
+      )}
+    >
+      {children}
+    </button>
+  )
+}
+
+/** Up and down move between files, opening each in turn. */
+const moveBetweenFiles = (event: React.KeyboardEvent<HTMLElement>) => {
+  if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return
+  // Option-arrows move between changes in the open diff instead.
+  if (event.altKey || event.metaKey || event.ctrlKey) return
+  const files = [...event.currentTarget.querySelectorAll<HTMLButtonElement>("button[data-file]")]
+  const current = files.indexOf(document.activeElement as HTMLButtonElement)
+  if (current < 0) return
+  event.preventDefault()
+  const next = files[current + (event.key === "ArrowDown" ? 1 : -1)]
+  next?.focus()
+  next?.click()
+}
 
 /** A path with its file name first and its directory dimmed after it. */
 const FilePath = ({ path, title }: { path: string; title: string }) => {

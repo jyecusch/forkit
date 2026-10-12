@@ -69,6 +69,8 @@ type StatusSummary struct {
 	Unstaged   int `json:"unstaged"`
 	Untracked  int `json:"untracked"`
 	Conflicted int `json:"conflicted"`
+	// Counts up each time the worktree's status is read, so views of file contents know to refresh.
+	Revision int `json:"revision"`
 }
 
 type Worktree struct {
@@ -401,6 +403,63 @@ type FileChange struct {
 	Additions int              `json:"additions"`
 	Deletions int              `json:"deletions"`
 	Binary    bool             `json:"binary"`
+}
+
+// Where a file's changes come from: a commit against its first parent, or a worktree's index or files.
+type DiffKind string
+
+const (
+	DiffKindCommit    DiffKind = "commit"
+	DiffKindStaged    DiffKind = "staged"
+	DiffKindUnstaged  DiffKind = "unstaged"
+	DiffKindUntracked DiffKind = "untracked"
+)
+
+type DiffRequest struct {
+	Kind DiffKind `json:"kind"`
+	// The commit, for a commit diff.
+	OID OID `json:"oid,omitempty"`
+	// The worktree, for every other kind.
+	WorktreeID WorktreeID `json:"worktreeId,omitempty"`
+	Path       string     `json:"path"`
+	// The path before a rename or copy.
+	OldPath string `json:"oldPath,omitempty"`
+}
+
+type DiffLineKind string
+
+const (
+	DiffLineKindContext DiffLineKind = "context"
+	DiffLineKindAdded   DiffLineKind = "added"
+	DiffLineKindRemoved DiffLineKind = "removed"
+)
+
+type DiffLine struct {
+	Kind    DiffLineKind `json:"kind"`
+	OldLine *int         `json:"oldLine,omitempty"`
+	NewLine *int         `json:"newLine,omitempty"`
+	Text    string       `json:"text"`
+	// The file ends on this line without a newline.
+	NoNewline *bool `json:"noNewline,omitempty"`
+}
+
+type DiffHunk struct {
+	OldStart int `json:"oldStart"`
+	OldLines int `json:"oldLines"`
+	NewStart int `json:"newStart"`
+	NewLines int `json:"newLines"`
+	// The enclosing function or heading git names after the hunk's range, if any.
+	Section string     `json:"section"`
+	Lines   []DiffLine `json:"lines,omitempty"`
+}
+
+type FileDiff struct {
+	Path    string `json:"path"`
+	OldPath string `json:"oldPath,omitempty"`
+	Binary  bool   `json:"binary"`
+	// The diff was cut short at the line limit.
+	Truncated bool       `json:"truncated"`
+	Hunks     []DiffHunk `json:"hunks,omitempty"`
 }
 
 type CommitDetail struct {

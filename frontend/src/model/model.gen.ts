@@ -60,6 +60,7 @@ export const StatusSummary = Schema.Struct({
   unstaged: Schema.Int,
   untracked: Schema.Int,
   conflicted: Schema.Int,
+  revision: Schema.Int,
 })
 export type StatusSummary = typeof StatusSummary.Type
 
@@ -315,6 +316,50 @@ export const FileChange = Schema.Struct({
   binary: Schema.Boolean,
 })
 export type FileChange = typeof FileChange.Type
+
+/** Where a file's changes come from: a commit against its first parent, or a worktree's index or files. */
+export const DiffKind = Schema.Literals(["commit", "staged", "unstaged", "untracked"])
+export type DiffKind = typeof DiffKind.Type
+
+export const DiffRequest = Schema.Struct({
+  kind: DiffKind,
+  oid: Schema.optionalKey(Oid),
+  worktreeId: Schema.optionalKey(WorktreeId),
+  path: Schema.String,
+  oldPath: Schema.optionalKey(Schema.String),
+})
+export type DiffRequest = typeof DiffRequest.Type
+
+export const DiffLineKind = Schema.Literals(["context", "added", "removed"])
+export type DiffLineKind = typeof DiffLineKind.Type
+
+export const DiffLine = Schema.Struct({
+  kind: DiffLineKind,
+  oldLine: Schema.optionalKey(Schema.Int),
+  newLine: Schema.optionalKey(Schema.Int),
+  text: Schema.String,
+  noNewline: Schema.optionalKey(Schema.Boolean),
+})
+export type DiffLine = typeof DiffLine.Type
+
+export const DiffHunk = Schema.Struct({
+  oldStart: Schema.Int,
+  oldLines: Schema.Int,
+  newStart: Schema.Int,
+  newLines: Schema.Int,
+  section: Schema.String,
+  lines: Schema.Array(DiffLine).pipe(Schema.withDecodingDefaultKey(Effect.succeed([]))),
+})
+export type DiffHunk = typeof DiffHunk.Type
+
+export const FileDiff = Schema.Struct({
+  path: Schema.String,
+  oldPath: Schema.optionalKey(Schema.String),
+  binary: Schema.Boolean,
+  truncated: Schema.Boolean,
+  hunks: Schema.Array(DiffHunk).pipe(Schema.withDecodingDefaultKey(Effect.succeed([]))),
+})
+export type FileDiff = typeof FileDiff.Type
 
 export const CommitDetail = Schema.Struct({
   oid: Oid,
