@@ -229,7 +229,7 @@ func (x *Session) ResetLayoutSize(meta model.CallMeta, name model.LayoutSize) er
 
 var layoutSizes = []model.LayoutSize{
 	model.LayoutSizeSidebar, model.LayoutSizeDetails, model.LayoutSizeStaged, model.LayoutSizeDiffSplit,
-	model.LayoutSizeRefsColumn, model.LayoutSizeGraphColumn, model.LayoutSizeAuthorColumn, model.LayoutSizeDateColumn, model.LayoutSizeCommitColumn,
+	model.LayoutSizeRefsColumn, model.LayoutSizeGraphColumn, model.LayoutSizeAuthorColumn,
 }
 
 // maxLayoutSize bounds a remembered size, so a hand-edited file cannot make
