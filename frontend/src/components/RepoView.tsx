@@ -1,15 +1,25 @@
 import { useLiveQuery } from "@tanstack/react-db"
 import { useCallback, useMemo, useState } from "react"
 import { useRun } from "@/app/hooks"
-import { graphViewsCollection, refsCollection, remotesCollection, worktreesCollection } from "@/data/collections"
+import {
+  graphViewsCollection,
+  operationsCollection,
+  refsCollection,
+  remotesCollection,
+  worktreesCollection,
+} from "@/data/collections"
 import { baseName } from "@/lib/format"
-import type { OpenRepo, Preferences, Ref, Repo, RepoId, Worktree } from "@/model/model.gen"
+import { changeCount } from "@/lib/worktree"
+import type { OpenRepo, OperationKind, Preferences, Ref, Repo, RepoId, Worktree } from "@/model/model.gen"
 import { Commands } from "@/services/Commands"
 import type { LoadedRow } from "@/services/GraphData"
 import { DetailsPanel } from "./DetailsPanel"
 import { GraphPane, type ScrollRequest } from "./GraphPane"
 import { RefNav } from "./RefNav"
 import { StatusBar } from "./StatusBar"
+import { NewWorktreeDialog } from "./NewWorktreeDialog"
+import { Prompt, type PromptSpec } from "./Prompt"
+import { useCheckout } from "./useCheckout"
 import { headLabel, WorktreeTabs } from "./WorktreeTabs"
 
 interface RepoViewProps {
@@ -28,6 +38,8 @@ export const RepoView = ({ repo, openRepo, preferences, onOpenSettings }: RepoVi
   const { data: remotes } = useLiveQuery({ query: (q) => q.from({ remote: remotesCollection(id) }) })
   const { data: views } = useLiveQuery({ query: (q) => q.from({ view: graphViewsCollection(id) }) })
   const view = views[0]
+  const { data: operations } = useLiveQuery({ query: (q) => q.from({ operation: operationsCollection(id) }) })
+  const running = operations.filter((op) => op.state === "running")
 
   const sortedWorktrees = useMemo(
     () => [...worktrees].sort((a, b) => Number(b.isMain) - Number(a.isMain) || a.path.localeCompare(b.path)),
@@ -45,6 +57,8 @@ export const RepoView = ({ repo, openRepo, preferences, onOpenSettings }: RepoVi
   const headOids = useMemo(() => new Set(worktrees.map((wt) => wt.head.oid)), [worktrees])
 
   const [selected, setSelected] = useState<LoadedRow>()
+  const [prompt, setPrompt] = useState<PromptSpec>()
+  const [newWorktreeBase, setNewWorktreeBase] = useState<Ref>()
   const [scrollRequest, setScrollRequest] = useState<ScrollRequest>()
 
   const emphasize = useCallback(
@@ -63,10 +77,43 @@ export const RepoView = ({ repo, openRepo, preferences, onOpenSettings }: RepoVi
     }
   }
 
+  const checkout = useCheckout({
+    repo: id,
+    refs,
+    worktrees,
+    dirtyCheckout: preferences.behaviour.dirtyCheckout,
+    prompt: setPrompt,
+    selectWorktree,
+  })
+
+  const removeWorktree = (worktree: Worktree) => {
+    const dirty = changeCount(worktree) > 0
+    setPrompt({
+      title: `Remove worktree ${baseName(worktree.path)}?`,
+      message: dirty
+        ? `Its folder will be deleted, including ${changeCount(worktree)} uncommitted changes. Its branch is kept.`
+        : "Its folder will be deleted. Its branch is kept.",
+      actions: [
+        {
+          label: "Remove",
+          tone: "destructive",
+          run: () => void run(Commands.use((commands) => commands.removeWorktree(worktree.id, dirty))),
+        },
+      ],
+    })
+  }
+
   const emphasizedRef = emphasized ? refsById.get(emphasized) : undefined
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <WorktreeTabs worktrees={sortedWorktrees} refsById={refsById} active={activeWorktree?.id} onSelect={selectWorktree} />
+      <WorktreeTabs
+        worktrees={sortedWorktrees}
+        refsById={refsById}
+        active={activeWorktree?.id}
+        onSelect={selectWorktree}
+        onCreate={() => setNewWorktreeBase(emphasizedRef ?? (headRef ? refsById.get(headRef) : undefined))}
+        onRemove={removeWorktree}
+      />
       <div className="flex min-h-0 flex-1">
         <RefNav
           refs={refs}
@@ -75,7 +122,8 @@ export const RepoView = ({ repo, openRepo, preferences, onOpenSettings }: RepoVi
           activeWorktree={activeWorktree?.id}
           emphasized={emphasized}
           onEmphasize={emphasize}
-          onCheckout={emphasize}
+          onCheckout={(ref) => checkout(ref, activeWorktree)}
+          onNewWorktree={setNewWorktreeBase}
         />
         <main className="flex min-h-0 min-w-0 flex-1 flex-col">
           <div className="flex flex-wrap items-center gap-2.5 border-b px-3.5 py-2 text-xs text-secondary-foreground">
@@ -123,12 +171,25 @@ export const RepoView = ({ repo, openRepo, preferences, onOpenSettings }: RepoVi
           <span className="size-[7px] rounded-full bg-success" />
           Watching {worktrees.length} {worktrees.length === 1 ? "worktree" : "worktrees"}
         </span>
+        {running.map((op) => (
+          <span key={op.id} className="animate-pulse text-primary">
+            {operationLabels[op.kind]}…
+          </span>
+        ))}
         {activeWorktree && (
           <span>
             {baseName(activeWorktree.path)} on {headLabel(activeWorktree, refsById)}
           </span>
         )}
       </StatusBar>
+      <Prompt spec={prompt} onClose={() => setPrompt(undefined)} />
+      <NewWorktreeDialog repo={repo} base={newWorktreeBase} onClose={() => setNewWorktreeBase(undefined)} />
     </div>
   )
+}
+
+const operationLabels: Record<OperationKind, string> = {
+  checkout: "Checking out",
+  createWorktree: "Creating worktree",
+  removeWorktree: "Removing worktree",
 }

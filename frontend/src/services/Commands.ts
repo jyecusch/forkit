@@ -1,6 +1,6 @@
 import { Context, Effect, Layer, type Option } from "effect"
 import type { RpcFailure } from "@/model/errors"
-import type { RefId, Repo, RepoId, WorktreeId } from "@/model/model.gen"
+import type { CheckoutMode, CheckoutResult, RefId, Repo, RepoId, Worktree, WorktreeId } from "@/model/model.gen"
 import { Rpc } from "./Rpc"
 
 /** Actions the user takes. Each runs in its own span. */
@@ -18,6 +18,17 @@ export class Commands extends Context.Service<
      * tip, or -1 when that commit is not shown.
      */
     readonly emphasize: (repo: RepoId, ref: RefId) => Effect.Effect<number, RpcFailure>
+    /** Checks out ref in a worktree and then emphasizes the branch it lands on. */
+    readonly checkout: (
+      repo: RepoId,
+      worktree: WorktreeId,
+      ref: RefId,
+      mode: CheckoutMode,
+    ) => Effect.Effect<CheckoutResult, RpcFailure>
+    /** Creates a worktree, makes it the active one and emphasizes its branch. */
+    readonly createWorktree: (repo: RepoId, base: RefId, newBranch: string, path: string) => Effect.Effect<Worktree, RpcFailure>
+    readonly removeWorktree: (worktree: WorktreeId, force: boolean) => Effect.Effect<void, RpcFailure>
+    readonly chooseWorktreeParent: () => Effect.Effect<Option.Option<string>, RpcFailure>
   }
 >()("forkit/Commands") {
   static readonly layer = Layer.effect(
@@ -45,6 +56,25 @@ export class Commands extends Context.Service<
             concurrency: "unbounded",
           })
           return row
+        }),
+        checkout: Effect.fn("command.checkout")(function* (repo: RepoId, worktree: WorktreeId, ref: RefId, mode: CheckoutMode) {
+          const result = yield* rpc.checkout(worktree, ref, mode)
+          yield* rpc.setEmphasizedRef(repo, result.branch ?? ref)
+          return result
+        }),
+        createWorktree: Effect.fn("command.createWorktree")(function* (repo: RepoId, base: RefId, newBranch: string, path: string) {
+          const worktree = yield* rpc.createWorktree(repo, base, newBranch, path)
+          yield* rpc.setActiveWorktree(repo, worktree.id)
+          if (worktree.head.refId) {
+            yield* rpc.setEmphasizedRef(repo, worktree.head.refId)
+          }
+          return worktree
+        }),
+        removeWorktree: Effect.fn("command.removeWorktree")(function* (worktree: WorktreeId, force: boolean) {
+          yield* rpc.removeWorktree(worktree, force)
+        }),
+        chooseWorktreeParent: Effect.fn("command.chooseWorktreeParent")(function* () {
+          return yield* rpc.chooseWorktreeParent()
         }),
       })
     }),

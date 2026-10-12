@@ -1,4 +1,5 @@
-import { Folder } from "lucide-react"
+import { Folder, Plus } from "lucide-react"
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu"
 import { baseName, shortOid } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import type { Ref, Worktree, WorktreeId, WorktreeOperation } from "@/model/model.gen"
@@ -9,15 +10,17 @@ interface WorktreeTabsProps {
   readonly refsById: ReadonlyMap<string, Ref>
   readonly active: WorktreeId | undefined
   readonly onSelect: (worktree: Worktree) => void
+  readonly onCreate: () => void
+  readonly onRemove: (worktree: Worktree) => void
 }
 
 /** One sub-tab per worktree of the active repository. */
-export const WorktreeTabs = ({ worktrees, refsById, active, onSelect }: WorktreeTabsProps) => (
+export const WorktreeTabs = ({ worktrees, refsById, active, onSelect, onCreate, onRemove }: WorktreeTabsProps) => (
   <div role="tablist" aria-label="Worktrees" className="flex flex-wrap items-center gap-1 border-b px-3 py-1.5">
     {worktrees.map((worktree) => {
       const on = worktree.id === active
       const changes = changeCount(worktree)
-      return (
+      const tab = (
         <button
           key={worktree.id}
           role="tab"
@@ -41,7 +44,24 @@ export const WorktreeTabs = ({ worktrees, refsById, active, onSelect }: Worktree
           )}
         </button>
       )
+      if (worktree.isMain) {
+        return tab
+      }
+      return (
+        <ContextMenu key={worktree.id}>
+          <ContextMenuTrigger asChild>{tab}</ContextMenuTrigger>
+          <ContextMenuContent>
+            <ContextMenuItem variant="destructive" onSelect={() => onRemove(worktree)}>
+              Remove worktree…
+            </ContextMenuItem>
+          </ContextMenuContent>
+        </ContextMenu>
+      )
     })}
+    <button aria-label="New worktree" onClick={onCreate} className="flex items-center gap-1.5 px-2.5 py-1.5 text-secondary-foreground hover:text-foreground">
+      <Plus aria-hidden className="size-3" />
+      Worktree
+    </button>
   </div>
 )
 

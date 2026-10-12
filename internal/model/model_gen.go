@@ -198,6 +198,8 @@ const (
 )
 
 type CheckoutResult struct {
+	// The local branch now checked out; absent for a detached HEAD.
+	Branch RefID `json:"branch,omitempty"`
 	// Stashed changes conflicted when reapplied and were left in the stash.
 	ReapplyConflicted bool `json:"reapplyConflicted"`
 }

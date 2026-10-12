@@ -163,6 +163,7 @@ export const CheckoutMode = Schema.Literals(["safe", "stash", "carry"])
 export type CheckoutMode = typeof CheckoutMode.Type
 
 export const CheckoutResult = Schema.Struct({
+  branch: Schema.optionalKey(RefId),
   reapplyConflicted: Schema.Boolean,
 })
 export type CheckoutResult = typeof CheckoutResult.Type

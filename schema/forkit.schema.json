@@ -150,6 +150,7 @@
       "type": "object",
       "required": ["reapplyConflicted"],
       "properties": {
+        "branch": { "$ref": "#/$defs/RefId", "description": "The local branch now checked out; absent for a detached HEAD." },
         "reapplyConflicted": { "type": "boolean", "description": "Stashed changes conflicted when reapplied and were left in the stash." }
       }
     },

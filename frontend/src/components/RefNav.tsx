@@ -4,6 +4,7 @@ import { useMemo, useRef, useState } from "react"
 import { baseName } from "@/lib/format"
 import { buildNavRows, type NavRow } from "@/lib/navTree"
 import { cn } from "@/lib/utils"
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu"
 import type { Ref, RefId, Remote, Worktree, WorktreeId } from "@/model/model.gen"
 
 const navRowHeight = 26
@@ -16,10 +17,11 @@ interface RefNavProps {
   readonly emphasized: RefId | undefined
   readonly onEmphasize: (ref: Ref) => void
   readonly onCheckout: (ref: Ref) => void
+  readonly onNewWorktree: (ref: Ref) => void
 }
 
 /** Branches, remotes, tags and stashes, virtualized for repositories with thousands of refs. */
-export const RefNav = ({ refs, remotes, worktrees, activeWorktree, emphasized, onEmphasize, onCheckout }: RefNavProps) => {
+export const RefNav = ({ refs, remotes, worktrees, activeWorktree, emphasized, onEmphasize, onCheckout, onNewWorktree }: RefNavProps) => {
   const [filter, setFilter] = useState("")
   const [toggled, setToggled] = useState<ReadonlySet<string>>(new Set())
   const rows = useMemo(() => buildNavRows(refs, remotes, toggled, filter), [refs, remotes, toggled, filter])
@@ -78,7 +80,7 @@ export const RefNav = ({ refs, remotes, worktrees, activeWorktree, emphasized, o
         )
       case "ref": {
         const on = row.ref.id === emphasized
-        return (
+        const item = (
           <button
             title="Click to emphasize, double-click to check out"
             onClick={() => onEmphasize(row.ref)}
@@ -93,6 +95,18 @@ export const RefNav = ({ refs, remotes, worktrees, activeWorktree, emphasized, o
             <span className="min-w-0 flex-1 truncate">{row.name}</span>
             <span className="text-[11px] whitespace-nowrap text-subtle-foreground">{meta(row.ref)}</span>
           </button>
+        )
+        return (
+          <ContextMenu>
+            <ContextMenuTrigger asChild>{item}</ContextMenuTrigger>
+            <ContextMenuContent>
+              <ContextMenuItem onSelect={() => onCheckout(row.ref)}>Check out</ContextMenuItem>
+              {row.ref.kind !== "stash" && (
+                <ContextMenuItem onSelect={() => onNewWorktree(row.ref)}>New worktree from here…</ContextMenuItem>
+              )}
+              <ContextMenuItem onSelect={() => onEmphasize(row.ref)}>Emphasize history</ContextMenuItem>
+            </ContextMenuContent>
+          </ContextMenu>
         )
       }
     }

@@ -31,7 +31,7 @@ func (w *Workspace) Checkout(ctx context.Context, worktreeID model.WorktreeID, r
 	}
 	args, err := r.checkoutArgs(ref, wt)
 	if err != nil || args == nil {
-		return model.CheckoutResult{}, err
+		return model.CheckoutResult{Branch: r.headBranch(wt.ID)}, err
 	}
 
 	var result model.CheckoutResult
@@ -41,6 +41,9 @@ func (w *Workspace) Checkout(ctx context.Context, worktreeID model.WorktreeID, r
 	})
 	if refreshErr := r.refresh(ctx, watch.Change{Refs: true, Worktrees: true, Status: map[model.WorktreeID]bool{wt.ID: true}}); err == nil {
 		err = refreshErr
+	}
+	if err == nil {
+		result.Branch = r.headBranch(wt.ID)
 	}
 	return result, err
 }
@@ -145,6 +148,19 @@ func plural(n int, one, many string) string {
 		return one
 	}
 	return many
+}
+
+// headBranch returns the branch a worktree has checked out, or "" when its
+// HEAD is detached.
+func (r *openRepo) headBranch(id model.WorktreeID) model.RefID {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for _, wt := range r.worktrees {
+		if wt.ID == id && wt.Head.Kind == model.HeadKindBranch {
+			return wt.Head.RefID
+		}
+	}
+	return ""
 }
 
 // worktree finds an open worktree by ID.

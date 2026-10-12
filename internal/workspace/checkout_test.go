@@ -72,11 +72,12 @@ func codeOf(err error) model.ErrorCode {
 
 func TestCheckoutCleanWorktree(t *testing.T) {
 	f := newCheckoutFixture(t)
-	if _, err := f.checkout(f.mainWT, "refs/heads/feature", model.CheckoutModeSafe); err != nil {
+	result, err := f.checkout(f.mainWT, "refs/heads/feature", model.CheckoutModeSafe)
+	if err != nil {
 		t.Fatal(err)
 	}
-	if got := f.branch(f.git.Dir); got != "feature" {
-		t.Fatalf("on %s", got)
+	if got := f.branch(f.git.Dir); got != "feature" || result.Branch != f.ref("refs/heads/feature") {
+		t.Fatalf("on %s, result %+v", got, result)
 	}
 }
 

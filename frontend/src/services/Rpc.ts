@@ -1,10 +1,13 @@
 import { Context, Effect, Layer, Option, Schema, type Tracer } from "effect"
 import { fromRejection, type RpcFailure } from "@/model/errors"
 import {
+  CheckoutResult,
   CommitDetail,
   GraphWindow,
   Repo,
   SyncSnapshot,
+  Worktree,
+  type CheckoutMode,
   type Oid,
   type RefId,
   type RepoId,
@@ -15,6 +18,7 @@ import * as Preferences from "@/wailsjs/go/rpc/Preferences"
 import * as Repos from "@/wailsjs/go/rpc/Repos"
 import * as Session from "@/wailsjs/go/rpc/Session"
 import * as Sync from "@/wailsjs/go/rpc/Sync"
+import * as Worktrees from "@/wailsjs/go/rpc/Worktrees"
 
 /** Typed, traced access to the backend's bound services. */
 export class Rpc extends Context.Service<
@@ -39,6 +43,12 @@ export class Rpc extends Context.Service<
     readonly reorderRepos: (ids: ReadonlyArray<RepoId>) => Effect.Effect<void, RpcFailure>
     readonly setActiveWorktree: (repo: RepoId, worktree: WorktreeId) => Effect.Effect<void, RpcFailure>
     readonly setEmphasizedRef: (repo: RepoId, ref: RefId) => Effect.Effect<void, RpcFailure>
+    readonly checkout: (worktree: WorktreeId, ref: RefId, mode: CheckoutMode) => Effect.Effect<CheckoutResult, RpcFailure>
+    /** An empty newBranch checks out base itself; an empty path lets the backend choose. */
+    readonly createWorktree: (repo: RepoId, base: RefId, newBranch: string, path: string) => Effect.Effect<Worktree, RpcFailure>
+    readonly removeWorktree: (worktree: WorktreeId, force: boolean) => Effect.Effect<void, RpcFailure>
+    /** Resolves to None when the user cancels the folder picker. */
+    readonly chooseWorktreeParent: () => Effect.Effect<Option.Option<string>, RpcFailure>
   }
 >()("forkit/Rpc") {
   static readonly layer = Layer.succeed(Rpc, {
@@ -73,6 +83,19 @@ export class Rpc extends Context.Service<
       invoke("Session.SetActiveWorktree", Schema.Void, (meta) => Session.SetActiveWorktree(meta, repo, worktree)),
     setEmphasizedRef: (repo, ref) =>
       invoke("Session.SetEmphasizedRef", Schema.Void, (meta) => Session.SetEmphasizedRef(meta, repo, ref)),
+    checkout: (worktree, ref, mode) =>
+      invoke("Worktrees.Checkout", CheckoutResult, (meta) => Worktrees.Checkout(meta, worktree, ref, mode), {
+        "worktree.id": worktree,
+        "checkout.mode": mode,
+      }),
+    createWorktree: (repo, base, newBranch, path) =>
+      invoke("Worktrees.Create", Worktree, (meta) => Worktrees.Create(meta, repo, base, newBranch, path), { "repo.id": repo }),
+    removeWorktree: (worktree, force) =>
+      invoke("Worktrees.Remove", Schema.Void, (meta) => Worktrees.Remove(meta, worktree, force), { "worktree.id": worktree }),
+    chooseWorktreeParent: () =>
+      invoke("Worktrees.ChooseParentDirectory", Schema.String, (meta) => Worktrees.ChooseParentDirectory(meta)).pipe(
+        Effect.map((path) => (path === "" ? Option.none() : Option.some(path))),
+      ),
   })
 }
 
