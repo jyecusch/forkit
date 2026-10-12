@@ -71,7 +71,7 @@ type source interface {
 
 // Watcher reports changes to one repository until closed.
 type Watcher struct {
-	onChange func(context.Context, Change)
+	onChange func(Change)
 	logger   *slog.Logger
 
 	mu     sync.Mutex
@@ -82,7 +82,7 @@ type Watcher struct {
 
 // Start watches layout and calls onChange, never concurrently, after each
 // burst of filesystem activity.
-func Start(layout Layout, onChange func(context.Context, Change), logger *slog.Logger) (*Watcher, error) {
+func Start(layout Layout, onChange func(Change), logger *slog.Logger) (*Watcher, error) {
 	w := &Watcher{onChange: onChange, logger: logger}
 	if err := w.Update(layout); err != nil {
 		return nil, err
@@ -181,7 +181,7 @@ func (w *Watcher) run(ctx context.Context, layout Layout, src source) {
 		case <-quiet:
 		case <-deadline:
 		}
-		w.onChange(ctx, pending)
+		w.onChange(pending)
 		pending = Change{Status: map[model.WorktreeID]bool{}}
 		quiet, deadline = nil, nil
 	}
