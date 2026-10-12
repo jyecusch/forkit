@@ -91,4 +91,6 @@ Then open http://localhost:16686. Frontend and backend spans share traces, so yo
 
 ## Commits and releases
 
-Use [Conventional Commits](https://www.conventionalcommits.org/) (`feat:`, `fix:`, `perf:`, `refactor:`, `docs:`, `test:`, `chore:`). release-please turns them into the changelog and version tags when changes reach `main`.
+Use [Conventional Commits](https://www.conventionalcommits.org/) (`feat:`, `fix:`, `perf:`, `refactor:`, `docs:`, `test:`, `chore:`). They decide the next version: breaking changes (`feat!:` or a `BREAKING CHANGE:` footer) bump the major version, or the minor version before 1.0, `feat` the minor, and `fix` and `perf` the patch.
+
+Each time CI passes on `main`, the Draft release workflow updates a single draft release with that version, its notes and the commit it would tag (`tools/nextrelease` does the working out). A maintainer releases by publishing the draft, which creates the tag that the next draft counts from.
