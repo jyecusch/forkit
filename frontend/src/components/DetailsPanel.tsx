@@ -1,8 +1,9 @@
 import { useLiveQuery } from "@tanstack/react-db"
 import { Effect } from "effect"
 import { Check, Copy } from "lucide-react"
-import { useEffect, useState } from "react"
+import { useEffect, useState, type ReactNode } from "react"
 import { useForkedEffect } from "@/app/hooks"
+import { useNow } from "@/app/useNow"
 import { fileStatusesCollection } from "@/data/collections"
 import { formatDate, formatFullDate, initials, shortOid } from "@/lib/format"
 import { cn } from "@/lib/utils"
@@ -14,13 +15,15 @@ interface DetailsPanelProps {
   readonly repo: RepoId
   readonly selected: LoadedRow | undefined
   readonly worktree: WorktreeId | undefined
+  /** Uncommitted changes in the worktree, shown on the Changes tab. */
+  readonly changes: number
   readonly preferences: Preferences
 }
 
 type Tab = "commit" | "changes"
 
 /** The selected commit's details, or the active worktree's uncommitted changes. */
-export const DetailsPanel = ({ repo, selected, worktree, preferences }: DetailsPanelProps) => {
+export const DetailsPanel = ({ repo, selected, worktree, changes, preferences }: DetailsPanelProps) => {
   // Selecting another commit shows its details, whichever tab was open.
   const oid = selected?.row.oid
   const [chosen, setChosen] = useState<{ readonly tab: Tab; readonly oid: string | undefined }>({ tab: "commit", oid })
@@ -34,6 +37,7 @@ export const DetailsPanel = ({ repo, selected, worktree, preferences }: DetailsP
         </TabButton>
         <TabButton active={tab === "changes"} onClick={() => setTab("changes")}>
           Changes
+          {changes > 0 && <span className="ml-1.5 text-subtle-foreground tabular-nums">{changes}</span>}
         </TabButton>
       </div>
       <div className="flex-1 overflow-y-auto select-text">
@@ -49,7 +53,7 @@ export const DetailsPanel = ({ repo, selected, worktree, preferences }: DetailsP
   )
 }
 
-const TabButton = ({ active, onClick, children }: { active: boolean; onClick: () => void; children: string }) => (
+const TabButton = ({ active, onClick, children }: { active: boolean; onClick: () => void; children: ReactNode }) => (
   <button
     role="tab"
     aria-selected={active}
@@ -69,6 +73,7 @@ const Empty = ({ children }: { children: string }) => (
 
 const CommitTab = ({ repo, selected, preferences }: { repo: RepoId; selected: LoadedRow | undefined; preferences: Preferences }) => {
   const [detail, setDetail] = useState<CommitDetail>()
+  const now = useNow()
   const oid = selected?.row.oid
   useForkedEffect(
     () =>
@@ -95,23 +100,22 @@ const CommitTab = ({ repo, selected, preferences }: { repo: RepoId; selected: Lo
         <div className="flex items-center gap-2.5">
           <span
             aria-hidden
-            className="flex size-7 flex-none items-center justify-center rounded-full text-[11px] font-semibold"
-            style={{ color: authorColor(commit.authorEmail), background: `color-mix(in srgb, ${authorColor(commit.authorEmail)} 16%, transparent)` }}
+            className="flex size-7 flex-none items-center justify-center rounded-full bg-foreground/[0.08] text-[11px] font-semibold text-secondary-foreground"
           >
             {initials(commit.authorName)}
           </span>
           <div className="flex min-w-0 flex-col">
             <span className="truncate">{commit.authorName}</span>
             <span className="text-xs text-subtle-foreground" title={formatFullDate(commit.authorTime)}>
-              {formatDate(commit.authorTime, preferences.appearance.dateFormat)}
+              {formatDate(commit.authorTime, preferences.appearance.dateFormat, now)}
             </span>
           </div>
         </div>
         <dl className="grid grid-cols-[64px_minmax(0,1fr)] gap-x-2 gap-y-1 text-xs">
           <dt className="text-subtle-foreground">Commit</dt>
           <dd className="flex min-w-0 items-center gap-1 font-mono text-secondary-foreground">
-            <span className="truncate">{commit.oid}</span>
-            <CopyButton text={commit.oid} label="Copy SHA" />
+            <span title={commit.oid}>{commit.oid.slice(0, 12)}</span>
+            <CopyButton text={commit.oid} label="Copy full SHA" />
           </dd>
           <dt className="text-subtle-foreground">Parents</dt>
           <dd className="font-mono text-secondary-foreground">{commit.parents.map(shortOid).join(", ") || "none (root)"}</dd>
@@ -189,7 +193,7 @@ const ChangesTab = ({ worktree }: { worktree: WorktreeId }) => {
   )
 }
 
-const fileRow = "flex h-7 items-center gap-2 rounded-md px-2 hover:bg-foreground/[0.04]"
+const fileRow = "flex h-7 items-center gap-2 px-2"
 
 /** A path with its file name first and its directory dimmed after it. */
 const FilePath = ({ path, title }: { path: string; title: string }) => {
@@ -222,18 +226,11 @@ const CopyButton = ({ text, label }: { text: string; label: string }) => {
   )
 }
 
-/** A colour for an author that stays the same wherever they appear. */
-const authorColor = (email: string) => {
-  let hash = 0
-  for (const char of email.toLowerCase()) hash = (hash * 31 + char.charCodeAt(0)) | 0
-  return `var(--lane-${Math.abs(hash) % 8})`
-}
-
 type Tone = "added" | "modified" | "deleted" | "conflict"
 
 const toneColors: Record<Tone, string> = {
   added: "var(--success)",
-  modified: "var(--warning)",
+  modified: "var(--lane-0)",
   deleted: "var(--destructive)",
   conflict: "var(--destructive)",
 }

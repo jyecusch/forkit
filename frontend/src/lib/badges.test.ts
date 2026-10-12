@@ -16,13 +16,18 @@ const ids = refs.map((r) => r.id as RefId)
 
 describe("badgesFor", () => {
   it("puts the checked-out branch first and folds in its upstream at the same commit", () => {
-    const badges = badgesFor(ids, byId, "main" as RefId)
+    const badges = badgesFor(ids, byId, { head: "main" as RefId, emphasized: undefined })
     expect(badges.map((b) => b.ref.id)).toEqual(["main", "topic", "fork/main", "v1"])
     expect(badges[0]).toMatchObject({ isHead: true, inSync: true })
   })
 
   it("keeps an upstream that is on a different commit", () => {
-    const badges = badgesFor(["main" as RefId], byId, undefined)
+    const badges = badgesFor(["main" as RefId], byId, { head: undefined, emphasized: undefined })
     expect(badges).toEqual([{ ref: byId.get("main"), isHead: false, inSync: false }])
+  })
+
+  it("puts the emphasized ref straight after the checked-out branch", () => {
+    const badges = badgesFor(ids, byId, { head: "main" as RefId, emphasized: "v1" as RefId })
+    expect(badges.map((b) => b.ref.id)).toEqual(["main", "v1", "topic", "fork/main"])
   })
 })

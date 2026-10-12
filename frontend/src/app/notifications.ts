@@ -5,6 +5,8 @@ export interface Notice {
   readonly id: number
   readonly message: string
   readonly tone: "info" | "error"
+  /** Milliseconds shown before it goes by itself; notices with an action stay. */
+  readonly duration?: number
   readonly action?: { readonly label: string; readonly run: () => void }
 }
 

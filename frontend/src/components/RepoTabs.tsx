@@ -11,7 +11,7 @@ import { Commands } from "@/services/Commands"
 
 /**
  * One tab per open repository, in session order. The active tab is the
- * panel's colour and opens into it; the rest sit quietly on the chrome.
+ * panel's colour and flows into it; the rest sit quietly on the chrome.
  */
 export const RepoTabs = () => {
   const run = useRun()
@@ -28,15 +28,20 @@ export const RepoTabs = () => {
   const close = (repo: RepoId) => void run(Commands.use((commands) => commands.closeRepository(repo)))
 
   const [dragging, setDragging] = useState<RepoId>()
+  const [dropTarget, setDropTarget] = useState<RepoId>()
+  const ids = ordered.map((repo) => repo.id)
   // Dropping on a tab puts the dragged one where that tab was, so dragging
   // right lands after it and dragging left lands before it.
+  const landsAfter = (target: RepoId) => dragging !== undefined && ids.indexOf(dragging) < ids.indexOf(target)
   const drop = (target: RepoId) => {
     if (!dragging || dragging === target) return
-    const ids = ordered.map((repo) => repo.id)
-    const movingRight = ids.indexOf(dragging) < ids.indexOf(target)
     const order = ids.filter((id) => id !== dragging)
-    order.splice(order.indexOf(target) + (movingRight ? 1 : 0), 0, dragging)
+    order.splice(order.indexOf(target) + (landsAfter(target) ? 1 : 0), 0, dragging)
     void run(Commands.use((commands) => commands.reorderRepositories(order)))
+  }
+  const endDrag = () => {
+    setDragging(undefined)
+    setDropTarget(undefined)
   }
 
   const onKeyDown = (event: KeyboardEvent, index: number) => {
@@ -51,9 +56,12 @@ export const RepoTabs = () => {
   }
 
   return (
-    <div role="tablist" aria-label="Repositories" className="flex min-w-0 items-end gap-0.5">
+    <div role="tablist" aria-label="Repositories" className="flex min-w-0 items-end">
       {ordered.map((repo, index) => {
         const on = repo.id === active
+        // Inactive neighbours are separated by a short rule.
+        const divided = index > 0 && !on && ordered[index - 1]!.id !== active
+        const showDrop = dropTarget === repo.id && dragging !== undefined && dragging !== repo.id
         return (
           <div
             key={repo.id}
@@ -65,40 +73,64 @@ export const RepoTabs = () => {
             aria-selected={on}
             tabIndex={on ? 0 : -1}
             draggable
-            onDragStart={() => setDragging(repo.id)}
-            onDragEnd={() => setDragging(undefined)}
-            onDragOver={(event) => event.preventDefault()}
-            onDrop={() => drop(repo.id)}
+            onDragStart={(event) => {
+              event.dataTransfer.effectAllowed = "move"
+              setDragging(repo.id)
+            }}
+            onDragEnd={endDrag}
+            onDragOver={(event) => {
+              event.preventDefault()
+              setDropTarget(repo.id)
+            }}
+            onDrop={() => {
+              drop(repo.id)
+              endDrag()
+            }}
             onClick={() => select(repo.id)}
             onAuxClick={(event) => event.button === 1 && close(repo.id)}
             onKeyDown={(event) => onKeyDown(event, index)}
             style={noDrag}
             className={cn(
               // Tabs share one width, like a browser's, so labels line up and
-              // the close button can sit in the right padding of every tab.
-              "group relative flex h-8 w-44 min-w-24 shrink cursor-default items-center gap-2 rounded-t-[10px] border border-b-0 pr-7 pl-3",
+              // the close button and status sit in the right padding of every tab.
+              "group relative flex h-8 w-44 min-w-12 shrink cursor-default items-center rounded-t-[10px] border border-b-0 pr-8 pl-4",
               "focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring",
               on
                 ? "z-10 -mb-px h-[33px] bg-background text-foreground"
-                : "border-transparent text-secondary-foreground hover:bg-foreground/[0.04] hover:text-foreground",
+                : "isolate border-transparent text-secondary-foreground hover:text-foreground",
+              dragging === repo.id && "opacity-50",
             )}
           >
-            <RepoStatus repo={repo} />
+            {on ? (
+              <>
+                {index > 0 && <Flare side="left" />}
+                <Flare side="right" />
+              </>
+            ) : (
+              <span aria-hidden className="absolute inset-x-1 inset-y-1 -z-10 rounded-md group-hover:bg-foreground/[0.05]" />
+            )}
+            {divided && <span aria-hidden className="absolute top-1/2 -left-px h-4 w-px -translate-y-1/2 bg-border" />}
+            {showDrop && (
+              <span
+                aria-hidden
+                className={cn("absolute top-1/2 h-4 w-0.5 -translate-y-1/2 rounded-full bg-primary", landsAfter(repo.id) ? "-right-px" : "-left-px")}
+              />
+            )}
             <span className="min-w-0 flex-1 truncate">{repo.name}</span>
-            <button
-              aria-label={`Close ${repo.name}`}
-              tabIndex={-1}
-              onClick={(event) => {
-                event.stopPropagation()
-                close(repo.id)
-              }}
-              className={cn(
-                "absolute top-1/2 right-2 flex size-4 -translate-y-1/2 items-center justify-center rounded text-subtle-foreground hover:bg-foreground/10 hover:text-foreground",
-                on ? "opacity-100" : "opacity-0 group-hover:opacity-100",
-              )}
-            >
-              <X className="size-2.5" strokeWidth={2.5} />
-            </button>
+            <span className="absolute top-1/2 right-2 flex size-5 -translate-y-1/2 items-center justify-center">
+              <RepoStatus repo={repo} />
+              <button
+                aria-label={`Close ${repo.name}`}
+                tabIndex={-1}
+                onClick={(event) => {
+                  event.stopPropagation()
+                  close(repo.id)
+                }}
+                className="absolute inset-0 flex items-center justify-center rounded text-subtle-foreground opacity-0 group-hover:opacity-100 hover:bg-foreground/10 hover:text-foreground"
+              >
+                <X className="size-3" />
+              </button>
+            </span>
           </div>
         )
       })}
@@ -107,13 +139,33 @@ export const RepoTabs = () => {
         title="Open repository"
         onClick={() => void run(Commands.use((commands) => commands.openRepository()))}
         style={noDrag}
-        className="mb-1 ml-1 flex size-6 flex-none items-center justify-center rounded-md text-subtle-foreground hover:bg-foreground/[0.06] hover:text-foreground"
+        className="mb-0.5 ml-1 flex size-7 flex-none items-center justify-center rounded-md text-subtle-foreground hover:bg-foreground/[0.05] hover:text-foreground"
       >
-        <Plus className="size-3.5" />
+        <Plus className="size-4" />
       </button>
     </div>
   )
 }
+
+/** Size of the concave corners joining the active tab to the panel. */
+const flare = 10
+
+/**
+ * A concave corner at the foot of the active tab, so the tab flows into the
+ * panel's top edge instead of sitting on it.
+ */
+const Flare = ({ side }: { side: "left" | "right" }) => (
+  <span
+    aria-hidden
+    className="pointer-events-none absolute bottom-0"
+    style={{
+      [side]: -flare - 1,
+      width: flare,
+      height: flare,
+      background: `radial-gradient(circle at ${side === "left" ? "0" : "100%"} 0, transparent ${flare - 1}px, var(--border) ${flare - 1}px ${flare}px, var(--background) ${flare}px)`,
+    }}
+  />
+)
 
 /**
  * Loading, errors, operations in progress and uncommitted changes, each
@@ -132,5 +184,12 @@ const RepoStatus = ({ repo }: { repo: Repo }) => {
             ? { color: "bg-primary", label: "Uncommitted changes" }
             : undefined
   if (!status) return null
-  return <span role="img" aria-label={status.label} title={status.label} className={cn("size-1.5 flex-none rounded-full", status.color)} />
+  return (
+    <span
+      role="img"
+      aria-label={status.label}
+      title={status.label}
+      className={cn("size-1.5 rounded-full group-hover:invisible", status.color)}
+    />
+  )
 }

@@ -10,7 +10,7 @@ export const Toaster = () => {
   const notice = useNotice()
   useEffect(() => {
     if (!notice || notice.action) return
-    const timer = setTimeout(() => dismiss(notice.id), visibleFor)
+    const timer = setTimeout(() => dismiss(notice.id), notice.duration ?? visibleFor)
     return () => clearTimeout(timer)
   }, [notice])
   if (!notice) return null

@@ -1,5 +1,6 @@
 import { Option } from "effect"
-import { useEffect, useState } from "react"
+import { LoaderCircle } from "lucide-react"
+import { useEffect, useRef, useState } from "react"
 import { useRun } from "@/app/hooks"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -20,6 +21,7 @@ export const NewWorktreeDialog = ({ repo, base, onClose }: NewWorktreeDialogProp
   const [branch, setBranch] = useState("")
   const [parent, setParent] = useState<string>()
   const [busy, setBusy] = useState(false)
+  const branchInput = useRef<HTMLInputElement>(null)
   useEffect(() => {
     setBranch("")
     setParent(undefined)
@@ -46,14 +48,21 @@ export const NewWorktreeDialog = ({ repo, base, onClose }: NewWorktreeDialogProp
   return (
     <Dialog open={base !== undefined} onOpenChange={(open) => !open && onClose()}>
       {base && (
-        <DialogContent className="sm:max-w-[480px]" aria-describedby={undefined}>
+        <DialogContent
+          className="sm:max-w-[480px]"
+          aria-describedby={undefined}
+          onOpenAutoFocus={(event) => {
+            event.preventDefault()
+            branchInput.current?.focus()
+          }}
+        >
           <DialogHeader>
             <DialogTitle>New worktree from {base.shortName}</DialogTitle>
           </DialogHeader>
           <label className="flex flex-col gap-1.5">
             <span>New branch</span>
             <Input
-              autoFocus
+              ref={branchInput}
               value={branch}
               placeholder={canUseBase ? `Leave empty to check out ${base.shortName}` : "feature/my-change"}
               onChange={(event) => setBranch(event.target.value)}
@@ -61,27 +70,25 @@ export const NewWorktreeDialog = ({ repo, base, onClose }: NewWorktreeDialogProp
             />
           </label>
           {effectiveBranch && (
-            <label className="flex flex-col gap-1.5">
+            <div className="flex flex-col gap-1.5">
               <span>Location</span>
-              <div className="flex items-center gap-2">
-                <Input
-                  readOnly
-                  value={path || `…/${folder}`}
-                  title={path || `Next to the main worktree, in ${folder}`}
-                  className="min-w-0 flex-1 font-mono text-xs text-secondary-foreground"
-                />
-                <Button variant="outline" onClick={() => void choose()}>
+              <div className="flex h-7 items-center gap-2">
+                <span className="min-w-0 flex-1 truncate font-mono text-xs text-secondary-foreground" title={path || `Next to the main worktree, in ${folder}`}>
+                  {path || `…/${folder}`}
+                </span>
+                <Button variant="ghost" size="sm" className="text-primary" onClick={() => void choose()}>
                   Choose…
                 </Button>
               </div>
-            </label>
+            </div>
           )}
           <DialogFooter>
             <Button variant="ghost" onClick={onClose}>
               Cancel
             </Button>
-            <Button disabled={!effectiveBranch || busy} onClick={() => void create()}>
-              Create worktree
+            <Button disabled={!effectiveBranch} aria-busy={busy} onClick={() => void create()}>
+              {busy && <LoaderCircle aria-hidden className="size-3.5 animate-spin" />}
+              {busy ? "Creating…" : "Create worktree"}
             </Button>
           </DialogFooter>
         </DialogContent>

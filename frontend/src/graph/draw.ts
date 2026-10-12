@@ -4,12 +4,15 @@ import { rowHeight, type Dot, type Geometry, type Segment } from "./geometry"
 export interface GraphPalette {
   readonly lanes: ReadonlyArray<string>
   readonly background: string
+  /** Scales the toned-down strength so it reads the same in every theme. */
+  readonly dimScale: number
 }
 
 export const readPalette = (element: Element): GraphPalette => {
   const style = getComputedStyle(element)
   const lanes = Array.from({ length: 8 }, (_, i) => style.getPropertyValue(`--lane-${i}`).trim())
-  return { lanes, background: style.getPropertyValue("--background").trim() }
+  const dimScale = Number(style.getPropertyValue("--graph-dim-scale")) || 1
+  return { lanes, background: style.getPropertyValue("--background").trim(), dimScale }
 }
 
 const lineWidth = 2
@@ -30,7 +33,7 @@ export const drawGraph = (context: CanvasRenderingContext2D, geometry: Geometry,
     let color = colors.get(key)
     if (!color) {
       const lane = palette.lanes[thread % palette.lanes.length]!
-      color = emphasized ? lane : mixHex(lane, palette.background, dimmedStrength)
+      color = emphasized ? lane : mixHex(lane, palette.background, Math.min(dimmedStrength * palette.dimScale, 1))
       colors.set(key, color)
     }
     return color
@@ -76,7 +79,7 @@ const drawDot = (context: CanvasRenderingContext2D, dot: Dot, color: string, bac
     context.beginPath()
     context.arc(dot.x, dot.y, radius, 0, Math.PI * 2)
   }
-  const outer = dot.shape === "head" ? dotRadius + 3 : dotRadius
+  const outer = dot.shape === "head" ? dotRadius + 2 : dotRadius
   if (dot.shape !== "commit") {
     // Rings are hollow, so clear the lines that run into them.
     context.fillStyle = background
@@ -98,7 +101,7 @@ const drawDot = (context: CanvasRenderingContext2D, dot: Dot, color: string, bac
       break
     case "head":
       context.fillStyle = color
-      circle(dotRadius - 0.5)
+      circle(dotRadius - 1)
       context.fill()
       context.strokeStyle = color
       context.lineWidth = 1.5

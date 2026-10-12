@@ -38,27 +38,29 @@
   --lane-5: #ff9e64;
   --lane-6: #f7768e;
   --lane-7: #73daca;
+  /* How strongly toned-down history keeps its colour, relative to the setting. */
+  --graph-dim-scale: 1;
 }
 
 [data-theme="tokyo-night-day"] {
-  --background: #eeeef2;
+  --background: #f8f8fa;
   --sidebar: #e1e2e7;
-  --card: #f7f7f9;
-  --popover: #f7f7f9;
+  --card: #ffffff;
+  --popover: #ffffff;
   --foreground: #2b3047;
-  --secondary-foreground: #4a5070;
+  --secondary-foreground: #3d4260;
   --muted-foreground: #7a7f9a;
   --subtle-foreground: #5a6080;
   --border: #d3d5df;
   --input: #d3d5df;
-  --ring: #2e7de9;
-  --selection: #d6def5;
+  --ring: #1f63c6;
+  --selection: #d3ddf7;
   --accent: #dfe0e8;
   --muted: #e4e5ec;
   --secondary: #dfe0e8;
-  --primary: #2e7de9;
-  --primary-foreground: #e1e2e7;
-  --destructive: #f52a65;
+  --primary: #1f63c6;
+  --primary-foreground: #ffffff;
+  --destructive: #d0164f;
   --success: #587539;
   --warning: #8c6c3e;
   --lane-0: #2e7de9;
@@ -69,6 +71,7 @@
   --lane-5: #b15c00;
   --lane-6: #f52a65;
   --lane-7: #118c74;
+  --graph-dim-scale: 1.4;
 }
 
 @theme inline {

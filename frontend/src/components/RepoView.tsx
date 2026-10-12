@@ -137,6 +137,7 @@ export const RepoView = ({ repo, openRepo, preferences }: RepoViewProps) => {
         emphasizedOther={emphasizedOther}
         onClearEmphasis={() => headBranch && emphasize(headBranch)}
         view={view}
+        checkingOut={running.some((op) => op.kind === "checkout")}
         detailsShown={showDetails}
         onToggleDetails={() => setDetailsToggled(!showDetails)}
       />
@@ -151,6 +152,7 @@ export const RepoView = ({ repo, openRepo, preferences }: RepoViewProps) => {
               headOids={headOids}
               headRef={headRef}
               selected={selected}
+              defaultSelection={activeWorktree?.head.oid}
               onSelect={setSelected}
               scrollRequest={scrollRequest}
               preferences={preferences}
@@ -162,7 +164,13 @@ export const RepoView = ({ repo, openRepo, preferences }: RepoViewProps) => {
           )}
         </main>
         {showDetails && (
-          <DetailsPanel repo={id} selected={selected} worktree={activeWorktree?.id} preferences={preferences} />
+          <DetailsPanel
+            repo={id}
+            selected={selected}
+            worktree={activeWorktree?.id}
+            changes={activeWorktree ? changeCount(activeWorktree) : 0}
+            preferences={preferences}
+          />
         )}
       </div>
       <Prompt spec={prompt} onClose={() => setPrompt(undefined)} />

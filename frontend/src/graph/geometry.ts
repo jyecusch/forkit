@@ -89,15 +89,3 @@ export const geometry = (options: {
     items.sort((a, b) => Number(a.emphasized) - Number(b.emphasized))
   return { segments: emphasizedLast(segments), dots: emphasizedLast(dots) }
 }
-
-/** The widest lane any loaded row in [first, last] draws on, or -1 if none. */
-export const widestLane = (first: number, last: number, rowAt: (index: number) => LoadedRow | undefined): number => {
-  let widest = -1
-  for (let index = Math.max(0, first - 1); index <= last; index++) {
-    const loaded = rowAt(index)
-    if (!loaded) continue
-    widest = Math.max(widest, loaded.row.lane)
-    for (const edge of loaded.row.edges) widest = Math.max(widest, edge.fromLane, edge.toLane)
-  }
-  return widest
-}

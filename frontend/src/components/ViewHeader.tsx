@@ -1,4 +1,4 @@
-import { Folder, GitBranch, PanelRight, X } from "lucide-react"
+import { Folder, GitBranch, LoaderCircle, PanelRight, Tag, X } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { baseName } from "@/lib/format"
 import { changeCount, headLabel } from "@/lib/worktree"
@@ -11,6 +11,8 @@ interface ViewHeaderProps {
   readonly emphasizedOther: Ref | undefined
   readonly onClearEmphasis: () => void
   readonly view: GraphView | undefined
+  /** A checkout is running, so the branch is about to change. */
+  readonly checkingOut: boolean
   readonly detailsShown: boolean
   readonly onToggleDetails: () => void
 }
@@ -19,24 +21,40 @@ interface ViewHeaderProps {
  * The panel's second header level: which worktree and branch the view is
  * about, and what the graph is showing.
  */
-export const ViewHeader = ({ worktree, refsById, emphasizedOther, onClearEmphasis, view, detailsShown, onToggleDetails }: ViewHeaderProps) => {
+export const ViewHeader = ({ worktree, refsById, emphasizedOther, onClearEmphasis, view, checkingOut, detailsShown, onToggleDetails }: ViewHeaderProps) => {
   const changes = worktree ? changeCount(worktree) : 0
   return (
     <div className="flex h-10 flex-none items-center gap-3 border-b px-3 text-[13px]">
       {worktree && (
         <div className="flex min-w-0 items-center gap-2">
-          {!worktree.isMain && (
-            <>
-              <Folder aria-hidden className="size-4 flex-none text-subtle-foreground" />
-              <span className="truncate font-medium text-foreground" title={worktree.path}>
-                {baseName(worktree.path)}
-              </span>
-            </>
-          )}
-          <span className="flex min-w-0 items-center gap-1 rounded-md bg-foreground/[0.06] px-1.5 py-0.5 text-xs text-secondary-foreground">
-            <GitBranch aria-hidden className="size-3 flex-none" />
+          <Folder aria-hidden className="size-4 flex-none text-subtle-foreground" />
+          <span className="truncate font-medium text-foreground" title={worktree.path}>
+            {baseName(worktree.path)}
+          </span>
+          <span className={cn(chip, "bg-foreground/[0.06] text-secondary-foreground")} aria-busy={checkingOut}>
+            {checkingOut ? (
+              <LoaderCircle aria-label="Checking out" className="size-3 flex-none animate-spin" />
+            ) : (
+              <GitBranch aria-hidden className="size-3 flex-none" />
+            )}
             <span className="truncate">{headLabel(worktree, refsById)}</span>
           </span>
+          {emphasizedOther && (
+            <span
+              className={cn(chip, "bg-primary/12 pr-0.5 text-primary")}
+              title="Emphasized: its history is drawn at full strength and the rest is toned down"
+            >
+              <RefKindIcon kind={emphasizedOther.kind} />
+              <span className="max-w-48 truncate">{emphasizedOther.shortName}</span>
+              <button
+                aria-label="Stop emphasizing"
+                onClick={onClearEmphasis}
+                className="flex size-[18px] flex-none items-center justify-center rounded hover:bg-primary/20"
+              >
+                <X className="size-3" />
+              </button>
+            </span>
+          )}
           {worktree.operation !== "none" && <span className="flex-none text-xs text-warning">{operationLabels[worktree.operation]}</span>}
           {changes > 0 && (
             <span className="flex-none text-xs text-subtle-foreground tabular-nums">
@@ -46,18 +64,6 @@ export const ViewHeader = ({ worktree, refsById, emphasizedOther, onClearEmphasi
         </div>
       )}
       <div className="ml-auto flex flex-none items-center gap-3 text-xs text-subtle-foreground">
-        {emphasizedOther && (
-          <span className="flex h-6 items-center gap-1.5 rounded-md bg-primary/15 pr-1 pl-2 text-primary" title="Its history is drawn at full strength; the rest is toned down">
-            <span className="max-w-48 truncate">{emphasizedOther.shortName}</span>
-            <button
-              aria-label="Stop emphasizing"
-              onClick={onClearEmphasis}
-              className="flex size-4 items-center justify-center rounded hover:bg-primary/20"
-            >
-              <X className="size-3" />
-            </button>
-          </span>
-        )}
         {view && (
           <span className="tabular-nums">
             {view.totalRows.toLocaleString()} {view.totalRows === 1 ? "commit" : "commits"}
@@ -70,8 +76,8 @@ export const ViewHeader = ({ worktree, refsById, emphasizedOther, onClearEmphasi
           title={detailsShown ? "Hide details" : "Show details"}
           onClick={onToggleDetails}
           className={cn(
-            "-mr-1 flex size-7 items-center justify-center rounded-md hover:bg-foreground/[0.06] hover:text-foreground",
-            detailsShown && "text-foreground",
+            "-mr-1.5 flex size-7 items-center justify-center rounded-md hover:bg-foreground/[0.05] hover:text-foreground",
+            detailsShown && "bg-foreground/[0.06] text-foreground",
           )}
         >
           <PanelRight className="size-4" />
@@ -80,6 +86,11 @@ export const ViewHeader = ({ worktree, refsById, emphasizedOther, onClearEmphasi
     </div>
   )
 }
+
+const chip = "flex h-[22px] min-w-0 items-center gap-1 rounded-md px-1.5 text-xs"
+
+const RefKindIcon = ({ kind }: { kind: Ref["kind"] }) =>
+  kind === "tag" ? <Tag aria-hidden className="size-3 flex-none" /> : <GitBranch aria-hidden className="size-3 flex-none" />
 
 const operationLabels: Record<WorktreeOperation, string> = {
   none: "",

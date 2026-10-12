@@ -35,7 +35,9 @@ export const useCheckout = ({ repo, refs, worktrees, dirtyCheckout, prompt, sele
       Commands.use((commands) => commands.checkout(repo, worktree.id, ref.id, mode)).pipe(
         Effect.tap((result) =>
           Effect.sync(() => {
-            const target = refs.find((r) => r.id === result.branch)?.shortName ?? ref.shortName
+            // A remote branch is checked out as a local branch, which may be new.
+            const branch = result.branch?.split(":refs/heads/")[1]
+            const target = branch && ref.kind === "remoteBranch" ? `${branch}, tracking ${ref.shortName}` : (branch ?? ref.shortName)
             notify({
               tone: "info",
               message: result.reapplyConflicted
