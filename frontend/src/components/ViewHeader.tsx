@@ -16,6 +16,8 @@ interface ViewHeaderProps {
   readonly view: GraphView | undefined
   /** A checkout is running, so the branch is about to change. */
   readonly checkingOut: boolean
+  /** Selects the uncommitted changes, from the count of them. */
+  readonly onShowChanges: () => void
   readonly detailsShown: boolean
   readonly onToggleDetails: () => void
 }
@@ -24,7 +26,7 @@ interface ViewHeaderProps {
  * The panel's second header level: which worktree and branch the view is
  * about, and what the graph is showing.
  */
-export const ViewHeader = ({ worktree, refsById, headEmphasized, emphasizedOther, onClearEmphasis, view, checkingOut, detailsShown, onToggleDetails }: ViewHeaderProps) => {
+export const ViewHeader = ({ worktree, refsById, headEmphasized, emphasizedOther, onClearEmphasis, view, checkingOut, detailsShown, onToggleDetails, onShowChanges }: ViewHeaderProps) => {
   const changes = worktree ? changeCount(worktree) : 0
   const head = worktree?.head.refId ? refsById.get(worktree.head.refId) : undefined
   return (
@@ -68,9 +70,12 @@ export const ViewHeader = ({ worktree, refsById, headEmphasized, emphasizedOther
           )}
           {worktree.operation !== "none" && <span className="flex-none text-xs text-warning">{operationLabels[worktree.operation]}</span>}
           {changes > 0 && (
-            <span className="flex-none text-xs text-subtle-foreground tabular-nums">
+            <button
+              onClick={onShowChanges}
+              className="flex-none rounded px-1 text-xs text-subtle-foreground tabular-nums hover:bg-foreground/[0.05] hover:text-foreground"
+            >
               {changes} uncommitted {changes === 1 ? "change" : "changes"}
-            </span>
+            </button>
           )}
         </div>
       )}

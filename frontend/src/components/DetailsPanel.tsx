@@ -17,71 +17,25 @@ interface DetailsPanelProps {
   readonly repo: RepoId
   readonly selected: LoadedRow | undefined
   readonly worktree: WorktreeId | undefined
-  /** Uncommitted changes in the worktree, shown on the Changes tab. */
-  readonly changes: number
+  /** The uncommitted changes row is selected, rather than a commit. */
+  readonly showChanges: boolean
   readonly preferences: Preferences
   /** The file whose diff is open, highlighted in the lists. */
   readonly openDiff: DiffTarget | undefined
   readonly onOpenDiff: (target: DiffTarget) => void
 }
 
-type Tab = "commit" | "changes"
-
-/** The selected commit's details, or the active worktree's uncommitted changes. */
-export const DetailsPanel = ({ repo, selected, worktree, changes, preferences, openDiff, onOpenDiff }: DetailsPanelProps) => {
-  // Selecting another commit shows its details, whichever tab was open.
-  const oid = selected?.row.oid
-  const [chosen, setChosen] = useState<{ readonly tab: Tab; readonly oid: string | undefined }>({ tab: "commit", oid })
-  const tab = chosen.oid === oid ? chosen.tab : "commit"
-  const setTab = (next: Tab) => setChosen({ tab: next, oid })
-  return (
-    <aside aria-label="Details" className="flex w-[clamp(260px,26vw,340px)] flex-none flex-col border-l">
-      <div
-        role="tablist"
-        aria-label="Details"
-        className="flex h-8 flex-none items-center gap-0.5 border-b px-2"
-        onKeyDown={(event) => {
-          if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return
-          event.preventDefault()
-          setTab(tab === "commit" ? "changes" : "commit")
-          const list = event.currentTarget
-          requestAnimationFrame(() => list.querySelector<HTMLElement>("[aria-selected=true]")?.focus())
-        }}
-      >
-        <TabButton active={tab === "commit"} onClick={() => setTab("commit")}>
-          Commit
-        </TabButton>
-        <TabButton active={tab === "changes"} onClick={() => setTab("changes")}>
-          Changes
-          {changes > 0 && <span className="ml-1.5 text-subtle-foreground tabular-nums">{changes}</span>}
-        </TabButton>
-      </div>
-      <div className="flex-1 overflow-y-auto select-text" onKeyDown={moveBetweenFiles}>
-        {tab === "commit" ? (
-          <CommitTab repo={repo} selected={selected} preferences={preferences} openDiff={openDiff} onOpenDiff={onOpenDiff} />
-        ) : worktree ? (
-          <ChangesTab worktree={worktree} openDiff={openDiff} onOpenDiff={onOpenDiff} />
-        ) : (
-          <Empty>No worktree selected</Empty>
-        )}
-      </div>
-    </aside>
-  )
-}
-
-const TabButton = ({ active, onClick, children }: { active: boolean; onClick: () => void; children: ReactNode }) => (
-  <button
-    role="tab"
-    aria-selected={active}
-    tabIndex={active ? 0 : -1}
-    onClick={onClick}
-    className={cn(
-      "flex h-6 items-center rounded-md px-2 text-xs font-medium",
-      active ? "bg-foreground/[0.08] text-foreground" : "text-subtle-foreground hover:bg-foreground/[0.05] hover:text-foreground",
-    )}
-  >
-    {children}
-  </button>
+/** Whatever is selected in the graph: a commit's details, or the active worktree's uncommitted changes. */
+export const DetailsPanel = ({ repo, selected, worktree, showChanges, preferences, openDiff, onOpenDiff }: DetailsPanelProps) => (
+  <aside aria-label="Details" className="flex w-[clamp(260px,26vw,340px)] flex-none flex-col border-l">
+    <div className="min-h-0 flex-1 overflow-y-auto select-text" onKeyDown={moveBetweenFiles}>
+      {showChanges && worktree ? (
+        <ChangesTab worktree={worktree} openDiff={openDiff} onOpenDiff={onOpenDiff} />
+      ) : (
+        <CommitTab repo={repo} selected={selected} preferences={preferences} openDiff={openDiff} onOpenDiff={onOpenDiff} />
+      )}
+    </div>
+  </aside>
 )
 
 const Empty = ({ children }: { children: string }) => (
@@ -242,6 +196,7 @@ const ChangesTab = ({ worktree, openDiff, onOpenDiff }: { worktree: WorktreeId }
 
   return (
     <div className="flex h-full flex-col">
+      <h2 className="flex-none px-4 pt-4 text-[15px] leading-snug font-semibold">Uncommitted changes</h2>
       {files.length === 0 ? (
         <div className="min-h-0 flex-1">
           <Empty>No uncommitted changes</Empty>

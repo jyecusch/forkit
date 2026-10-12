@@ -15,7 +15,7 @@ import { cn } from "@/lib/utils"
 import type { GraphView, Preferences, Ref, RefId, RepoId } from "@/model/model.gen"
 import { GraphData, type LoadedRow } from "@/services/GraphData"
 import { focusIsLost } from "./Chrome"
-import { RefBadge } from "./RefBadge"
+import { laneColor, RefBadge } from "./RefBadge"
 
 /** Rows rendered beyond the viewport on each side, for rows and graph alike. */
 const overscan = 30
@@ -41,6 +41,12 @@ interface GraphPaneProps {
   /** The active worktree's checked-out commit: ringed, and selected until the user picks one. */
   readonly activeHead: string | undefined
   readonly onSelect: (row: LoadedRow) => void
+  /** Uncommitted changes in the active worktree; with any, a row for them heads the history. */
+  readonly changes: number
+  /** The checked-out commit's row, which the uncommitted changes row joins. */
+  readonly headRow: number | undefined
+  readonly changesSelected: boolean
+  readonly onSelectChanges: () => void
   readonly scrollRequest: ScrollRequest | undefined
   /** Whether this list is on screen; hidden lists neither load nor draw. */
   readonly active: boolean
@@ -75,10 +81,15 @@ export const GraphPane = (props: GraphPaneProps) => {
   const paneWidth = useSize(sectionRef).width
   const viewportHeight = useSize(scrollRef).height
 
+  // The uncommitted changes row sits in space kept above the commits, so
+  // commit rows keep their numbering.
+  const wip = props.changes > 0
+  const wipHeight = wip ? rowHeight : 0
   const virtualizer = useVirtualizer({
     count: view.totalRows,
     getScrollElement: () => scrollRef.current,
     estimateSize: () => rowHeight,
+    paddingStart: wipHeight,
     overscan,
     // Keyboard moves keep a little context visible past the selection.
     scrollPaddingStart: rowHeight * 2,
@@ -116,7 +127,7 @@ export const GraphPane = (props: GraphPaneProps) => {
   // A row jumped to is centred, selected and brought into view sideways.
   useEffect(() => {
     if (!scrollRequest || scrollRequest.row < 0) return
-    const top = Math.max(scrollRequest.row * rowHeight - (virtualizer.scrollRect?.height ?? 0) / 2 + rowHeight / 2, 0)
+    const top = Math.max(wipHeight + scrollRequest.row * rowHeight - (virtualizer.scrollRect?.height ?? 0) / 2 + rowHeight / 2, 0)
     virtualizer.scrollToOffset(top)
     setPendingSelect(scrollRequest.row)
     setPanToRow(scrollRequest.row)
@@ -148,6 +159,18 @@ export const GraphPane = (props: GraphPaneProps) => {
   const lanes = useRatchet(viewportWidest < 0 ? 0 : Math.max(viewportWidest + 2, 2), { scrolling, resting, reset: jump.nonce })
   const columns = layoutColumns(paneWidth, lanes)
   const maxOffset = Math.max(laneX(viewportWidest) + gutter - columns.graph, 0)
+
+  // The line from the uncommitted changes needs the checked-out commit's
+  // lane, so its row is loaded even when it is far below the screen.
+  const headLoaded = props.headRow === undefined ? undefined : graphData.peek(repo, props.headRow)
+  const headRow = props.headRow
+  useForkedEffect(
+    () =>
+      active && wip && headRow !== undefined
+        ? graphData.ensure({ repo, view, emphasized, first: headRow, last: headRow })
+        : Effect.void,
+    [active, wip, graphData, repo, view, emphasized, headRow],
+  )
 
   // When the column grows enough for the rows on screen, stop panning.
   useEffect(() => {
@@ -204,7 +227,7 @@ export const GraphPane = (props: GraphPaneProps) => {
     context.setTransform(dpr, 0, 0, dpr, 0, 0)
   }, [columns.graph, canvasHeight])
 
-  const canvasTop = first * rowHeight
+  const canvasTop = wipHeight + first * rowHeight
   useLayoutEffect(() => {
     const context = canvasRef.current?.getContext("2d")
     if (!context || !palette || !active) return
@@ -214,7 +237,7 @@ export const GraphPane = (props: GraphPaneProps) => {
       geometry({
         first,
         last: Math.min(first + canvasRows, view.totalRows - 1),
-        originY: canvasTop,
+        originY: first * rowHeight,
         offsetX: clampedOffsetX,
         rowAt: (index) => graphData.peek(repo, index),
         activeHead: props.activeHead,
@@ -263,7 +286,27 @@ export const GraphPane = (props: GraphPaneProps) => {
   const selectedIndex = () =>
     items.find((item) => graphData.peek(repo, item.index)?.row.oid === selectedOid)?.index ?? props.selected?.row.index ?? -1
   const pageRows = Math.max(Math.floor(viewportHeight / rowHeight) - 1, 1)
+  const selectChanges = () => {
+    props.onSelectChanges()
+    keyedRow.current = undefined
+    virtualizer.scrollToOffset(0)
+  }
   const onKeyDown = (event: KeyboardEvent) => {
+    // Up from the first commit reaches the uncommitted changes, and down from them the first commit.
+    if (wip && props.changesSelected && (event.key === "ArrowDown" || event.key === "ArrowUp" || event.key === "Home")) {
+      event.preventDefault()
+      if (event.key === "ArrowDown") {
+        virtualizer.scrollToIndex(0)
+        setPendingSelect(0)
+        keyedRow.current = 0
+      }
+      return
+    }
+    if (wip && !props.changesSelected && (event.key === "Home" || (event.key === "ArrowUp" && (keyedRow.current ?? selectedIndex()) === 0))) {
+      event.preventDefault()
+      selectChanges()
+      return
+    }
     if ((event.metaKey || event.ctrlKey) && event.key === "c" && props.selected) {
       copySha(props.selected.row.oid)
       return
@@ -336,7 +379,7 @@ export const GraphPane = (props: GraphPaneProps) => {
               showAuthor={columns.showAuthor}
               showDate={columns.showDate}
               showCommit={columns.showCommit}
-              selected={selectedOid !== undefined && graphData.peek(repo, item.index)?.row.oid === selectedOid}
+              selected={!props.changesSelected && selectedOid !== undefined && graphData.peek(repo, item.index)?.row.oid === selectedOid}
               anyEmphasis={emphasized !== undefined}
               refsById={props.refsById}
               headRef={props.headRef}
@@ -347,16 +390,118 @@ export const GraphPane = (props: GraphPaneProps) => {
               onMenuOpenChange={onMenuOpenChange}
             />
           ))}
+          {wip && (
+            <ChangesRow
+              columns={columns.template}
+              count={props.changes}
+              selected={props.changesSelected}
+              onSelect={selectChanges}
+            />
+          )}
           <canvas
             ref={canvasRef}
             aria-hidden
             className="pointer-events-none absolute"
             style={{ top: canvasTop, left: listInset, width: columns.graph, height: canvasHeight }}
           />
+          {wip && headLoaded && (
+            <ChangesLine
+              x={laneX(headLoaded.row.lane) - clampedOffsetX}
+              width={columns.graph}
+              to={wipHeight + headLoaded.row.index * rowHeight + rowHeight / 2}
+              color={laneColor(headLoaded.row.threadId)}
+              crossings={crossings(headLoaded, first, last, (index) => graphData.peek(repo, index), wipHeight)}
+            />
+          )}
         </div>
       </div>
     </section>
   )
+}
+
+/** The uncommitted changes, as the first row of the history. */
+const ChangesRow = ({ columns, count, selected, onSelect }: { columns: string; count: number; selected: boolean; onSelect: () => void }) => (
+  <div
+    role="row"
+    aria-rowindex={0}
+    aria-selected={selected}
+    aria-label={`Uncommitted changes, ${count} ${count === 1 ? "file" : "files"}`}
+    onClick={onSelect}
+    className={cn(
+      "absolute inset-x-0 top-0 grid cursor-default items-center gap-3",
+      selected ? "bg-selection group-focus-visible/grid:shadow-[inset_2px_0_0_var(--ring)]" : "hover:bg-foreground/[0.05]",
+    )}
+    style={{ height: rowHeight, gridTemplateColumns: columns, paddingInline: listInset }}
+  >
+    <span role="gridcell" />
+    <span role="gridcell" className="flex min-w-0 items-center gap-2">
+      <span className="truncate font-medium text-foreground">Uncommitted changes</span>
+      <span className="flex-none rounded bg-foreground/[0.07] px-1.5 text-[11px] leading-[18px] text-secondary-foreground tabular-nums">
+        {count} {count === 1 ? "file" : "files"}
+      </span>
+    </span>
+  </div>
+)
+
+/**
+ * The uncommitted changes' node, drawn hollow as not yet a commit, and a
+ * dashed line down to the commit they build on.
+ */
+interface ChangesLineProps {
+  readonly x: number
+  readonly width: number
+  readonly to: number
+  readonly color: string
+  /** Where other commits' dots sit on the line, which it breaks around. */
+  readonly crossings: ReadonlyArray<number>
+}
+
+/**
+ * The heights of commits drawn in the checked-out commit's lane above it,
+ * among the rows drawn; elsewhere the line is out of sight.
+ */
+const crossings = (head: LoadedRow, first: number, last: number, rowAt: (index: number) => LoadedRow | undefined, top: number) => {
+  const ys: Array<number> = []
+  for (let index = first; index <= Math.min(last, head.row.index - 1); index++) {
+    if (rowAt(index)?.row.lane === head.row.lane) ys.push(top + index * rowHeight + rowHeight / 2)
+  }
+  return ys
+}
+
+const ChangesLine = ({ x, width, to, color, crossings }: ChangesLineProps) => {
+  if (x < 0 || x > width) return null
+  const nodeY = rowHeight / 2
+  const radius = 4
+  return (
+    <svg
+      aria-hidden
+      className="pointer-events-none absolute top-0"
+      style={{ left: listInset, width, height: to }}
+      fill="none"
+      strokeWidth={2}
+    >
+      {/* Drawn over the graph, with a halo, so it stays its own line where it crosses other commits. */}
+      {segments(nodeY + radius, to - radius - 3, crossings, 7).map(([from, end]) => (
+        <g key={from}>
+          <line x1={x} x2={x} y1={from} y2={end} stroke="var(--background)" strokeWidth={4} />
+          <line x1={x} x2={x} y1={from} y2={end} stroke={color} strokeDasharray="3 3" />
+        </g>
+      ))}
+      <circle cx={x} cy={nodeY} r={radius - 1} stroke={color} fill="var(--background)" />
+    </svg>
+  )
+}
+
+/** Splits [from, to] into pieces that leave a gap of clearance around each crossing. */
+const segments = (from: number, to: number, crossings: ReadonlyArray<number>, clearance: number) => {
+  const pieces: Array<[number, number]> = []
+  let start = from
+  for (const y of crossings) {
+    if (y - clearance > start) pieces.push([start, y - clearance])
+    start = Math.max(start, y + clearance)
+  }
+  if (to > start) pieces.push([start, to])
+  return pieces
 }
 
 const copySha = (oid: string) =>
