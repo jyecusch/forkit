@@ -1,6 +1,6 @@
 import { useLiveQuery } from "@tanstack/react-db"
 import { Plus, X } from "lucide-react"
-import { useMemo, useRef, useState, type KeyboardEvent } from "react"
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react"
 import { useRun, useSession } from "@/app/hooks"
 import { reposCollection, worktreesCollection } from "@/data/collections"
 import { noDrag } from "@/lib/platform"
@@ -23,6 +23,11 @@ export const RepoTabs = () => {
   }, [repos, session])
   const active = session?.activeRepoId
   const tabRefs = useRef(new Map<RepoId, HTMLDivElement>())
+  // Keyboard focus in the strip follows the active tab, however it changed.
+  useEffect(() => {
+    if (!active || !(document.activeElement instanceof HTMLElement)) return
+    if (document.activeElement.getAttribute("role") === "tab") tabRefs.current.get(active)?.focus()
+  }, [active])
 
   const select = (repo: RepoId) => void run(Commands.use((commands) => commands.selectRepository(repo)))
   const close = (repo: RepoId) => void run(Commands.use((commands) => commands.closeRepository(repo)))
@@ -86,7 +91,12 @@ export const RepoTabs = () => {
               drop(repo.id)
               endDrag()
             }}
-            onClick={() => select(repo.id)}
+            onClick={(event) => {
+              // A click hands focus on to the repository, as macOS tab bars
+              // do; only the keyboard keeps focus in the strip.
+              if (event.detail > 0) event.currentTarget.blur()
+              select(repo.id)
+            }}
             onAuxClick={(event) => event.button === 1 && close(repo.id)}
             onKeyDown={(event) => onKeyDown(event, index)}
             style={noDrag}

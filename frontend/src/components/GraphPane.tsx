@@ -63,6 +63,9 @@ export const GraphPane = (props: GraphPaneProps) => {
   const [palette, setPalette] = useState<GraphPalette>()
   const [panToRow, setPanToRow] = useState<number>()
   const [pendingSelect, setPendingSelect] = useState<number>()
+  // The row the keyboard last moved to, so presses that arrive before the
+  // selection catches up still count from it.
+  const keyedRow = useRef<number>(undefined)
 
   const now = useNow()
   const dataVersion = useSyncExternalStore(
@@ -133,7 +136,13 @@ export const GraphPane = (props: GraphPaneProps) => {
   // Narrowing moves text, so it waits until the pointer has left the list
   // and no menu is open.
   const [pointerOver, setPointerOver] = useState(false)
-  const resting = !useScrolling(scrollRef, restAfter) && !pointerOver && !scrolling
+  const [menuOpen, setMenuOpen] = useState(false)
+  const onMenuOpenChange = useCallback((open: boolean) => {
+    setMenuOpen(open)
+    // An open menu stops pointer events reaching the list, so look again.
+    if (!open) setPointerOver(sectionRef.current?.matches(":hover") ?? false)
+  }, [])
+  const resting = !useScrolling(scrollRef, restAfter) && !pointerOver && !menuOpen && !scrolling
   const viewportFirst = jump.landing ?? Math.floor((virtualizer.scrollOffset ?? 0) / rowHeight)
   const viewportWidest = widestLane(viewportFirst - 3, viewportFirst + viewportRows + 3, (index) => graphData.peek(repo, index))
   const lanes = useRatchet(viewportWidest < 0 ? 0 : Math.max(viewportWidest + 2, 2), { scrolling, resting, reset: jump.nonce })
@@ -153,6 +162,7 @@ export const GraphPane = (props: GraphPaneProps) => {
   // Selecting a row brings its lane into view if it is panned away.
   const onSelect = useCallback(
     (loaded: LoadedRow) => {
+      keyedRow.current = undefined
       selectRow(loaded)
       setPanToRow(loaded.row.index)
     },
@@ -267,7 +277,7 @@ export const GraphPane = (props: GraphPaneProps) => {
     const current = selectedIndex()
     // With nothing selected, the arrows start from the first row on screen.
     const firstVisible = Math.floor((virtualizer.scrollOffset ?? 0) / rowHeight)
-    const from = current >= 0 ? current : firstVisible - 1
+    const from = keyedRow.current ?? (current >= 0 ? current : firstVisible - 1)
     const target = {
       ArrowDown: from + 1,
       ArrowUp: Math.max(from - 1, 0),
@@ -281,6 +291,7 @@ export const GraphPane = (props: GraphPaneProps) => {
     const next = Math.min(target, view.totalRows - 1)
     virtualizer.scrollToIndex(next)
     setPendingSelect(next)
+    keyedRow.current = next
     if (event.key === "Home") jumpTo(0)
     if (event.key === "End") jumpTo(Math.max(view.totalRows - viewportRows, 0))
   }
@@ -333,6 +344,7 @@ export const GraphPane = (props: GraphPaneProps) => {
               dateFormat={preferences.appearance.dateFormat}
               now={now}
               onSelect={onSelect}
+              onMenuOpenChange={onMenuOpenChange}
             />
           ))}
           <canvas
@@ -423,6 +435,7 @@ interface CommitRowProps {
   readonly dateFormat: Preferences["appearance"]["dateFormat"]
   readonly now: number
   readonly onSelect: (row: LoadedRow) => void
+  readonly onMenuOpenChange: (open: boolean) => void
 }
 
 const CommitRow = memo(function CommitRow({
@@ -441,6 +454,7 @@ const CommitRow = memo(function CommitRow({
   dateFormat,
   now,
   onSelect,
+  onMenuOpenChange,
 }: CommitRowProps) {
   const style = { top, height: rowHeight, gridTemplateColumns: columns, paddingInline: listInset }
   if (!loaded) {
@@ -459,7 +473,7 @@ const CommitRow = memo(function CommitRow({
   const badges = badgesFor(row.refIds, refsById, { head: headRef, emphasized })
   const meta = cn("truncate text-xs", dim && !selected ? "text-subtle-foreground" : "text-secondary-foreground")
   return (
-    <ContextMenu>
+    <ContextMenu onOpenChange={onMenuOpenChange}>
       <ContextMenuTrigger asChild>
         <div
           role="row"

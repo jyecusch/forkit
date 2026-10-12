@@ -50,15 +50,32 @@ function DialogContent({
   children,
   showCloseButton = true,
   onInteractOutside,
+  onOpenAutoFocus,
+  onCloseAutoFocus,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   showCloseButton?: boolean
 }) {
+  // Dialogs here are opened from code more often than from a trigger, so
+  // each one puts focus back where it was when it opened.
+  const opener = React.useRef<Element | null>(null)
   return (
     <DialogPortal data-slot="dialog-portal">
       <DialogOverlay />
       <DialogPrimitive.Content
         data-slot="dialog-content"
+        onOpenAutoFocus={(event) => {
+          opener.current = document.activeElement
+          onOpenAutoFocus?.(event)
+        }}
+        onCloseAutoFocus={(event) => {
+          onCloseAutoFocus?.(event)
+          if (event.defaultPrevented) return
+          event.preventDefault()
+          const target = opener.current
+          const usable = target instanceof HTMLElement && target.isConnected && !target.closest("[inert]") && target !== document.body
+          ;(usable ? target : document.querySelector<HTMLElement>("[role=grid]:not([inert] *)"))?.focus({ preventScroll: true })
+        }}
         // Toasts sit outside the dialog but above it; using one is not leaving.
         onInteractOutside={(event) => {
           if (event.target instanceof Element && event.target.closest("[data-toast]")) event.preventDefault()
