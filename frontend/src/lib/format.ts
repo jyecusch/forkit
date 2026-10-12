@@ -43,15 +43,6 @@ export const formatDate = (millis: number, style: DateFormat, now = Date.now()):
   }
 }
 
-/** Up to two initials from a name, for avatars. */
-export const initials = (name: string): string =>
-  name
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]!.toUpperCase())
-    .join("")
-
 export const shortOid = (oid: string): string => oid.slice(0, 7)
 
 /** The last path segment, for showing a worktree by its folder name. */

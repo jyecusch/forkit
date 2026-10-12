@@ -365,13 +365,12 @@ type Session struct {
 type LayoutSize string
 
 const (
-	LayoutSizeSidebar      LayoutSize = "sidebar"
-	LayoutSizeDetails      LayoutSize = "details"
-	LayoutSizeStaged       LayoutSize = "staged"
-	LayoutSizeDiffSplit    LayoutSize = "diffSplit"
-	LayoutSizeRefsColumn   LayoutSize = "refsColumn"
-	LayoutSizeGraphColumn  LayoutSize = "graphColumn"
-	LayoutSizeAuthorColumn LayoutSize = "authorColumn"
+	LayoutSizeSidebar     LayoutSize = "sidebar"
+	LayoutSizeDetails     LayoutSize = "details"
+	LayoutSizeStaged      LayoutSize = "staged"
+	LayoutSizeDiffSplit   LayoutSize = "diffSplit"
+	LayoutSizeRefsColumn  LayoutSize = "refsColumn"
+	LayoutSizeGraphColumn LayoutSize = "graphColumn"
 )
 
 type Commit struct {

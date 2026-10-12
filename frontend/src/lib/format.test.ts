@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { baseName, formatDate, initials, reflow } from "./format"
+import { baseName, formatDate, reflow } from "./format"
 
 describe("formatDate", () => {
   const now = Date.UTC(2026, 9, 12, 12, 0, 0)
@@ -18,8 +18,7 @@ describe("formatDate", () => {
 })
 
 describe("names and paths", () => {
-  it("takes initials and base names", () => {
-    expect(initials("Priya Nair")).toBe("PN")
+  it("takes base names", () => {
     expect(baseName("/home/ada/repos/forkit/")).toBe("forkit")
     expect(baseName("C:\\code\\forkit")).toBe("forkit")
   })
