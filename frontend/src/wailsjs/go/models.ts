@@ -13,6 +13,7 @@ export namespace model {
 	    }
 	}
 	export class CheckoutResult {
+	    branch?: string;
 	    reapplyConflicted: boolean;
 	
 	    static createFrom(source: any = {}) {
@@ -21,6 +22,7 @@ export namespace model {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.branch = source["branch"];
 	        this.reapplyConflicted = source["reapplyConflicted"];
 	    }
 	}
