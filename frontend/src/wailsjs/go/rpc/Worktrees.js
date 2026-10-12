@@ -10,10 +10,26 @@ export function ChooseParentDirectory(arg1) {
   return window['go']['rpc']['Worktrees']['ChooseParentDirectory'](arg1);
 }
 
+export function Commit(arg1, arg2, arg3, arg4) {
+  return window['go']['rpc']['Worktrees']['Commit'](arg1, arg2, arg3, arg4);
+}
+
 export function Create(arg1, arg2, arg3, arg4, arg5) {
   return window['go']['rpc']['Worktrees']['Create'](arg1, arg2, arg3, arg4, arg5);
 }
 
+export function HeadMessage(arg1, arg2) {
+  return window['go']['rpc']['Worktrees']['HeadMessage'](arg1, arg2);
+}
+
 export function Remove(arg1, arg2, arg3) {
   return window['go']['rpc']['Worktrees']['Remove'](arg1, arg2, arg3);
+}
+
+export function Stage(arg1, arg2, arg3) {
+  return window['go']['rpc']['Worktrees']['Stage'](arg1, arg2, arg3);
+}
+
+export function Unstage(arg1, arg2, arg3) {
+  return window['go']['rpc']['Worktrees']['Unstage'](arg1, arg2, arg3);
 }

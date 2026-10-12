@@ -61,4 +61,4 @@ These answer the plan's open questions and record where the implementation diffe
 
 ## Not yet built
 
-From the roadmap: staging and the commit composer; fetch, pull, push and auth; merge, rebase, conflict resolution, stash management, search, blame and reflog undo; signing, notarization, installers and auto-update; the diagnostics panel, command palette and an accessibility pass.
+From the roadmap: staging hunks and lines, discarding changes, and commit signing; fetch, pull, push and auth; merge, rebase, conflict resolution, stash management, search, blame and reflog undo; signing, notarization, installers and auto-update; the diagnostics panel, command palette and an accessibility pass.

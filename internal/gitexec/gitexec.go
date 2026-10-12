@@ -122,6 +122,16 @@ func (r *Repo) Mutate(ctx context.Context, args ...string) ([]byte, error) {
 	return r.git.run(ctx, r.dir, args, nil, nil)
 }
 
+// MutateWithInput is Mutate with stdin, for commands such as "commit -F -"
+// that read what they write from it.
+func (r *Repo) MutateWithInput(ctx context.Context, stdin io.Reader, args ...string) ([]byte, error) {
+	ctx, cancel := withDefaultTimeout(ctx)
+	defer cancel()
+	r.writeLock.Lock()
+	defer r.writeLock.Unlock()
+	return r.git.run(ctx, r.dir, args, stdin, nil)
+}
+
 // Stream executes a read-only command, feeding it stdin (which may be nil),
 // and hands its stdout to consume as it is produced. The process is killed if
 // consume returns early or ctx ends.

@@ -1,8 +1,8 @@
 import { useLiveQuery } from "@tanstack/react-db"
 import { Effect } from "effect"
-import { Check, Copy } from "lucide-react"
+import { Check, Copy, Minus, Plus } from "lucide-react"
 import { useEffect, useState, type ReactNode } from "react"
-import { useForkedEffect } from "@/app/hooks"
+import { useForkedEffect, useRun } from "@/app/hooks"
 import { useNow } from "@/app/useNow"
 import { fileStatusesCollection } from "@/data/collections"
 import { formatDate, formatFullDate, initials, reflow, shortOid } from "@/lib/format"
@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils"
 import type { CommitDetail, DiffKind, FileChangeStatus, FileStatus, Preferences, RepoId, StatusCode, WorktreeId } from "@/model/model.gen"
 import type { LoadedRow } from "@/services/GraphData"
 import { Rpc } from "@/services/Rpc"
+import { CommitComposer } from "./CommitComposer"
 import { sameDiff, type DiffTarget } from "./DiffView"
 
 interface DetailsPanelProps {
@@ -189,56 +190,106 @@ const CommitTab = ({
   )
 }
 
+/** A group of changed files, and how a file moves out of it. */
+interface Group {
+  readonly title: string
+  readonly kind: DiffKind
+  readonly statusOf: (file: FileStatus) => StatusCode | undefined
+  /** Staging moves a file into the index; unstaging moves it back out. */
+  readonly action: "stage" | "unstage"
+}
+
+const groups: ReadonlyArray<Group> = [
+  { title: "Conflicted", kind: "unstaged", action: "stage", statusOf: (f) => (f.index === "unmerged" ? f.index : undefined) },
+  {
+    title: "Staged",
+    kind: "staged",
+    action: "unstage",
+    statusOf: (f) => (f.index !== "unmodified" && f.index !== "untracked" && f.index !== "unmerged" ? f.index : undefined),
+  },
+  {
+    title: "Unstaged",
+    kind: "unstaged",
+    action: "stage",
+    statusOf: (f) => (f.workTree !== "unmodified" && f.workTree !== "untracked" && f.workTree !== "unmerged" ? f.workTree : undefined),
+  },
+  { title: "Untracked", kind: "untracked", action: "stage", statusOf: (f) => (f.index === "untracked" ? f.index : undefined) },
+]
+
 const ChangesTab = ({ worktree, openDiff, onOpenDiff }: { worktree: WorktreeId } & FileListProps) => {
+  const run = useRun()
   const { data: files } = useLiveQuery({ query: (q) => q.from({ file: fileStatusesCollection(worktree) }) })
-  if (files.length === 0) {
-    return <Empty>No uncommitted changes</Empty>
+  const sections = groups.flatMap((group) => {
+    const entries = files
+      .flatMap((file) => {
+        const status = group.statusOf(file)
+        return status ? [{ file, status }] : []
+      })
+      .sort((a, b) => a.file.path.localeCompare(b.file.path))
+    return entries.length > 0 ? [{ group, entries }] : []
+  })
+  const staged = sections.find((section) => section.group.kind === "staged")?.entries.length ?? 0
+
+  // Moves files in or out of the index. An open diff of one of them follows
+  // it to its new group.
+  const apply = (action: Group["action"], paths: ReadonlyArray<string>) => {
+    const open = openDiff?.request
+    if (open?.worktreeId === worktree && paths.includes(open.path)) {
+      onOpenDiff({ ...openDiff!, request: { ...open, kind: action === "stage" ? "staged" : "unstaged" } })
+    }
+    void run(Rpc.use((rpc) => (action === "stage" ? rpc.stage(worktree, paths) : rpc.unstage(worktree, paths))))
   }
-  const groups: Array<[string, DiffKind, (file: FileStatus) => StatusCode | undefined]> = [
-    ["Conflicted", "unstaged", (f) => (f.index === "unmerged" ? f.index : undefined)],
-    ["Staged", "staged", (f) => (f.index !== "unmodified" && f.index !== "untracked" && f.index !== "unmerged" ? f.index : undefined)],
-    [
-      "Unstaged",
-      "unstaged",
-      (f) => (f.workTree !== "unmodified" && f.workTree !== "untracked" && f.workTree !== "unmerged" ? f.workTree : undefined),
-    ],
-    ["Untracked", "untracked", (f) => (f.index === "untracked" ? f.index : undefined)],
-  ]
+
   return (
-    <div className="flex flex-col pb-2">
-      {groups.map(([title, kind, statusOf]) => {
-        const entries = files.flatMap((file) => {
-          const status = statusOf(file)
-          return status ? [{ file, status }] : []
-        })
-        if (entries.length === 0) return null
-        return (
-          <section key={title}>
-            <h3 className="flex justify-between px-4 pt-3 pb-1.5 text-xs font-medium text-subtle-foreground">
-              <span>{title}</span>
-              <span>{entries.length}</span>
-            </h3>
-            <ul className="flex flex-col px-2">
-              {entries
-                .sort((a, b) => a.file.path.localeCompare(b.file.path))
-                .map(({ file, status }) => {
+    <div className="flex h-full flex-col">
+      {files.length === 0 ? (
+        <div className="min-h-0 flex-1">
+          <Empty>No uncommitted changes</Empty>
+        </div>
+      ) : (
+        <div className="flex-1 overflow-y-auto pb-2">
+          {sections.map(({ group, entries }) => (
+            <section key={group.title}>
+              <h3 className="flex h-9 items-end justify-between gap-2 px-4 pb-1.5 text-xs font-medium text-subtle-foreground">
+                <span>
+                  {group.title} <span className="font-normal tabular-nums">{entries.length}</span>
+                </span>
+                <button
+                  onClick={() => apply(group.action, entries.map(({ file }) => file.path))}
+                  className="-mr-1.5 rounded px-1.5 py-0.5 font-normal hover:bg-foreground/[0.05] hover:text-foreground"
+                >
+                  {group.action === "stage" ? "Stage all" : "Unstage all"}
+                </button>
+              </h3>
+              <ul className="flex flex-col px-2">
+                {entries.map(({ file, status }) => {
                   const target: DiffTarget = {
-                    request: { kind, worktreeId: worktree, path: file.path, ...(file.oldPath && { oldPath: file.oldPath }) },
+                    request: { kind: group.kind, worktreeId: worktree, path: file.path, ...(file.oldPath && { oldPath: file.oldPath }) },
                     conflicted: status === "unmerged",
                   }
                   return (
-                    <li key={file.id}>
+                    <li key={file.id} className="group/file relative">
                       <FileButton target={target} openDiff={openDiff} onOpenDiff={onOpenDiff}>
                         <StatusBadge letter={statusLetters[status]} tone={statusTones[status]} />
                         <FilePath path={file.path} title={file.path} />
                       </FileButton>
+                      <button
+                        aria-label={`${group.action === "stage" ? "Stage" : "Unstage"} ${file.path}`}
+                        title={group.action === "stage" ? "Stage" : "Unstage"}
+                        onClick={() => apply(group.action, [file.path])}
+                        className="absolute top-1/2 right-1 flex size-5 -translate-y-1/2 items-center justify-center rounded bg-background text-subtle-foreground opacity-0 group-focus-within/file:opacity-100 group-hover/file:opacity-100 hover:text-foreground focus-visible:opacity-100"
+                      >
+                        {group.action === "stage" ? <Plus className="size-3.5" /> : <Minus className="size-3.5" />}
+                      </button>
                     </li>
                   )
                 })}
-            </ul>
-          </section>
-        )
-      })}
+              </ul>
+            </section>
+          ))}
+        </div>
+      )}
+      <CommitComposer worktree={worktree} staged={staged} />
     </div>
   )
 }

@@ -248,6 +248,34 @@ func (x *Worktrees) Remove(meta model.CallMeta, worktreeID model.WorktreeID, for
 	}, attribute.String("worktree.id", string(worktreeID)))
 }
 
+// Stage adds paths' current contents to a worktree's index.
+func (x *Worktrees) Stage(meta model.CallMeta, worktreeID model.WorktreeID, paths []string) error {
+	return callNoResult(x.s, meta, "Worktrees.Stage", func(ctx context.Context) error {
+		return x.s.deps.Workspace.Stage(ctx, worktreeID, paths)
+	}, attribute.String("worktree.id", string(worktreeID)), attribute.Int("paths", len(paths)))
+}
+
+// Unstage returns paths in a worktree's index to their state in HEAD.
+func (x *Worktrees) Unstage(meta model.CallMeta, worktreeID model.WorktreeID, paths []string) error {
+	return callNoResult(x.s, meta, "Worktrees.Unstage", func(ctx context.Context) error {
+		return x.s.deps.Workspace.Unstage(ctx, worktreeID, paths)
+	}, attribute.String("worktree.id", string(worktreeID)), attribute.Int("paths", len(paths)))
+}
+
+// Commit records a worktree's staged changes, or amends its last commit.
+func (x *Worktrees) Commit(meta model.CallMeta, worktreeID model.WorktreeID, message string, amend bool) (model.OID, error) {
+	return call(x.s, meta, "Worktrees.Commit", func(ctx context.Context) (model.OID, error) {
+		return x.s.deps.Workspace.Commit(ctx, worktreeID, message, amend)
+	}, attribute.String("worktree.id", string(worktreeID)), attribute.Bool("commit.amend", amend))
+}
+
+// HeadMessage returns the message of a worktree's checked-out commit.
+func (x *Worktrees) HeadMessage(meta model.CallMeta, worktreeID model.WorktreeID) (string, error) {
+	return call(x.s, meta, "Worktrees.HeadMessage", func(ctx context.Context) (string, error) {
+		return x.s.deps.Workspace.HeadMessage(ctx, worktreeID)
+	}, attribute.String("worktree.id", string(worktreeID)))
+}
+
 // ChooseParentDirectory asks the user where to put a new worktree and
 // returns "" if they cancel.
 func (x *Worktrees) ChooseParentDirectory(meta model.CallMeta) (string, error) {
