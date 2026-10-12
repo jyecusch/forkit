@@ -17,7 +17,7 @@ export const Welcome = () => {
           <SidebarFooter />
         </>
       }
-      header={<RepoTabs />}
+      tabs={<RepoTabs />}
     >
       <div className="flex flex-1 flex-col items-center justify-center gap-4 text-secondary-foreground">
         <FolderGit2 aria-hidden className="size-10 text-subtle-foreground" />

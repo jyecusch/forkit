@@ -1,66 +1,127 @@
-import type { Ref, Remote } from "@/model/model.gen"
+import type { Ref, RefId, Remote, Worktree } from "@/model/model.gen"
+import { baseName } from "./format"
 
-/** One line of the reference navigator. */
+/** One line of the sidebar navigator. */
 export type NavRow =
-  | { readonly type: "section"; readonly id: string; readonly title: string; readonly count: number; readonly collapsed: boolean }
+  | { readonly type: "section"; readonly id: SectionId; readonly title: string; readonly count: number; readonly collapsed: boolean }
+  | { readonly type: "worktree"; readonly id: string; readonly worktree: Worktree; readonly name: string }
+  | { readonly type: "remote"; readonly id: string; readonly remote: Remote; readonly count: number; readonly collapsed: boolean }
   | { readonly type: "folder"; readonly id: string; readonly name: string; readonly depth: number; readonly collapsed: boolean }
   | { readonly type: "ref"; readonly id: string; readonly name: string; readonly depth: number; readonly ref: Ref }
 
-interface Group {
-  readonly id: string
-  readonly title: string
-  readonly refs: ReadonlyArray<{ readonly name: string; readonly ref: Ref }>
-}
+export type SectionId = "worktrees" | "branches" | "remotes" | "tags" | "stashes"
 
-/** Whether a node starts collapsed before the user toggles it. */
-const collapsedByDefault = (id: string) => id === "tags" || id.includes("/")
-
-/**
- * Flattens refs into navigator rows: sections for local branches, each
- * remote, tags and stashes, with "/"-separated names nested as folders.
- * toggled holds the IDs the user expanded or collapsed. While filtering,
- * every match is shown.
- */
-export const buildNavRows = (
-  refs: ReadonlyArray<Ref>,
-  remotes: ReadonlyArray<Remote>,
-  toggled: ReadonlySet<string>,
-  filter: string,
-): Array<NavRow> => {
-  const query = filter.trim().toLowerCase()
-  const matches = (ref: Ref) => query === "" || ref.shortName.toLowerCase().includes(query)
-  const isCollapsed = (id: string) => query === "" && collapsedByDefault(id) !== toggled.has(id)
-
-  const byKind = (kind: Ref["kind"]) => refs.filter((ref) => ref.kind === kind && matches(ref))
-  const groups: Array<Group> = [
-    { id: "local", title: "Local branches", refs: byKind("localBranch").map((ref) => ({ name: ref.shortName, ref })) },
-    ...remotes.map((remote) => ({
-      id: `remote:${remote.name}`,
-      title: remote.name,
-      refs: byKind("remoteBranch")
-        .filter((ref) => ref.remoteId === remote.id)
-        .map((ref) => ({ name: ref.shortName.slice(remote.name.length + 1), ref })),
-    })),
-    { id: "tags", title: "Tags", refs: byKind("tag").map((ref) => ({ name: ref.shortName, ref })) },
-    { id: "stashes", title: "Stashes", refs: byKind("stash").map((ref) => ({ name: ref.shortName, ref })) },
-  ]
-
-  const rows: Array<NavRow> = []
-  for (const group of groups) {
-    if (group.refs.length === 0) {
-      continue
-    }
-    const collapsed = isCollapsed(group.id)
-    rows.push({ type: "section", id: group.id, title: group.title, count: group.refs.length, collapsed })
-    if (!collapsed) {
-      appendTree(rows, group.id, group.refs, 0, isCollapsed)
-    }
-  }
-  return rows
+export interface NavInput {
+  readonly refs: ReadonlyArray<Ref>
+  readonly remotes: ReadonlyArray<Remote>
+  readonly worktrees: ReadonlyArray<Worktree>
+  /** Refs whose folders are always open, such as the checked-out branch. */
+  readonly reveal: ReadonlyArray<RefId>
+  /** Node IDs the user expanded or collapsed, flipping their default. */
+  readonly toggled: ReadonlySet<string>
+  readonly filter: string
 }
 
 /** Orders names the way people expect, with fix-9 before fix-10. */
 const byName = (a: string, b: string) => a.localeCompare(b, undefined, { numeric: true })
+
+/**
+ * Flattens a repository into navigator rows: worktrees, local branches,
+ * remotes (each holding its branches), tags and stashes, with "/"-separated
+ * names nested as folders. While filtering, every match is shown.
+ */
+export const buildNavRows = ({ refs, remotes, worktrees, reveal, toggled, filter }: NavInput): Array<NavRow> => {
+  const query = filter.trim().toLowerCase()
+  const matches = (text: string) => query === "" || text.toLowerCase().includes(query)
+  const revealed = revealedNodes(refs, remotes, reveal)
+  const isCollapsed = (id: string, byDefault: boolean) =>
+    query === "" && (revealed.has(id) ? false : byDefault !== toggled.has(id))
+
+  const rows: Array<NavRow> = []
+  const section = (id: SectionId, title: string, count: number, byDefault: boolean, fill: () => void) => {
+    if (count === 0) return
+    const collapsed = isCollapsed(id, byDefault)
+    rows.push({ type: "section", id, title, count, collapsed })
+    if (!collapsed) fill()
+  }
+
+  const shownWorktrees = worktrees
+    .filter((wt) => matches(baseName(wt.path)) || matches(branchOf(wt, refs)))
+    .sort((a, b) => Number(b.isMain) - Number(a.isMain) || byName(baseName(a.path), baseName(b.path)))
+  section("worktrees", "Worktrees", shownWorktrees.length, false, () => {
+    for (const worktree of shownWorktrees) rows.push({ type: "worktree", id: worktree.id, worktree, name: baseName(worktree.path) })
+  })
+
+  const ofKind = (kind: Ref["kind"]) => refs.filter((ref) => ref.kind === kind && matches(ref.shortName))
+  const branches = ofKind("localBranch")
+  section("branches", "Branches", branches.length, false, () =>
+    appendTree(rows, "branches", branches.map((ref) => ({ name: ref.shortName, ref })), 0, (id) => isCollapsed(id, false)),
+  )
+
+  const remoteBranches = ofKind("remoteBranch")
+  const orderedRemotes = [...remotes].sort((a, b) => Number(b.name === "origin") - Number(a.name === "origin") || byName(a.name, b.name))
+  const branchesOf = (remote: Remote) =>
+    remoteBranches.filter((ref) => ref.remoteId === remote.id).map((ref) => ({ name: ref.shortName.slice(remote.name.length + 1), ref }))
+  const shownRemotes = orderedRemotes.filter((remote) => query === "" || branchesOf(remote).length > 0)
+  section("remotes", "Remotes", shownRemotes.length, false, () => {
+    for (const remote of shownRemotes) {
+      const id = `remote:${remote.name}`
+      const entries = branchesOf(remote)
+      const collapsed = isCollapsed(id, true)
+      rows.push({ type: "remote", id, remote, count: entries.length, collapsed })
+      if (!collapsed) appendTree(rows, id, entries, 1, (folder) => isCollapsed(folder, true))
+    }
+  })
+
+  const tags = ofKind("tag")
+  section("tags", "Tags", tags.length, true, () =>
+    appendTree(rows, "tags", tags.map((ref) => ({ name: ref.shortName, ref })), 0, (id) => isCollapsed(id, true)),
+  )
+
+  const stashes = ofKind("stash")
+  section("stashes", "Stashes", stashes.length, true, () => {
+    for (const ref of stashes) rows.push({ type: "ref", id: ref.id, name: ref.shortName, depth: 0, ref })
+  })
+  return rows
+}
+
+const branchOf = (worktree: Worktree, refs: ReadonlyArray<Ref>) =>
+  refs.find((ref) => ref.id === worktree.head.refId)?.shortName ?? ""
+
+/** The IDs of every section, remote and folder that contains a revealed ref. */
+const revealedNodes = (refs: ReadonlyArray<Ref>, remotes: ReadonlyArray<Remote>, reveal: ReadonlyArray<RefId>) => {
+  const nodes = new Set<string>()
+  for (const ref of refs) {
+    if (!reveal.includes(ref.id)) continue
+    let parent: string
+    let name = ref.shortName
+    switch (ref.kind) {
+      case "localBranch":
+        parent = "branches"
+        break
+      case "remoteBranch": {
+        const remote = remotes.find((r) => r.id === ref.remoteId)
+        if (!remote) continue
+        nodes.add("remotes")
+        parent = `remote:${remote.name}`
+        name = ref.shortName.slice(remote.name.length + 1)
+        break
+      }
+      case "tag":
+        parent = "tags"
+        break
+      default:
+        parent = "stashes"
+    }
+    nodes.add(parent)
+    const parts = name.split("/").slice(0, -1)
+    for (const part of parts) {
+      parent = `${parent}/${part}`
+      nodes.add(parent)
+    }
+  }
+  return nodes
+}
 
 const appendTree = (
   rows: Array<NavRow>,

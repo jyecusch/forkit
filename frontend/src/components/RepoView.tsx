@@ -16,14 +16,14 @@ import { Commands } from "@/services/Commands"
 import type { LoadedRow } from "@/services/GraphData"
 import { DetailsPanel } from "./DetailsPanel"
 import { GraphPane, type ScrollRequest } from "./GraphPane"
-import { RefNav } from "./RefNav"
+import { RepoNav } from "./RepoNav"
 import { Chrome } from "./Chrome"
 import { RepoTabs } from "./RepoTabs"
 import { SidebarFooter } from "./SidebarFooter"
 import { NewWorktreeDialog } from "./NewWorktreeDialog"
 import { Prompt, type PromptSpec } from "./Prompt"
 import { useCheckout } from "./useCheckout"
-import { headLabel, WorktreeTabs } from "./WorktreeTabs"
+import { ViewHeader } from "./ViewHeader"
 
 interface RepoViewProps {
   readonly repo: Repo
@@ -47,7 +47,6 @@ export const RepoView = ({ repo, openRepo, preferences }: RepoViewProps) => {
     () => [...worktrees].sort((a, b) => Number(b.isMain) - Number(a.isMain) || a.path.localeCompare(b.path)),
     [worktrees],
   )
-  const sortedRemotes = useMemo(() => [...remotes].sort((a, b) => a.name.localeCompare(b.name)), [remotes])
   const refsById = useMemo(() => new Map<string, Ref>(refs.map((ref) => [ref.id, ref])), [refs])
 
   const activeWorktree =
@@ -102,58 +101,38 @@ export const RepoView = ({ repo, openRepo, preferences }: RepoViewProps) => {
     })
   }
 
-  const emphasizedRef = emphasized ? refsById.get(emphasized) : undefined
+  const headBranch = headRef ? refsById.get(headRef) : undefined
+  const emphasizedOther = emphasized && emphasized !== headRef ? refsById.get(emphasized) : undefined
+  const reveal = useMemo(() => [headRef, emphasized].filter((ref): ref is NonNullable<typeof ref> => ref !== undefined), [headRef, emphasized])
+
   const sidebar = (
     <>
-      <RefNav
+      <RepoNav
         refs={refs}
-        remotes={sortedRemotes}
+        remotes={remotes}
         worktrees={worktrees}
         activeWorktree={activeWorktree?.id}
         emphasized={emphasized}
+        reveal={reveal}
         onEmphasize={emphasize}
         onCheckout={(ref) => checkout(ref, activeWorktree)}
-        onNewWorktree={setNewWorktreeBase}
+        onNewWorktree={(base) => setNewWorktreeBase(base ?? headBranch ?? refs.find((ref) => ref.kind === "localBranch"))}
+        onSelectWorktree={selectWorktree}
+        onRemoveWorktree={removeWorktree}
       />
       <SidebarFooter>
-        {running.length > 0 ? (
-          <span className="animate-pulse truncate text-primary">{operationLabels[running[0]!.kind]}…</span>
-        ) : (
-          <span className="truncate" title={`Watching ${worktrees.length} ${worktrees.length === 1 ? "worktree" : "worktrees"}`}>
-            <span className="mr-1.5 inline-block size-1.5 rounded-full bg-success align-middle" />
-            {activeWorktree ? `${baseName(activeWorktree.path)} on ${headLabel(activeWorktree, refsById)}` : repo.name}
-          </span>
-        )}
+        {running.length > 0 && <span className="animate-pulse truncate text-primary">{operationLabels[running[0]!.kind]}…</span>}
       </SidebarFooter>
     </>
   )
   return (
-    <Chrome sidebar={sidebar} header={<RepoTabs />}>
-      <WorktreeTabs
-        worktrees={sortedWorktrees}
+    <Chrome sidebar={sidebar} tabs={<RepoTabs />}>
+      <ViewHeader
+        worktree={activeWorktree}
         refsById={refsById}
-        active={activeWorktree?.id}
-        onSelect={selectWorktree}
-        onCreate={() => setNewWorktreeBase(emphasizedRef ?? (headRef ? refsById.get(headRef) : undefined))}
-        onRemove={removeWorktree}
-        trailing={
-          <div className="flex flex-none items-center gap-3 text-xs whitespace-nowrap text-subtle-foreground">
-            {emphasizedRef && (
-              <span
-                className="flex items-center gap-1.5"
-                title="Its first-parent history is drawn at full strength; other history is dimmed"
-              >
-                <span className="size-1.5 rounded-full bg-primary" />
-                <span className="max-w-48 truncate text-secondary-foreground">{emphasizedRef.shortName}</span>
-              </span>
-            )}
-            {view && (
-              <span className="tabular-nums">
-                {view.totalRows.toLocaleString()} commits{view.complete ? "" : "…"}
-              </span>
-            )}
-          </div>
-        }
+        emphasizedOther={emphasizedOther}
+        onClearEmphasis={() => headBranch && emphasize(headBranch)}
+        view={view}
       />
       <div className="flex min-h-0 flex-1">
         <main className="flex min-h-0 min-w-0 flex-1 flex-col">

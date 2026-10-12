@@ -14,8 +14,6 @@ export const readPalette = (element: Element): GraphPalette => {
 
 const lineWidth = 2
 const dotRadius = 4
-/** Space cleared around every dot, so lines stop short of it. */
-const dotHalo = 2
 /** Radius of the bend where a line changes lane. */
 const elbowRadius = 8
 
@@ -79,9 +77,12 @@ const drawDot = (context: CanvasRenderingContext2D, dot: Dot, color: string, bac
     context.arc(dot.x, dot.y, radius, 0, Math.PI * 2)
   }
   const outer = dot.shape === "head" ? dotRadius + 3 : dotRadius
-  context.fillStyle = background
-  circle(outer + dotHalo)
-  context.fill()
+  if (dot.shape !== "commit") {
+    // Rings are hollow, so clear the lines that run into them.
+    context.fillStyle = background
+    circle(outer)
+    context.fill()
+  }
 
   switch (dot.shape) {
     case "commit":
