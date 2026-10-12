@@ -187,6 +187,7 @@ export namespace model {
 	    worktreeId?: string;
 	    path: string;
 	    oldPath?: string;
+	    ignoreWhitespace?: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new DiffRequest(source);
@@ -199,6 +200,7 @@ export namespace model {
 	        this.worktreeId = source["worktreeId"];
 	        this.path = source["path"];
 	        this.oldPath = source["oldPath"];
+	        this.ignoreWhitespace = source["ignoreWhitespace"];
 	    }
 	}
 	

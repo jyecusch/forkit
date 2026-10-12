@@ -208,6 +208,11 @@ export const GraphPreferences = Schema.Struct({
 })
 export type GraphPreferences = typeof GraphPreferences.Type
 
+export const DiffPreferences = Schema.Struct({
+  ignoreWhitespace: Schema.Boolean,
+})
+export type DiffPreferences = typeof DiffPreferences.Type
+
 export const GitPreferences = Schema.Struct({
   binaryPath: Schema.String,
   maintainCommitGraph: Schema.Boolean,
@@ -230,6 +235,7 @@ export const Preferences = Schema.Struct({
   version: Schema.Int,
   appearance: AppearancePreferences,
   graph: GraphPreferences,
+  diff: DiffPreferences,
   git: GitPreferences,
   behaviour: BehaviourPreferences,
   telemetry: TelemetryPreferences,
@@ -327,6 +333,7 @@ export const DiffRequest = Schema.Struct({
   worktreeId: Schema.optionalKey(WorktreeId),
   path: Schema.String,
   oldPath: Schema.optionalKey(Schema.String),
+  ignoreWhitespace: Schema.optionalKey(Schema.Boolean),
 })
 export type DiffRequest = typeof DiffRequest.Type
 

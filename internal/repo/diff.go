@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -49,6 +50,10 @@ func ReadDiff(ctx context.Context, git *gitexec.Git, loc Location, dir string, r
 }
 
 func diffArgs(ctx context.Context, git *gitexec.Git, loc Location, req model.DiffRequest) ([]string, error) {
+	flags := diffFlags
+	if req.IgnoreWhitespace != nil && *req.IgnoreWhitespace {
+		flags = append(slices.Clone(diffFlags), "--ignore-all-space")
+	}
 	paths := []string{"--", req.Path}
 	if req.OldPath != "" {
 		// Both sides of a rename, so git can pair them.
@@ -60,7 +65,7 @@ func diffArgs(ctx context.Context, git *gitexec.Git, loc Location, req model.Dif
 		if err != nil {
 			return nil, err
 		}
-		args := append([]string{"diff-tree", "-p", "-r"}, diffFlags...)
+		args := append([]string{"diff-tree", "-p", "-r"}, flags...)
 		if fields := strings.Fields(string(parents)); len(fields) > 1 {
 			args = append(args, fields[1], fields[0])
 		} else {
@@ -68,11 +73,11 @@ func diffArgs(ctx context.Context, git *gitexec.Git, loc Location, req model.Dif
 		}
 		return append(args, paths...), nil
 	case model.DiffKindStaged:
-		return append(append([]string{"diff", "--cached"}, diffFlags...), paths...), nil
+		return append(append([]string{"diff", "--cached"}, flags...), paths...), nil
 	case model.DiffKindUnstaged:
-		return append(append([]string{"diff"}, diffFlags...), paths...), nil
+		return append(append([]string{"diff"}, flags...), paths...), nil
 	case model.DiffKindUntracked:
-		return append(append([]string{"diff", "--no-index"}, diffFlags...), "--", "/dev/null", req.Path), nil
+		return append(append([]string{"diff", "--no-index"}, flags...), "--", "/dev/null", req.Path), nil
 	}
 	return nil, apperr.New(model.ErrorCodeInvalidArgument, "unknown diff kind")
 }

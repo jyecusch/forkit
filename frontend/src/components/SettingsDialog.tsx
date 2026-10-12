@@ -76,6 +76,12 @@ export const SettingsDialog = ({ open, onOpenChange, preferences: p }: SettingsD
             </Row>
           </Group>
 
+          <Group title="Diffs">
+            <Row label="Ignore whitespace" hint="Lines that differ only in spacing show as unchanged." end>
+              <Switch checked={p.diff.ignoreWhitespace} onCheckedChange={(v) => set("diff.ignoreWhitespace", v)} />
+            </Row>
+          </Group>
+
           <Group title="Git">
             <Row label="Git binary" hint="Empty uses git from PATH. Applies after restart.">
               <TextInput key={p.git.binaryPath} value={p.git.binaryPath} placeholder="git" onCommit={(v) => set("git.binaryPath", v)} />

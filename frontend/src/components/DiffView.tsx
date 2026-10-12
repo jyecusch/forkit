@@ -1,14 +1,15 @@
 import { useVirtualizer } from "@tanstack/react-virtual"
 import { Effect } from "effect"
-import { ChevronDown, ChevronLeft, ChevronUp } from "lucide-react"
+import { ChevronDown, ChevronLeft, ChevronUp, Space } from "lucide-react"
 import { useEffect, useMemo, useRef, useState } from "react"
-import { useForkedEffect } from "@/app/hooks"
+import { useForkedEffect, usePreferences, useRun } from "@/app/hooks"
 import { highlight } from "@/highlight/client"
 import { syntaxStyles, tokenStride } from "@/highlight/styles"
 import { shortOid } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import { wordDiff, type Range } from "@/lib/wordDiff"
 import type { DiffHunk, DiffLine, DiffRequest, FileDiff, RepoId } from "@/model/model.gen"
+import { Preferences } from "@/services/Preferences"
 import { Rpc } from "@/services/Rpc"
 
 /** A file whose changes are shown, and where they come from. */
@@ -59,7 +60,11 @@ type Side = 0 | 1
  * move between changes.
  */
 export const DiffView = ({ repo, target, revision, active, onClose }: DiffViewProps) => {
-  const { request } = target
+  const run = useRun()
+  const ignoreWhitespace = usePreferences()?.diff.ignoreWhitespace ?? false
+  const setIgnoreWhitespace = (ignore: boolean) =>
+    void run(Preferences.use((preferences) => preferences.set("diff.ignoreWhitespace", ignore)))
+  const request: DiffRequest = { ...target.request, ignoreWhitespace }
   const [loaded, setLoaded] = useState<{ readonly target: DiffTarget; readonly diff: FileDiff }>()
   const [failed, setFailed] = useState<string>()
   const reloadOn = request.kind === "commit" ? 0 : revision
@@ -73,7 +78,7 @@ export const DiffView = ({ repo, target, revision, active, onClose }: DiffViewPr
             Effect.tapError((error) => Effect.sync(() => setFailed(error.message))),
             Effect.ignore,
           ),
-    [repo, request.kind, request.oid, request.worktreeId, request.path, request.oldPath, target.conflicted, reloadOn],
+    [repo, request.kind, request.oid, request.worktreeId, request.path, request.oldPath, ignoreWhitespace, target.conflicted, reloadOn],
   )
   // A reload keeps showing the previous diff of the same file until it arrives.
   const diff = sameDiff(loaded?.target, target) ? loaded?.diff : undefined
@@ -92,12 +97,12 @@ export const DiffView = ({ repo, target, revision, active, onClose }: DiffViewPr
       let diff = cache.get(removed)
       if (diff === undefined) {
         const [before, after] = [rows[removed], rows[Math.max(row, partner)]]
-        diff = before?.type === "line" && after?.type === "line" ? wordDiff(before.line.text, after.line.text) : null
+        diff = before?.type === "line" && after?.type === "line" ? wordDiff(before.line.text, after.line.text, ignoreWhitespace) : null
         cache.set(removed, diff)
       }
       return diff ? (row === removed ? diff.before : diff.after) : undefined
     }
-  }, [rows, partners])
+  }, [rows, partners, ignoreWhitespace])
 
   // Highlighting arrives after the plain text, from a worker.
   const [highlighted, setHighlighted] = useState<{ readonly texts: unknown; readonly sides: ReadonlyArray<LineTokens> }>()
@@ -168,15 +173,22 @@ export const DiffView = ({ repo, target, revision, active, onClose }: DiffViewPr
     return () => window.removeEventListener("keydown", onKey)
   })
 
-  const message = target.conflicted
-    ? "This file has conflicts. Resolve them, and its changes appear here."
-    : failed && !diff
-      ? failed
-      : diff?.binary
-        ? "Binary file, not shown"
-        : diff && diff.hunks.length === 0
-          ? "No changes to its content"
-          : undefined
+  const message: React.ReactNode = target.conflicted ? (
+    "This file has conflicts. Resolve them, and its changes appear here."
+  ) : failed && !diff ? (
+    failed
+  ) : diff?.binary ? (
+    "Binary file, not shown"
+  ) : diff && diff.hunks.length === 0 && ignoreWhitespace ? (
+    <>
+      Only whitespace changed.
+      <button className="ml-1.5 font-medium text-primary hover:underline" onClick={() => setIgnoreWhitespace(false)}>
+        Show whitespace changes
+      </button>
+    </>
+  ) : diff && diff.hunks.length === 0 ? (
+    "No changes to its content"
+  ) : undefined
 
   return (
     <section aria-label={`Changes to ${request.path}`} className="absolute inset-0 z-10 flex flex-col bg-background">
@@ -195,6 +207,15 @@ export const DiffView = ({ repo, target, revision, active, onClose }: DiffViewPr
         </span>
         {diff && !diff.binary && (
           <span className="ml-auto flex flex-none items-center gap-3">
+            <button
+              aria-label="Ignore whitespace"
+              aria-pressed={ignoreWhitespace}
+              title={ignoreWhitespace ? "Showing changes other than whitespace" : "Ignore changes to whitespace"}
+              onClick={() => setIgnoreWhitespace(!ignoreWhitespace)}
+              className={cn(navButton, ignoreWhitespace && "bg-foreground/[0.08] text-foreground")}
+            >
+              <Space className="size-4" />
+            </button>
             <span className="flex gap-2 font-mono text-[11px] tabular-nums">
               <span className="text-success">+{stats.added}</span>
               <span className="text-destructive">−{stats.removed}</span>
