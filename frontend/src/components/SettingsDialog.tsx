@@ -7,6 +7,8 @@ import { Slider } from "@/components/ui/slider"
 import { Switch } from "@/components/ui/switch"
 import type { Preferences as PreferencesData } from "@/model/model.gen"
 import { Preferences, type PreferencePath, type PreferenceValue } from "@/services/Preferences"
+import { darkThemes, lightThemes } from "@/lib/themes"
+import { cn } from "@/lib/utils"
 
 interface SettingsDialogProps {
   readonly open: boolean
@@ -29,12 +31,19 @@ export const SettingsDialog = ({ open, onOpenChange, preferences: p }: SettingsD
         </DialogHeader>
         <div className="flex flex-col gap-4 overflow-y-auto px-5 pt-3 pb-5 [mask-image:linear-gradient(to_bottom,transparent,black_12px,black_calc(100%-16px),transparent)]">
           <Group title="Appearance">
-            <Row label="Theme">
-              <Choice
-                value={p.appearance.theme}
-                options={{ system: "Match system", "tokyo-night": "Tokyo Night", "tokyo-night-day": "Tokyo Night Day" }}
-                onChange={(v) => set("appearance.theme", v)}
+            <Row label="Appearance">
+              <Segmented
+                label="Appearance"
+                value={p.appearance.appearance}
+                options={{ system: "System", light: "Light", dark: "Dark" }}
+                onChange={(v) => set("appearance.appearance", v)}
               />
+            </Row>
+            <Row label="Light theme">
+              <Choice value={p.appearance.lightTheme} options={lightThemes} onChange={(v) => set("appearance.lightTheme", v)} />
+            </Row>
+            <Row label="Dark theme">
+              <Choice value={p.appearance.darkTheme} options={darkThemes} onChange={(v) => set("appearance.darkTheme", v)} />
             </Row>
             <Row label="Font size">
               <Choice
@@ -121,6 +130,36 @@ const Row = ({ label, hint, end = false, children }: { label: string; hint?: str
       {hint && <span className="text-xs text-subtle-foreground">{hint}</span>}
     </div>
     <div className={end ? "flex justify-end" : "flex"}>{children}</div>
+  </div>
+)
+
+/** A few mutually exclusive options side by side, filling the control column. */
+const Segmented = <V extends string>({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string
+  value: V
+  options: Record<V, string>
+  onChange: (value: V) => void
+}) => (
+  <div role="radiogroup" aria-label={label} className="flex h-7 w-full rounded-md bg-foreground/[0.06] p-0.5">
+    {(Object.keys(options) as Array<V>).map((key) => (
+      <button
+        key={key}
+        role="radio"
+        aria-checked={key === value}
+        onClick={() => onChange(key)}
+        className={cn(
+          "flex-1 rounded-[5px] text-xs font-medium",
+          key === value ? "bg-background text-foreground shadow-sm" : "text-subtle-foreground hover:text-foreground",
+        )}
+      >
+        {options[key]}
+      </button>
+    ))}
   </div>
 )
 

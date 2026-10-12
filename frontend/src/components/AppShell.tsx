@@ -31,10 +31,11 @@ export const AppShell = () => {
 
   // A layout effect, so the theme is applied before any child's passive
   // effects read colours from it, such as the graph canvas palette.
-  const theme = useResolvedTheme()
+  const { theme, appearance } = useResolvedTheme()
   useLayoutEffect(() => {
     document.documentElement.dataset.theme = theme
-  }, [theme])
+    document.documentElement.dataset.appearance = appearance
+  }, [theme, appearance])
   useLayoutEffect(() => {
     if (!preferences) return
     document.documentElement.style.setProperty("--app-font-size", `${preferences.appearance.fontSize}px`)

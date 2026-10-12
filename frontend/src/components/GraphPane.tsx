@@ -123,7 +123,7 @@ export const GraphPane = (props: GraphPaneProps) => {
     setJump((last) => ({ nonce: last.nonce + 1, landing: Math.floor(top / rowHeight) }))
   }, [scrollRequest, virtualizer])
 
-  const theme = useResolvedTheme()
+  const { theme } = useResolvedTheme()
   useEffect(() => {
     setPalette(readPalette(document.documentElement))
   }, [theme])

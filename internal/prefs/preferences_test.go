@@ -51,6 +51,16 @@ func TestPartialFileKeepsDefaultsForMissingKeys(t *testing.T) {
 	}
 }
 
+func TestSingleThemeBecomesAnAppearance(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, dir, `{"version": 1, "appearance": {"theme": "tokyo-night-day", "fontSize": 15}}`)
+
+	got := openStore(t, dir).Get().Appearance
+	if got.Appearance != model.AppearanceLight || got.FontSize != 15 {
+		t.Errorf("got %+v, want light appearance and the file's font size", got)
+	}
+}
+
 func TestInvalidFileFallsBackToDefaults(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, dir, `{"version": 1, "appearance": {"fontSize": 99}}`)
@@ -71,12 +81,15 @@ func TestSetValidatesAndPersists(t *testing.T) {
 	if err := store.Set(ctx, "graph.nope", true); err == nil {
 		t.Error("unknown key was accepted")
 	}
-	if err := store.Set(ctx, "appearance.theme", "tokyo-night-day"); err != nil {
+	if err := store.Set(ctx, "appearance.darkTheme", "tokyo-night-day"); err == nil {
+		t.Error("a light theme was accepted as the dark theme")
+	}
+	if err := store.Set(ctx, "appearance.darkTheme", "nord"); err != nil {
 		t.Fatal(err)
 	}
 
-	if got := openStore(t, dir).Get().Appearance.Theme; got != model.ThemeTokyoNightDay {
-		t.Errorf("reopened theme = %q", got)
+	if got := openStore(t, dir).Get().Appearance.DarkTheme; got != model.DarkThemeNord {
+		t.Errorf("reopened dark theme = %q", got)
 	}
 }
 

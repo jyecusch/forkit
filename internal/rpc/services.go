@@ -52,14 +52,18 @@ func (x *Repos) Open(meta model.CallMeta, path string) (model.Repo, error) {
 }
 
 // ChooseAndOpen asks the user for a folder and opens the repository in it.
-// It returns an empty Repo if the user cancels.
-func (x *Repos) ChooseAndOpen(meta model.CallMeta) (model.Repo, error) {
-	return call(x.s, meta, "Repos.ChooseAndOpen", func(ctx context.Context) (model.Repo, error) {
+// It returns nil if the user cancels.
+func (x *Repos) ChooseAndOpen(meta model.CallMeta) (*model.Repo, error) {
+	return call(x.s, meta, "Repos.ChooseAndOpen", func(ctx context.Context) (*model.Repo, error) {
 		path, err := x.s.deps.ChooseDirectory("Open repository")
 		if err != nil || path == "" {
-			return model.Repo{}, err
+			return nil, err
 		}
-		return x.s.deps.Workspace.Open(ctx, path)
+		repo, err := x.s.deps.Workspace.Open(ctx, path)
+		if err != nil {
+			return nil, err
+		}
+		return &repo, nil
 	})
 }
 

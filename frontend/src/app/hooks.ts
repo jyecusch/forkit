@@ -2,7 +2,7 @@ import { useLiveQuery } from "@tanstack/react-db"
 import { Cause, Effect, Exit, Fiber, Option } from "effect"
 import { useCallback, useEffect, useMemo, useSyncExternalStore, type DependencyList } from "react"
 import { preferencesCollection, sessionCollection } from "@/data/collections"
-import type { Preferences, Session, Theme } from "@/model/model.gen"
+import type { DarkTheme, LightTheme, Preferences, Session } from "@/model/model.gen"
 import { appRuntime, type AppServices } from "@/services/runtime"
 import { notify } from "./notifications"
 
@@ -63,13 +63,22 @@ export const useMediaQuery = (query: string, fallback: boolean): boolean => {
   )
 }
 
+/** The theme on screen, and whether it is light or dark. */
+export type ResolvedTheme =
+  | { readonly appearance: "light"; readonly theme: LightTheme }
+  | { readonly appearance: "dark"; readonly theme: DarkTheme }
+
 /**
- * The theme actually shown: the chosen one, or for "system" whichever
- * matches the operating system's appearance, following it as it changes.
+ * The theme actually shown: the chosen light or dark theme, or for "system"
+ * whichever matches the operating system's appearance, following it as it
+ * changes.
  */
-export const useResolvedTheme = (): Exclude<Theme, "system"> => {
-  const choice = usePreferences()?.appearance.theme ?? "tokyo-night"
+export const useResolvedTheme = (): ResolvedTheme => {
+  const appearance = usePreferences()?.appearance
   const systemDark = useMediaQuery("(prefers-color-scheme: dark)", true)
-  if (choice !== "system") return choice
-  return systemDark ? "tokyo-night" : "tokyo-night-day"
+  const mode = appearance?.appearance ?? "system"
+  const dark = mode === "dark" || (mode === "system" && systemDark)
+  return dark
+    ? { appearance: "dark", theme: appearance?.darkTheme ?? "tokyo-night" }
+    : { appearance: "light", theme: appearance?.lightTheme ?? "tokyo-night-day" }
 }

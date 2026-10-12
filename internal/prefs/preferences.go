@@ -35,7 +35,9 @@ func Defaults() model.Preferences {
 		ID:      preferencesID,
 		Version: CurrentVersion,
 		Appearance: model.AppearancePreferences{
-			Theme:      model.ThemeTokyoNight,
+			Appearance: model.AppearanceSystem,
+			LightTheme: model.LightThemeTokyoNightDay,
+			DarkTheme:  model.DarkThemeTokyoNight,
 			FontSize:   13,
 			DateFormat: model.DateFormatRelative,
 		},
@@ -232,6 +234,7 @@ func (s *Store) readFile() (model.Preferences, error) {
 	if version, _ := file["version"].(float64); version != CurrentVersion {
 		return model.Preferences{}, fmt.Errorf("unsupported preferences version %v", file["version"])
 	}
+	migrateTheme(file)
 	tree, err := toTree(Defaults())
 	if err != nil {
 		return model.Preferences{}, err
@@ -313,4 +316,23 @@ func walkPath(tree map[string]any, path string) (map[string]any, string, error) 
 		return nil, "", fmt.Errorf("unknown preference %q", path)
 	}
 	return parent, leaf, nil
+}
+
+// migrateTheme rewrites appearance.theme, which named one theme or "system",
+// as the appearance that replaced it, so older files still load.
+func migrateTheme(file map[string]any) {
+	appearance, _ := file["appearance"].(map[string]any)
+	theme, ok := appearance["theme"].(string)
+	if !ok {
+		return
+	}
+	delete(appearance, "theme")
+	switch theme {
+	case "tokyo-night":
+		appearance["appearance"] = string(model.AppearanceDark)
+	case "tokyo-night-day":
+		appearance["appearance"] = string(model.AppearanceLight)
+	default:
+		appearance["appearance"] = string(model.AppearanceSystem)
+	}
 }

@@ -59,8 +59,8 @@ export class Rpc extends Context.Service<
       }),
     openRepo: (path) => invoke("Repos.Open", Repo, (meta) => Repos.Open(meta, path)),
     chooseAndOpenRepo: () =>
-      invoke("Repos.ChooseAndOpen", Repo, (meta) => Repos.ChooseAndOpen(meta)).pipe(
-        Effect.map((repo) => (repo.id === "" ? Option.none() : Option.some(repo))),
+      invoke("Repos.ChooseAndOpen", Schema.NullOr(Repo), (meta) => Repos.ChooseAndOpen(meta)).pipe(
+        Effect.map(Option.fromNullishOr),
       ),
     closeRepo: (id) => invoke("Repos.Close", Schema.Void, (meta) => Repos.Close(meta, id), { "repo.id": id }),
     graphWindow: (id, start, count, emphasized) =>
