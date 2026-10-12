@@ -3,6 +3,7 @@ import { cn } from "@/lib/utils"
 import { baseName } from "@/lib/format"
 import { changeCount, headLabel } from "@/lib/worktree"
 import type { GraphView, Ref, Worktree, WorktreeOperation } from "@/model/model.gen"
+import { AheadBehind } from "./AheadBehind"
 import { WorktreeIcon } from "./WorktreeIcon"
 
 interface ViewHeaderProps {
@@ -44,13 +45,7 @@ export const ViewHeader = ({ worktree, refsById, headEmphasized, emphasizedOther
               <Check aria-label="Checked out" className="size-3 flex-none" />
             )}
             <span className="truncate">{headLabel(worktree, refsById)}</span>
-            {head && Boolean(head.ahead || head.behind) && (
-              <span className="flex-none opacity-70 tabular-nums" title="Ahead of and behind its upstream">
-                {head.ahead ? `↑${head.ahead}` : ""}
-                {head.ahead && head.behind ? " " : ""}
-                {head.behind ? `↓${head.behind}` : ""}
-              </span>
-            )}
+            {head && <AheadBehind ahead={head.ahead} behind={head.behind} />}
           </span>
           {emphasizedOther && (
             <span

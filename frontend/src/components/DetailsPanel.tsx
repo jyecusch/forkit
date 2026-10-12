@@ -82,7 +82,8 @@ const CommitTab = ({
         <div className="flex items-center gap-2.5">
           <span
             aria-hidden
-            className="flex size-7 flex-none items-center justify-center rounded-full bg-foreground/[0.08] text-[11px] font-semibold text-secondary-foreground"
+            className="flex size-7 flex-none items-center justify-center rounded-full bg-[color-mix(in_srgb,currentColor_16%,transparent)] text-[11px] font-semibold"
+            style={{ color: authorColor(commit.authorEmail) }}
           >
             {initials(commit.authorName)}
           </span>
@@ -151,14 +152,17 @@ interface Group {
   readonly statusOf: (file: FileStatus) => StatusCode | undefined
   /** Staging moves a file into the index; unstaging moves it back out. */
   readonly action: "stage" | "unstage"
+  /** A colour for the title of a group that needs attention. */
+  readonly titleClass?: string
 }
 
 const groups: ReadonlyArray<Group> = [
-  { title: "Conflicted", kind: "unstaged", action: "stage", statusOf: (f) => (f.index === "unmerged" ? f.index : undefined) },
+  { title: "Conflicted", kind: "unstaged", action: "stage", titleClass: "text-destructive", statusOf: (f) => (f.index === "unmerged" ? f.index : undefined) },
   {
     title: "Staged",
     kind: "staged",
     action: "unstage",
+    titleClass: "text-success",
     statusOf: (f) => (f.index !== "unmodified" && f.index !== "untracked" && f.index !== "unmerged" ? f.index : undefined),
   },
   {
@@ -197,7 +201,7 @@ const ChangesTab = ({ worktree, openDiff, onOpenDiff }: { worktree: WorktreeId }
   const renderSection = (group: Group, entries: ReadonlyArray<{ file: FileStatus; status: StatusCode }>) => (
     <section key={group.title}>
       <h3 className="flex h-9 items-end justify-between gap-2 px-4 pb-1.5 text-xs font-medium text-subtle-foreground">
-        <span>
+        <span className={group.titleClass}>
           {group.title} <span className="font-normal tabular-nums">{entries.length}</span>
         </span>
         {entries.length > 0 && (
@@ -300,6 +304,17 @@ const moveBetweenFiles = (event: React.KeyboardEvent<HTMLElement>) => {
   const next = files[current + (event.key === "ArrowDown" ? 1 : -1)]
   next?.focus()
   next?.click()
+}
+
+/**
+ * A colour for an author that stays the same wherever they appear, from the
+ * theme's lanes, leaving out the grey first lane and the red that reads as an error.
+ */
+const authorColor = (email: string) => {
+  const lanes = [1, 2, 3, 4, 5, 7]
+  let hash = 0
+  for (const char of email.toLowerCase()) hash = (hash * 31 + char.charCodeAt(0)) | 0
+  return `var(--lane-${lanes[Math.abs(hash) % lanes.length]})`
 }
 
 /** A path with its file name first and its directory dimmed after it. */

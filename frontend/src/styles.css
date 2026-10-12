@@ -964,6 +964,102 @@
   --syntax-link: #207972;
 }
 
+/* Ref colours: tags in each theme's purple, remotes in its cyan. */
+[data-theme="tokyo-night"] {
+  --tag: #bb9af7;
+  --remote: #7dcfff;
+}
+
+[data-theme="tokyo-night-day"] {
+  --tag: #8f4fe3;
+  --remote: #007197;
+}
+
+[data-theme="catppuccin-latte"] {
+  --tag: #8839ef;
+  --remote: #0375a3;
+}
+
+[data-theme="catppuccin-frappe"] {
+  --tag: #ca9ee6;
+  --remote: #99d1db;
+}
+
+[data-theme="catppuccin-macchiato"] {
+  --tag: #c6a0f6;
+  --remote: #91d7e3;
+}
+
+[data-theme="catppuccin-mocha"] {
+  --tag: #cba6f7;
+  --remote: #89dceb;
+}
+
+[data-theme="dracula"] {
+  --tag: #bd93f9;
+  --remote: #8be9fd;
+}
+
+[data-theme="github-dark"] {
+  --tag: #a371f7;
+  --remote: #39c5cf;
+}
+
+[data-theme="github-light"] {
+  --tag: #8250df;
+  --remote: #1b7c83;
+}
+
+[data-theme="gruvbox-dark"] {
+  --tag: #d3869b;
+  --remote: #8ec07c;
+}
+
+[data-theme="gruvbox-light"] {
+  --tag: #8f3f71;
+  --remote: #417956;
+}
+
+[data-theme="nord"] {
+  --tag: #b690af;
+  --remote: #88c0d0;
+}
+
+[data-theme="one-dark"] {
+  --tag: #c678dd;
+  --remote: #56b6c2;
+}
+
+[data-theme="one-light"] {
+  --tag: #a626a4;
+  --remote: #017baf;
+}
+
+[data-theme="rose-pine"] {
+  --tag: #c4a7e7;
+  --remote: #9ccfd8;
+}
+
+[data-theme="rose-pine-moon"] {
+  --tag: #c4a7e7;
+  --remote: #9ccfd8;
+}
+
+[data-theme="rose-pine-dawn"] {
+  --tag: #7a6890;
+  --remote: #467881;
+}
+
+[data-theme="solarized-dark"] {
+  --tag: #8488cd;
+  --remote: #2aa198;
+}
+
+[data-theme="solarized-light"] {
+  --tag: #666ab8;
+  --remote: #217e77;
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-sidebar: var(--sidebar);
@@ -989,6 +1085,8 @@
   --color-success: var(--success);
   --color-warning: var(--warning);
   --color-highlight: var(--highlight);
+  --color-tag: var(--tag);
+  --color-remote: var(--remote);
   --font-sans: "IBM Plex Sans", system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, monospace;
 }
