@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // Repo is a repository in a temporary directory.
@@ -41,12 +42,24 @@ func (r *Repo) Git(args ...string) string {
 // GitIn is Git run in another directory, such as a linked worktree.
 func (r *Repo) GitIn(dir string, args ...string) string {
 	r.t.Helper()
+	return r.run(dir, "2026-01-01T00:00:00Z", args...)
+}
+
+// CommitAt creates an empty commit dated when and returns its oid.
+func (r *Repo) CommitAt(message string, when time.Time) string {
+	r.t.Helper()
+	r.run(r.Dir, when.UTC().Format(time.RFC3339), "commit", "--allow-empty", "-q", "-m", message)
+	return r.Git("rev-parse", "HEAD")
+}
+
+func (r *Repo) run(dir, date string, args ...string) string {
+	r.t.Helper()
 	cmd := exec.Command("git", args...)
 	cmd.Dir = dir
 	cmd.Env = append(os.Environ(),
 		"GIT_AUTHOR_NAME=Ada", "GIT_AUTHOR_EMAIL=ada@example.com",
 		"GIT_COMMITTER_NAME=Ada", "GIT_COMMITTER_EMAIL=ada@example.com",
-		"GIT_AUTHOR_DATE=2026-01-01T00:00:00Z", "GIT_COMMITTER_DATE=2026-01-01T00:00:00Z",
+		"GIT_AUTHOR_DATE="+date, "GIT_COMMITTER_DATE="+date,
 		"GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_NOSYSTEM=1",
 	)
 	out, err := cmd.CombinedOutput()

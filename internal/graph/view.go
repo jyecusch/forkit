@@ -126,6 +126,21 @@ func (v *View) prepend(ctx context.Context, current *Graph, currentTips, tips []
 	if err != nil {
 		return err
 	}
+	// New commits on top always keep topological order, but in date order
+	// they may belong further down, among older commits.
+	if options.Order == model.GraphOrderDate {
+		var top model.OID
+		if current.Len() > 0 {
+			top = current.history.OID(0)
+		}
+		fits, err := leadsWith(ctx, v.repo, options.Order, tips, newer, top)
+		if err != nil {
+			return err
+		}
+		if !fits {
+			return v.reload(ctx, tips, options, refs)
+		}
+	}
 	merged, err := current.history.Prepend(newer)
 	if err != nil {
 		return err

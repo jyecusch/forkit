@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"go.opentelemetry.io/otel/trace/noop"
 
@@ -77,7 +78,8 @@ func (f *viewFixture) window(emphasized model.RefID) model.GraphWindow {
 // order, as git log does.
 func (f *viewFixture) assertMatchesGitLog() {
 	f.t.Helper()
-	want := strings.Fields(f.repo.Git("log", "--topo-order", "--format=%H", "--branches", "--tags"))
+	order := map[model.GraphOrder]string{model.GraphOrderTopo: "--topo-order", model.GraphOrderDate: "--date-order"}[f.options.Order]
+	want := strings.Fields(f.repo.Git("log", order, "--format=%H", "--branches", "--tags"))
 	window := f.window("")
 	if len(window.Rows) != len(want) {
 		f.t.Fatalf("got %d rows, want %d", len(window.Rows), len(want))
@@ -111,6 +113,26 @@ func TestViewFollowsHistoryChanges(t *testing.T) {
 		f.refresh()
 		f.assertMatchesGitLog()
 	})
+}
+
+func TestDateOrderPlacesOlderNewCommitsAmongTheRest(t *testing.T) {
+	f := newViewFixture(t)
+	f.options.Order = model.GraphOrderDate
+	start := time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC)
+	f.repo.CommitAt("on main", start.Add(5*time.Hour))
+	f.refresh()
+	f.assertMatchesGitLog()
+
+	// A branch fetched now whose commit is older than main's newest.
+	f.repo.Git("checkout", "-qb", "older", "HEAD~1")
+	f.repo.CommitAt("older work", start.Add(3*time.Hour))
+	f.repo.Git("checkout", "-q", "main")
+	f.refresh()
+	f.assertMatchesGitLog()
+
+	f.repo.CommitAt("newest", start.Add(9*time.Hour))
+	f.refresh()
+	f.assertMatchesGitLog()
 }
 
 func TestWindowMarksEmphasizedHistoryAndRefs(t *testing.T) {

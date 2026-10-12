@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -91,6 +92,44 @@ func appendEntries(h *History, entries []logEntry) error {
 		}
 	}
 	return nil
+}
+
+// errListed stops a log walk once leadsWith has seen what it needs.
+var errListed = errors.New("listed enough")
+
+// leadsWith reports whether git lists history from tips, in order, as the
+// rows of lead followed by next. Commits new since the last walk can then go
+// on top of the rows already laid out; otherwise, as when date order puts a
+// fetched branch's older commits among them, they cannot. An empty next
+// means nothing follows lead. The walk stops early in date order, but not in
+// topological order.
+func leadsWith(ctx context.Context, repo *gitexec.Repo, order model.GraphOrder, tips []model.OID, lead *History, next model.OID) (bool, error) {
+	want := make([]model.OID, 0, lead.Len()+1)
+	for row := range lead.Len() {
+		want = append(want, lead.OID(row))
+	}
+	if next != "" {
+		want = append(want, next)
+	}
+	seen := 0
+	agrees := true
+	err := streamLog(ctx, repo, order, tips, nil, func(batch []logEntry) error {
+		for _, entry := range batch {
+			if seen == len(want) {
+				return errListed
+			}
+			if model.OID(hex.EncodeToString(entry.oid)) != want[seen] {
+				agrees = false
+				return errListed
+			}
+			seen++
+		}
+		return nil
+	})
+	if err != nil && !errors.Is(err, errListed) {
+		return false, err
+	}
+	return agrees && seen == len(want), nil
 }
 
 // allReachable reports whether every commit in tips is reachable from heads,
