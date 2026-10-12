@@ -140,9 +140,13 @@ func TestWorktreeAddedOutsideForkitIsPublished(t *testing.T) {
 	if err := runGit(fixture.Dir, "worktree", "add", "-b", "outside", path); err != nil {
 		t.Fatal(err)
 	}
+	encodedPath, err := json.Marshal(path)
+	if err != nil {
+		t.Fatal(err)
+	}
 	scope := string(opened.ID)
 	rec.waitFor(t, synchub.EventName("worktrees", scope), func(v json.RawMessage) bool {
-		return strings.Contains(string(v), path)
+		return strings.Contains(string(v), string(encodedPath))
 	})
 	rec.waitFor(t, synchub.EventName("refs", scope), func(v json.RawMessage) bool {
 		return strings.Contains(string(v), "refs/heads/outside")
