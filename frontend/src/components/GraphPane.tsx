@@ -5,7 +5,10 @@ import { useService } from "@/app/services"
 import { layoutColumns, listInset } from "@/graph/columns"
 import { drawGraph, readPalette, type GraphPalette } from "@/graph/draw"
 import { geometry, laneX, laneWidth, rowHeight, widestLane } from "@/graph/geometry"
-import { formatDate, shortOid } from "@/lib/format"
+import { useNow } from "@/app/useNow"
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu"
+import { badgesFor } from "@/lib/badges"
+import { formatDate, formatFullDate, shortOid } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import type { GraphView, Preferences, Ref, RefId, RepoId } from "@/model/model.gen"
 import { GraphData, type LoadedRow } from "@/services/GraphData"
@@ -53,6 +56,7 @@ export const GraphPane = (props: GraphPaneProps) => {
   const [palette, setPalette] = useState<GraphPalette>()
   const [panToRow, setPanToRow] = useState<number>()
 
+  const now = useNow()
   const dataVersion = useSyncExternalStore(
     useCallback((listener) => graphData.subscribe(repo, listener), [graphData, repo]),
     useCallback(() => graphData.revision(repo), [graphData, repo]),
@@ -162,15 +166,30 @@ export const GraphPane = (props: GraphPaneProps) => {
   // current row is looked up among the rows on screen.
   const selectedIndex = () =>
     items.find((item) => graphData.peek(repo, item.index)?.row.oid === selectedOid)?.index ?? props.selected?.row.index ?? -1
+  const pageRows = Math.max(Math.floor(viewportHeight / rowHeight) - 1, 1)
   const onKeyDown = (event: KeyboardEvent) => {
-    if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return
-    event.preventDefault()
-    const next = selectedIndex() + (event.key === "ArrowDown" ? 1 : -1)
-    const loaded = next >= 0 ? graphData.peek(repo, next) : undefined
-    if (loaded) {
-      props.onSelect(loaded)
-      virtualizer.scrollToIndex(next)
+    if ((event.metaKey || event.ctrlKey) && event.key === "c" && props.selected) {
+      void navigator.clipboard.writeText(props.selected.row.oid)
+      return
     }
+    const current = selectedIndex()
+    // With nothing selected, the arrows start from the first row on screen.
+    const firstVisible = Math.floor((virtualizer.scrollOffset ?? 0) / rowHeight)
+    const from = current >= 0 ? current : firstVisible - 1
+    const target = {
+      ArrowDown: from + 1,
+      ArrowUp: Math.max(from - 1, 0),
+      PageDown: from + pageRows,
+      PageUp: Math.max(from - pageRows, 0),
+      Home: 0,
+      End: view.totalRows - 1,
+    }[event.key]
+    if (target === undefined) return
+    event.preventDefault()
+    const next = Math.min(target, view.totalRows - 1)
+    virtualizer.scrollToIndex(next)
+    const loaded = graphData.peek(repo, next)
+    if (loaded) props.onSelect(loaded)
   }
 
   const clippedLeft = clampedOffsetX > 0
@@ -196,6 +215,7 @@ export const GraphPane = (props: GraphPaneProps) => {
         ref={scrollRef}
         role="grid"
         aria-rowcount={view.totalRows}
+        aria-label="Commits"
         tabIndex={0}
         onKeyDown={onKeyDown}
         onWheel={onWheel}
@@ -217,6 +237,7 @@ export const GraphPane = (props: GraphPaneProps) => {
               refsById={props.refsById}
               headRef={props.headRef}
               dateFormat={preferences.appearance.dateFormat}
+              now={now}
               onSelect={props.onSelect}
             />
           ))}
@@ -278,6 +299,7 @@ interface CommitRowProps {
   readonly refsById: ReadonlyMap<string, Ref>
   readonly headRef: RefId | undefined
   readonly dateFormat: Preferences["appearance"]["dateFormat"]
+  readonly now: number
   readonly onSelect: (row: LoadedRow) => void
 }
 
@@ -294,6 +316,7 @@ const CommitRow = memo(function CommitRow({
   refsById,
   headRef,
   dateFormat,
+  now,
   onSelect,
 }: CommitRowProps) {
   const style = { top, height: rowHeight, gridTemplateColumns: columns, paddingInline: listInset }
@@ -301,48 +324,74 @@ const CommitRow = memo(function CommitRow({
     return (
       <div role="row" aria-rowindex={index + 1} className="absolute inset-x-0 grid items-center gap-3" style={style}>
         <span />
-        <span className="h-2 w-2/3 rounded bg-muted" />
+        <span className="h-2 w-1/2 rounded bg-foreground/[0.06]" />
       </div>
     )
   }
   const { row, commit } = loaded
   const dim = anyEmphasis && !row.onEmphasized
-  const isHead = headRef !== undefined && row.refIds.includes(headRef)
-  // The checked-out branch first, so it is never hidden behind "+N".
-  const refs = row.refIds.flatMap((id) => refsById.get(id) ?? []).sort((a, b) => Number(b.id === headRef) - Number(a.id === headRef))
+  const badges = badgesFor(row.refIds, refsById, headRef)
   const meta = cn("truncate text-xs", dim ? "text-muted-foreground" : "text-secondary-foreground")
   return (
-    <div
-      role="row"
-      aria-rowindex={index + 1}
-      aria-selected={selected}
-      onClick={() => onSelect(loaded)}
-      className={cn("absolute inset-x-0 grid cursor-default items-center gap-3", selected ? "bg-selection" : "hover:bg-accent/40")}
-      style={style}
-    >
-      <span />
-      <span className="flex min-w-0 items-center gap-1.5 overflow-hidden">
-        {refs.slice(0, maxBadges).map((ref) => (
-          <RefBadge key={ref.id} refEntity={ref} thread={row.threadId} dim={dim} isHead={ref.id === headRef} />
-        ))}
-        {refs.length > maxBadges && (
-          <span
-            className="flex-none text-[11px] text-subtle-foreground"
-            title={refs.slice(maxBadges).map((ref) => ref.shortName).join("\n")}
-          >
-            +{refs.length - maxBadges}
-          </span>
-        )}
-        <span
-          className={cn("min-w-[4ch] flex-1 truncate", dim ? "text-subtle-foreground" : "text-foreground", isHead && "font-semibold")}
-          title={commit.subject}
+    <ContextMenu>
+      <ContextMenuTrigger asChild>
+        <div
+          role="row"
+          aria-rowindex={index + 1}
+          aria-selected={selected}
+          aria-label={`${commit.subject}, ${commit.authorName}, ${shortOid(row.oid)}`}
+          onClick={() => onSelect(loaded)}
+          className={cn(
+            "absolute inset-x-0 grid cursor-default items-center gap-3",
+            selected ? "bg-selection" : "hover:bg-foreground/[0.03]",
+          )}
+          style={style}
         >
-          {commit.subject}
-        </span>
-      </span>
-      {showAuthor && <span className={meta}>{commit.authorName}</span>}
-      {showDate && <span className={meta}>{formatDate(commit.authorTime, dateFormat)}</span>}
-      {showCommit && <span className={cn("font-mono text-xs", dim ? "text-muted-foreground" : "text-secondary-foreground")}>{shortOid(row.oid)}</span>}
-    </div>
+          <span role="gridcell" />
+          <span role="gridcell" className="flex min-w-0 items-center gap-1.5 overflow-hidden">
+            {badges.length > 0 && (
+              <span className="flex max-w-[45%] min-w-0 flex-none items-center gap-1 overflow-hidden">
+                {badges.slice(0, maxBadges).map((badge) => (
+                  <RefBadge key={badge.ref.id} badge={badge} thread={row.threadId} dim={dim} />
+                ))}
+                {badges.length > maxBadges && (
+                  <span
+                    className="flex h-[18px] flex-none items-center rounded bg-foreground/[0.06] px-1.5 text-[11px] text-secondary-foreground tabular-nums"
+                    title={badges
+                      .slice(maxBadges)
+                      .map((badge) => badge.ref.shortName)
+                      .join("\n")}
+                  >
+                    +{badges.length - maxBadges}
+                  </span>
+                )}
+              </span>
+            )}
+            <span className={cn("min-w-0 flex-1 truncate", dim ? "text-subtle-foreground" : "text-foreground")} title={commit.subject}>
+              {commit.subject}
+            </span>
+          </span>
+          {showAuthor && (
+            <span role="gridcell" className={meta} title={commit.authorEmail}>
+              {commit.authorName}
+            </span>
+          )}
+          {showDate && (
+            <span role="gridcell" className={meta} title={formatFullDate(commit.authorTime)}>
+              {formatDate(commit.authorTime, dateFormat, now)}
+            </span>
+          )}
+          {showCommit && (
+            <span role="gridcell" className={cn("font-mono text-xs", dim ? "text-muted-foreground" : "text-secondary-foreground")}>
+              {shortOid(row.oid)}
+            </span>
+          )}
+        </div>
+      </ContextMenuTrigger>
+      <ContextMenuContent className="w-48">
+        <ContextMenuItem onSelect={() => void navigator.clipboard.writeText(row.oid)}>Copy SHA</ContextMenuItem>
+        <ContextMenuItem onSelect={() => void navigator.clipboard.writeText(commit.subject)}>Copy subject</ContextMenuItem>
+      </ContextMenuContent>
+    </ContextMenu>
   )
 })

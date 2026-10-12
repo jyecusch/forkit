@@ -1,9 +1,10 @@
 import { useLiveQuery } from "@tanstack/react-db"
 import { Effect } from "effect"
-import { useState } from "react"
+import { Check, Copy } from "lucide-react"
+import { useEffect, useState } from "react"
 import { useForkedEffect } from "@/app/hooks"
 import { fileStatusesCollection } from "@/data/collections"
-import { formatDate, initials, shortOid } from "@/lib/format"
+import { formatDate, formatFullDate, initials, shortOid } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import type { CommitDetail, FileChangeStatus, FileStatus, Preferences, RepoId, StatusCode, WorktreeId } from "@/model/model.gen"
 import type { LoadedRow } from "@/services/GraphData"
@@ -27,7 +28,7 @@ export const DetailsPanel = ({ repo, selected, worktree, preferences }: DetailsP
   const setTab = (next: Tab) => setChosen({ tab: next, oid })
   return (
     <aside aria-label="Details" className="flex w-[clamp(260px,26vw,340px)] flex-none flex-col border-l">
-      <div role="tablist" className="flex h-8 flex-none items-center gap-0.5 border-b px-2">
+      <div role="tablist" aria-label="Details" className="flex h-8 flex-none items-center gap-0.5 border-b px-2">
         <TabButton active={tab === "commit"} onClick={() => setTab("commit")}>
           Commit
         </TabButton>
@@ -62,7 +63,9 @@ const TabButton = ({ active, onClick, children }: { active: boolean; onClick: ()
   </button>
 )
 
-const Empty = ({ children }: { children: string }) => <p className="p-4 text-subtle-foreground">{children}</p>
+const Empty = ({ children }: { children: string }) => (
+  <p className="flex h-full items-center justify-center p-6 text-center text-subtle-foreground">{children}</p>
+)
 
 const CommitTab = ({ repo, selected, preferences }: { repo: RepoId; selected: LoadedRow | undefined; preferences: Preferences }) => {
   const [detail, setDetail] = useState<CommitDetail>()
@@ -90,17 +93,26 @@ const CommitTab = ({ repo, selected, preferences }: { repo: RepoId; selected: Lo
         <div className="text-[15px] leading-snug font-semibold">{subject}</div>
         {body && <pre className="font-sans text-xs whitespace-pre-wrap text-secondary-foreground">{body}</pre>}
         <div className="flex items-center gap-2.5">
-          <span className="flex size-7 items-center justify-center rounded-full bg-border text-[11px] font-semibold" style={{ color: "var(--lane-1)" }}>
+          <span
+            aria-hidden
+            className="flex size-7 flex-none items-center justify-center rounded-full text-[11px] font-semibold"
+            style={{ color: authorColor(commit.authorEmail), background: `color-mix(in srgb, ${authorColor(commit.authorEmail)} 16%, transparent)` }}
+          >
             {initials(commit.authorName)}
           </span>
-          <div className="flex flex-col">
-            <span>{commit.authorName}</span>
-            <span className="text-xs text-subtle-foreground">{formatDate(commit.authorTime, preferences.appearance.dateFormat)}</span>
+          <div className="flex min-w-0 flex-col">
+            <span className="truncate">{commit.authorName}</span>
+            <span className="text-xs text-subtle-foreground" title={formatFullDate(commit.authorTime)}>
+              {formatDate(commit.authorTime, preferences.appearance.dateFormat)}
+            </span>
           </div>
         </div>
         <dl className="grid grid-cols-[64px_minmax(0,1fr)] gap-x-2 gap-y-1 text-xs">
           <dt className="text-subtle-foreground">Commit</dt>
-          <dd className="truncate font-mono text-secondary-foreground">{commit.oid}</dd>
+          <dd className="flex min-w-0 items-center gap-1 font-mono text-secondary-foreground">
+            <span className="truncate">{commit.oid}</span>
+            <CopyButton text={commit.oid} label="Copy SHA" />
+          </dd>
           <dt className="text-subtle-foreground">Parents</dt>
           <dd className="font-mono text-secondary-foreground">{commit.parents.map(shortOid).join(", ") || "none (root)"}</dd>
           {detail && detail.committerName !== commit.authorName && (
@@ -117,18 +129,16 @@ const CommitTab = ({ repo, selected, preferences }: { repo: RepoId; selected: Lo
       </div>
       <ul className="flex flex-col px-2 pb-2">
         {detail?.files.map((file) => (
-          <li key={file.path} className="flex items-center gap-2 rounded-md px-2 py-1.5">
+          <li key={file.path} className={fileRow}>
             <StatusBadge letter={changeLetters[file.status]} tone={changeTones[file.status]} />
-            <span className="min-w-0 flex-1 truncate font-mono text-xs" title={file.oldPath ? `${file.oldPath} → ${file.path}` : file.path}>
-              {file.path}
-            </span>
+            <FilePath path={file.path} title={file.oldPath ? `${file.oldPath} → ${file.path}` : file.path} />
             {file.binary ? (
-              <span className="font-mono text-[11px] text-subtle-foreground">binary</span>
+              <span className="text-[11px] text-subtle-foreground">binary</span>
             ) : (
-              <>
-                <span className="font-mono text-[11px] text-success">+{file.additions}</span>
-                <span className="font-mono text-[11px] text-destructive">-{file.deletions}</span>
-              </>
+              <span className="grid grid-cols-[4ch_4ch] gap-1 text-right font-mono text-[11px] tabular-nums">
+                <span className="text-success">+{file.additions}</span>
+                <span className="text-destructive">−{file.deletions}</span>
+              </span>
             )}
           </li>
         ))}
@@ -166,9 +176,9 @@ const ChangesTab = ({ worktree }: { worktree: WorktreeId }) => {
               {entries
                 .sort((a, b) => a.file.path.localeCompare(b.file.path))
                 .map(({ file, status }) => (
-                  <li key={file.id} className="flex items-center gap-2 rounded-md px-2 py-1.5">
+                  <li key={file.id} className={fileRow}>
                     <StatusBadge letter={statusLetters[status]} tone={statusTones[status]} />
-                    <span className="min-w-0 flex-1 truncate font-mono text-xs">{file.path}</span>
+                    <FilePath path={file.path} title={file.path} />
                   </li>
                 ))}
             </ul>
@@ -177,6 +187,46 @@ const ChangesTab = ({ worktree }: { worktree: WorktreeId }) => {
       })}
     </div>
   )
+}
+
+const fileRow = "flex h-7 items-center gap-2 rounded-md px-2 hover:bg-foreground/[0.04]"
+
+/** A path with its file name first and its directory dimmed after it. */
+const FilePath = ({ path, title }: { path: string; title: string }) => {
+  const slash = path.lastIndexOf("/")
+  return (
+    <span className="flex min-w-0 flex-1 items-baseline gap-1.5 text-xs" title={title}>
+      <span className="truncate">{path.slice(slash + 1)}</span>
+      {slash >= 0 && <span className="min-w-0 flex-1 truncate text-subtle-foreground">{path.slice(0, slash)}</span>}
+    </span>
+  )
+}
+
+const CopyButton = ({ text, label }: { text: string; label: string }) => {
+  const [copied, setCopied] = useState(false)
+  useEffect(() => {
+    if (!copied) return
+    const timer = setTimeout(() => setCopied(false), 1200)
+    return () => clearTimeout(timer)
+  }, [copied])
+  const Icon = copied ? Check : Copy
+  return (
+    <button
+      aria-label={label}
+      title={label}
+      onClick={() => void navigator.clipboard.writeText(text).then(() => setCopied(true))}
+      className="flex size-5 flex-none items-center justify-center rounded text-subtle-foreground hover:bg-foreground/[0.06] hover:text-foreground"
+    >
+      <Icon className="size-3" />
+    </button>
+  )
+}
+
+/** A colour for an author that stays the same wherever they appear. */
+const authorColor = (email: string) => {
+  let hash = 0
+  for (const char of email.toLowerCase()) hash = (hash * 31 + char.charCodeAt(0)) | 0
+  return `var(--lane-${Math.abs(hash) % 8})`
 }
 
 type Tone = "added" | "modified" | "deleted" | "conflict"

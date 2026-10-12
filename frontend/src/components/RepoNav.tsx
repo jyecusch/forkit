@@ -1,6 +1,6 @@
 import { useVirtualizer } from "@tanstack/react-virtual"
 import { Archive, Check, ChevronRight, Folder, GitBranch, Plus, Search, Tag, X } from "lucide-react"
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react"
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react"
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu"
 import { buildNavRows, type NavRow } from "@/lib/navTree"
 import { cn } from "@/lib/utils"
@@ -88,6 +88,22 @@ export const RepoNav = (props: RepoNavProps) => {
   const doubleClickRef = (ref: Ref) => {
     clearTimeout(pendingClick.current)
     props.onCheckout(ref)
+  }
+
+  // Arrow keys move between rows; left and right close and open folders.
+  const onRowsKeyDown = (event: ReactKeyboardEvent) => {
+    const buttons = [...(scrollRef.current?.querySelectorAll("button") ?? [])]
+    const current = buttons.indexOf(document.activeElement as HTMLButtonElement)
+    const expanded = (document.activeElement as HTMLElement | null)?.getAttribute("aria-expanded")
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault()
+      const next = buttons[current + (event.key === "ArrowDown" ? 1 : -1)]
+      if (next) next.focus()
+      else if (event.key === "ArrowUp") filterRef.current?.focus()
+    } else if ((event.key === "ArrowRight" && expanded === "false") || (event.key === "ArrowLeft" && expanded === "true")) {
+      event.preventDefault()
+      buttons[current]?.click()
+    }
   }
 
   const renderRow = (row: NavRow) => {
@@ -183,7 +199,13 @@ export const RepoNav = (props: RepoNavProps) => {
           ref={filterRef}
           value={filter}
           onChange={(event) => setFilter(event.target.value)}
-          onKeyDown={(event) => event.key === "Escape" && setFilter("")}
+          onKeyDown={(event) => {
+            if (event.key === "Escape") setFilter("")
+            if (event.key === "ArrowDown") {
+              event.preventDefault()
+              scrollRef.current?.querySelector("button")?.focus()
+            }
+          }}
           placeholder="Filter"
           aria-label="Filter worktrees and refs"
           className="h-8 w-full rounded-md bg-foreground/[0.05] pr-8 pl-8 outline-none placeholder:text-subtle-foreground focus-visible:ring-2 focus-visible:ring-ring"
@@ -200,7 +222,7 @@ export const RepoNav = (props: RepoNavProps) => {
           <kbd className="pointer-events-none absolute top-2 right-2 font-sans text-[11px] text-subtle-foreground">/</kbd>
         )}
       </div>
-      <div ref={scrollRef} className="mt-1 flex-1 overflow-y-auto pb-2">
+      <div ref={scrollRef} onKeyDown={onRowsKeyDown} className="mt-1 flex-1 overflow-y-auto pb-2">
         <div style={{ height: virtualizer.getTotalSize(), position: "relative" }}>
           {virtualizer.getVirtualItems().map((item) => (
             <div key={rows[item.index]!.id} className="absolute inset-x-2" style={{ top: item.start, height: item.size }}>

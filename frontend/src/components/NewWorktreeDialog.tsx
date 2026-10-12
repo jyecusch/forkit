@@ -2,7 +2,7 @@ import { Option } from "effect"
 import { useEffect, useState } from "react"
 import { useRun } from "@/app/hooks"
 import { Button } from "@/components/ui/button"
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import type { Ref, Repo } from "@/model/model.gen"
 import { Commands } from "@/services/Commands"
@@ -46,12 +46,9 @@ export const NewWorktreeDialog = ({ repo, base, onClose }: NewWorktreeDialogProp
   return (
     <Dialog open={base !== undefined} onOpenChange={(open) => !open && onClose()}>
       {base && (
-        <DialogContent className="sm:max-w-[480px]">
+        <DialogContent className="sm:max-w-[480px]" aria-describedby={undefined}>
           <DialogHeader>
             <DialogTitle>New worktree from {base.shortName}</DialogTitle>
-            <DialogDescription>
-              A worktree is another checkout of this repository in its own folder, so you can work on two branches at once.
-            </DialogDescription>
           </DialogHeader>
           <label className="flex flex-col gap-1.5">
             <span>New branch</span>
@@ -63,17 +60,22 @@ export const NewWorktreeDialog = ({ repo, base, onClose }: NewWorktreeDialogProp
               onKeyDown={(event) => event.key === "Enter" && void create()}
             />
           </label>
-          <div className="flex flex-col gap-1.5">
-            <span>Location</span>
-            <div className="flex items-center gap-2">
-              <span className="min-w-0 flex-1 truncate font-mono text-xs text-secondary-foreground" title={path}>
-                {path || `Next to the main worktree, in ${folder}`}
-              </span>
-              <Button variant="outline" size="sm" onClick={() => void choose()}>
-                Choose…
-              </Button>
-            </div>
-          </div>
+          {effectiveBranch && (
+            <label className="flex flex-col gap-1.5">
+              <span>Location</span>
+              <div className="flex items-center gap-2">
+                <Input
+                  readOnly
+                  value={path || `…/${folder}`}
+                  title={path || `Next to the main worktree, in ${folder}`}
+                  className="min-w-0 flex-1 font-mono text-xs text-secondary-foreground"
+                />
+                <Button variant="outline" onClick={() => void choose()}>
+                  Choose…
+                </Button>
+              </div>
+            </label>
+          )}
           <DialogFooter>
             <Button variant="ghost" onClick={onClose}>
               Cancel

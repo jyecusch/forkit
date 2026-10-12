@@ -1,4 +1,5 @@
-import { Folder, GitBranch, X } from "lucide-react"
+import { Folder, GitBranch, PanelRight, X } from "lucide-react"
+import { cn } from "@/lib/utils"
 import { baseName } from "@/lib/format"
 import { changeCount, headLabel } from "@/lib/worktree"
 import type { GraphView, Ref, Worktree, WorktreeOperation } from "@/model/model.gen"
@@ -10,13 +11,15 @@ interface ViewHeaderProps {
   readonly emphasizedOther: Ref | undefined
   readonly onClearEmphasis: () => void
   readonly view: GraphView | undefined
+  readonly detailsShown: boolean
+  readonly onToggleDetails: () => void
 }
 
 /**
  * The panel's second header level: which worktree and branch the view is
  * about, and what the graph is showing.
  */
-export const ViewHeader = ({ worktree, refsById, emphasizedOther, onClearEmphasis, view }: ViewHeaderProps) => {
+export const ViewHeader = ({ worktree, refsById, emphasizedOther, onClearEmphasis, view, detailsShown, onToggleDetails }: ViewHeaderProps) => {
   const changes = worktree ? changeCount(worktree) : 0
   return (
     <div className="flex h-10 flex-none items-center gap-3 border-b px-3 text-[13px]">
@@ -61,6 +64,18 @@ export const ViewHeader = ({ worktree, refsById, emphasizedOther, onClearEmphasi
             {view.complete ? "" : "…"}
           </span>
         )}
+        <button
+          aria-label={detailsShown ? "Hide details" : "Show details"}
+          aria-pressed={detailsShown}
+          title={detailsShown ? "Hide details" : "Show details"}
+          onClick={onToggleDetails}
+          className={cn(
+            "-mr-1 flex size-7 items-center justify-center rounded-md hover:bg-foreground/[0.06] hover:text-foreground",
+            detailsShown && "text-foreground",
+          )}
+        >
+          <PanelRight className="size-4" />
+        </button>
       </div>
     </div>
   )

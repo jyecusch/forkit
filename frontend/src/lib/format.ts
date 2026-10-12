@@ -13,16 +13,26 @@ const units: Array<[Intl.RelativeTimeFormatUnit, number]> = [
   ["minute", 60],
 ]
 
-/** Formats a unix-millisecond time in the user's chosen style. */
+const full = new Intl.DateTimeFormat(undefined, { dateStyle: "full", timeStyle: "short" })
+const pad = (n: number) => String(n).padStart(2, "0")
+
+/** The complete local date and time, for tooltips. */
+export const formatFullDate = (millis: number) => full.format(new Date(millis))
+
+/**
+ * Formats a unix-millisecond time in the user's chosen style, in local
+ * time. Times slightly in the future, from clock skew between machines,
+ * read as "just now" rather than "in 2 days".
+ */
 export const formatDate = (millis: number, style: DateFormat, now = Date.now()): string => {
   const date = new Date(millis)
   switch (style) {
     case "iso":
-      return date.toISOString().slice(0, 16).replace("T", " ")
+      return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`
     case "absolute":
       return (date.getFullYear() === new Date(now).getFullYear() ? sameYear : otherYear).format(date)
     case "relative": {
-      const seconds = Math.round((millis - now) / 1000)
+      const seconds = Math.min(Math.round((millis - now) / 1000), 0)
       for (const [unit, size] of units) {
         if (Math.abs(seconds) >= size) {
           return relative.format(Math.round(seconds / size), unit)

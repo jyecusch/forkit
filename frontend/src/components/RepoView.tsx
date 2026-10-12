@@ -1,7 +1,7 @@
 import { useLiveQuery } from "@tanstack/react-db"
 import { Option } from "effect"
 import { useCallback, useMemo, useState } from "react"
-import { useRun } from "@/app/hooks"
+import { useMediaQuery, useRun } from "@/app/hooks"
 import {
   graphViewsCollection,
   operationsCollection,
@@ -61,6 +61,10 @@ export const RepoView = ({ repo, openRepo, preferences }: RepoViewProps) => {
   const [prompt, setPrompt] = useState<PromptSpec>()
   const [newWorktreeBase, setNewWorktreeBase] = useState<Ref>()
   const [scrollRequest, setScrollRequest] = useState<ScrollRequest>()
+  // The details panel follows the window's width until it is toggled.
+  const wide = useMediaQuery("(min-width: 1000px)", true)
+  const [detailsToggled, setDetailsToggled] = useState<boolean>()
+  const showDetails = detailsToggled ?? wide
 
   const scrollTo = useCallback((row: Option.Option<Option.Option<number>>) => {
     const index = Option.flatten(row)
@@ -133,6 +137,8 @@ export const RepoView = ({ repo, openRepo, preferences }: RepoViewProps) => {
         emphasizedOther={emphasizedOther}
         onClearEmphasis={() => headBranch && emphasize(headBranch)}
         view={view}
+        detailsShown={showDetails}
+        onToggleDetails={() => setDetailsToggled(!showDetails)}
       />
       <div className="flex min-h-0 flex-1">
         <main className="flex min-h-0 min-w-0 flex-1 flex-col">
@@ -155,7 +161,9 @@ export const RepoView = ({ repo, openRepo, preferences }: RepoViewProps) => {
             </div>
           )}
         </main>
-        <DetailsPanel repo={id} selected={selected} worktree={activeWorktree?.id} preferences={preferences} />
+        {showDetails && (
+          <DetailsPanel repo={id} selected={selected} worktree={activeWorktree?.id} preferences={preferences} />
+        )}
       </div>
       <Prompt spec={prompt} onClose={() => setPrompt(undefined)} />
       <NewWorktreeDialog repo={repo} base={newWorktreeBase} onClose={() => setNewWorktreeBase(undefined)} />

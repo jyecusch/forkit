@@ -1,6 +1,6 @@
 import { useLiveQuery } from "@tanstack/react-db"
 import { Cause, Effect, Exit, Fiber, Option } from "effect"
-import { useCallback, useEffect, useSyncExternalStore, type DependencyList } from "react"
+import { useCallback, useEffect, useMemo, useSyncExternalStore, type DependencyList } from "react"
 import { preferencesCollection, sessionCollection } from "@/data/collections"
 import type { Preferences, Session, Theme } from "@/model/model.gen"
 import { appRuntime, type AppServices } from "@/services/runtime"
@@ -51,7 +51,17 @@ export const usePreferences = (): Preferences | undefined =>
 export const useSession = (): Session | undefined =>
   useLiveQuery({ query: (q) => q.from({ session: sessionCollection }) }).data[0]
 
-const darkQuery = typeof matchMedia === "function" ? matchMedia("(prefers-color-scheme: dark)") : undefined
+/** Whether a CSS media query matches, following it as it changes. */
+export const useMediaQuery = (query: string, fallback: boolean): boolean => {
+  const list = useMemo(() => (typeof matchMedia === "function" ? matchMedia(query) : undefined), [query])
+  return useSyncExternalStore(
+    (listener) => {
+      list?.addEventListener("change", listener)
+      return () => list?.removeEventListener("change", listener)
+    },
+    () => list?.matches ?? fallback,
+  )
+}
 
 /**
  * The theme actually shown: the chosen one, or for "system" whichever
@@ -59,13 +69,7 @@ const darkQuery = typeof matchMedia === "function" ? matchMedia("(prefers-color-
  */
 export const useResolvedTheme = (): Exclude<Theme, "system"> => {
   const choice = usePreferences()?.appearance.theme ?? "tokyo-night"
-  const systemDark = useSyncExternalStore(
-    (listener) => {
-      darkQuery?.addEventListener("change", listener)
-      return () => darkQuery?.removeEventListener("change", listener)
-    },
-    () => darkQuery?.matches ?? true,
-  )
+  const systemDark = useMediaQuery("(prefers-color-scheme: dark)", true)
   if (choice !== "system") return choice
   return systemDark ? "tokyo-night" : "tokyo-night-day"
 }
