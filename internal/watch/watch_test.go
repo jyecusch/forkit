@@ -89,9 +89,14 @@ func startWatcher(t *testing.T, fixture *gittest.Repo) <-chan watch.Change {
 func TestWatcherReportsCommitsAndEdits(t *testing.T) {
 	fixture := gittest.New(t)
 	fixture.Commit("initial")
+	// Named like a git dir's reflogs, which are not watched.
+	fixture.WriteFile("logs/old.txt", "old")
 	changes := startWatcher(t, fixture)
 
 	fixture.WriteFile("new.txt", "hello")
+	waitFor(t, changes, func(c watch.Change) bool { return c.Status["main"] })
+
+	fixture.WriteFile("logs/new.txt", "hello")
 	waitFor(t, changes, func(c watch.Change) bool { return c.Status["main"] })
 
 	fixture.Commit("second")

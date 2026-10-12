@@ -12,9 +12,6 @@ import (
 	"github.com/fsnotify/fsnotify"
 )
 
-// skippedDirs are never watched: they change constantly and never matter.
-var skippedDirs = map[string]bool{"objects": true, "logs": true, "lfs": true}
-
 // dirSource watches every directory under its roots individually, as
 // inotify and ReadDirectoryChangesW require, except those skipDir rejects.
 // Roots whose directories would exceed the system's watch budget are left
@@ -70,7 +67,7 @@ func (s *dirSource) collectDirs(root string) []string {
 		if err != nil || !d.IsDir() {
 			return nil
 		}
-		if path != root && (d.Name() == ".git" || skippedDirs[d.Name()] || s.skipDir(path, false)) {
+		if path != root && (d.Name() == ".git" || s.skipDir(path, false)) {
 			return filepath.SkipDir
 		}
 		dirs = append(dirs, path)

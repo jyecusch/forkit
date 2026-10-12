@@ -101,7 +101,7 @@ func (w *Watcher) Update(layout Layout) error {
 // start watches layout, first reporting pending if it is not empty.
 func (w *Watcher) start(layout Layout, pending Change) error {
 	ignored := newIgnoreSet(w.ignores, layout, w.logger)
-	src, err := newSource(roots(layout), ignored.skipDir)
+	src, err := newSource(roots(layout), skipDir(layout, ignored))
 	if err != nil {
 		return err
 	}
@@ -155,6 +155,30 @@ func (w *Watcher) stopLocked() {
 		w.logger.Warn("closing watcher failed", "error", err)
 	}
 	w.source = nil
+}
+
+// gitDirNoise are directories at the top of a git dir that change
+// constantly and never matter.
+var gitDirNoise = map[string]bool{"objects": true, "logs": true, "lfs": true}
+
+// skipDir decides which directories a source that watches each directory
+// leaves alone: a git dir's object store, reflogs and LFS objects, and
+// directories git ignores. created says the directory was just made.
+func skipDir(layout Layout, ignored *ignoreSet) func(dir string, created bool) bool {
+	layout = normalizeLayout(layout)
+	gitDirs := []string{layout.CommonDir}
+	for _, wt := range layout.Worktrees {
+		if wt.GitDir != "" {
+			gitDirs = append(gitDirs, wt.GitDir)
+		}
+	}
+	return func(dir string, created bool) bool {
+		dir = normalize(dir)
+		if gitDirNoise[filepath.Base(dir)] && slices.ContainsFunc(gitDirs, func(gitDir string) bool { return samePath(filepath.Dir(dir), gitDir) }) {
+			return true
+		}
+		return ignored.skipDir(dir, created)
+	}
 }
 
 func roots(layout Layout) []string {
