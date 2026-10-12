@@ -4,7 +4,9 @@
 //
 // Each run writes OUT/origin.git, a bare repository, and OUT/repo, a clone
 // of it, so remote-tracking branches and fetches behave as they would
-// against a real server.
+// against a real server. The clone is fetched in stages, so its objects are
+// spread over several packs as they are in a clone that has been fetched
+// into for a while.
 //
 // Profiles:
 //
@@ -13,12 +15,17 @@
 //     long-lived integration lines, and around 1,900 pushed branches that
 //     are never deleted, many of which merge the trunk back in. The history
 //     is modest in length but very wide and has thousands of refs, and the
-//     pack is inflated by binary assets.
+//     pack is inflated by binary assets, a few of them tens of megabytes.
+//     Commit messages often have bodies, a thousand people commit, and one
+//     directory holds two thousand files. The clone has a JavaScript
+//     project's dependencies installed: a quarter of a million ignored files
+//     in node_modules directories, which slow down any tool that walks the
+//     working tree.
 //
 //   - deep-history: well over a million commits on a few dozen branches with
 //     regular merges, for history walking and layout at scale.
 //
-//     go run ./tools/synthrepo -profile busy-branches -out ~/forkit-perf/busy
+//     go run ./tools/synthrepo -profile busy-branches -out test-repos/busy
 package main
 
 import (
@@ -27,6 +34,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math"
 	"math/rand/v2"
 	"os"
 	"os/exec"
@@ -51,6 +59,7 @@ func main() {
 		"busy-branches": busyBranches,
 		"deep-history":  deepHistory,
 	}[*profile]
+	installsDependencies := *profile == "busy-branches"
 	if !ok {
 		log.Fatalf("unknown profile %q", *profile)
 	}
@@ -75,8 +84,15 @@ func main() {
 		log.Fatalf("fast-import: %v", err)
 	}
 
-	run("", "git", "clone", "-q", origin, filepath.Join(*out, "repo"))
-	log.Printf("generated %d commits in %s: %s", s.mark, time.Since(start).Round(time.Second), filepath.Join(*out, "repo"))
+	repo := filepath.Join(*out, "repo")
+	run("", "git", "clone", "-q", "--no-local", "--single-branch", "--no-tags", origin, repo)
+	run(repo, "git", "config", "remote.origin.fetch", "+refs/heads/*:refs/remotes/origin/*")
+	run(repo, "git", "fetch", "-q", "origin")
+	run(repo, "git", "fetch", "-q", "--tags", "origin")
+	if installsDependencies {
+		installDependencies(repo, *scale)
+	}
+	log.Printf("generated %d commits in %s: %s", s.mark, time.Since(start).Round(time.Second), repo)
 }
 
 func run(dir string, name string, args ...string) {
@@ -91,16 +107,20 @@ func run(dir string, name string, args ...string) {
 // stream writes a fast-import stream. Files live three directories deep so
 // each commit rewrites only small trees, which keeps generation fast.
 type stream struct {
-	w     *bufio.Writer
-	rng   *rand.Rand
-	mark  int
-	clock time.Time
-	end   time.Time
-	step  time.Duration
+	w    *bufio.Writer
+	rng  *rand.Rand
+	mark int
+	// authors is how many people commit.
+	authors float64
+	// bodies is the share of commits whose message has a body.
+	bodies float64
+	clock  time.Time
+	end    time.Time
+	step   time.Duration
 }
 
 func newStream(w io.Writer) *stream {
-	return &stream{w: bufio.NewWriterSize(w, 4<<20), rng: rand.New(rand.NewPCG(1, 2))}
+	return &stream{w: bufio.NewWriterSize(w, 4<<20), rng: rand.New(rand.NewPCG(1, 2)), authors: 150}
 }
 
 func (s *stream) flush() {
@@ -162,6 +182,19 @@ func (s *stream) text(size int) []byte {
 	return b
 }
 
+// withBody adds a body of a few paragraphs to some messages, averaging a
+// few hundred bytes and now and then running to several kilobytes.
+func (s *stream) withBody(subject string) string {
+	if s.rng.Float64() >= s.bodies {
+		return subject
+	}
+	size := 200 + s.rng.IntN(1000)
+	if s.rng.IntN(50) == 0 {
+		size = 3000 + s.rng.IntN(2000)
+	}
+	return subject + "\n\n" + string(s.text(size))
+}
+
 func (s *stream) binary(size int) []byte {
 	b := make([]byte, size)
 	for i := range b {
@@ -175,8 +208,10 @@ func (s *stream) binary(size int) []byte {
 func (s *stream) commit(ref, message string, parents []int, changes []change) int {
 	s.mark++
 	s.tick()
-	who := fmt.Sprintf("dev%d", s.rng.IntN(150))
+	// A few people make most of the commits, as in an open-source project.
+	who := fmt.Sprintf("dev%d", int(s.authors*math.Pow(s.rng.Float64(), 3)))
 	ident := fmt.Sprintf("%s <%s@example.com> %d +0000", who, who, s.now().Unix())
+	message = s.withBody(message)
 	fmt.Fprintf(s.w, "commit %s\nmark :%d\nauthor %s\ncommitter %s\ndata %d\n%s\n", ref, s.mark, ident, ident, len(message), message)
 	for i, parent := range parents {
 		if i == 0 {
@@ -211,13 +246,25 @@ func busyBranches(s *stream, scale float64) {
 	binaryEvery := 25
 	binarySize := 300 * 1024
 	maxActive := 70
+	// A generated directory, like snapshots or fixtures, whose tree object
+	// is rewritten whole whenever one of its files changes.
+	const wideFiles = 2000
+	wideEvery := 40
+	// Huge assets, such as a bundled binary, added now and then.
+	hugeEvery := trunkCommits / 3
+	hugeSize := 30 << 20
+	s.authors, s.bodies = 1000, 0.6
 
 	s.spanTime(18*30*24*time.Hour, trunkCommits+scaled(14500, scale))
 
-	initial := make([]change, files)
+	initial := make([]change, files, files+wideFiles+1)
 	for i := range initial {
 		initial[i] = change{path: filePath(i), content: s.text(1024 + s.rng.IntN(3*1024))}
 	}
+	for i := range wideFiles {
+		initial = append(initial, change{path: widePath(i), content: s.text(200)})
+	}
+	initial = append(initial, change{path: ".gitignore", content: []byte("node_modules\ndist\n")})
 	trunk := s.commit("refs/heads/main", "Initial commit", nil, initial)
 
 	type branch struct {
@@ -238,6 +285,12 @@ func busyBranches(s *stream, scale float64) {
 		}
 		if s.mark%binaryEvery == 0 {
 			changes = append(changes, change{path: fmt.Sprintf("assets/a%04d.bin", s.rng.IntN(400)), content: s.binary(binarySize)})
+		}
+		if s.mark%wideEvery == 0 {
+			changes = append(changes, change{path: widePath(s.rng.IntN(wideFiles)), content: s.text(200)})
+		}
+		if hugeEvery > 0 && s.mark%hugeEvery == 0 {
+			changes = append(changes, change{path: "vendor/bundle.bin", content: s.binary(hugeSize)})
 		}
 		return changes
 	}
@@ -304,6 +357,42 @@ func busyBranches(s *stream, scale float64) {
 	}
 	for _, b := range active {
 		s.reset(b.name, b.tip)
+	}
+}
+
+func widePath(n int) string {
+	return fmt.Sprintf("snapshots/s%04d.json", n)
+}
+
+// installDependencies fills node_modules directories, which the repository
+// ignores, as installing a JavaScript project's packages would: one at the
+// root and one in each of a handful of packages, holding about a quarter of
+// a million small files in some forty thousand directories.
+func installDependencies(repo string, scale float64) {
+	rng := rand.New(rand.NewPCG(3, 4))
+	roots := []string{"node_modules"}
+	for i := range 8 {
+		roots = append(roots, fmt.Sprintf("src/m%02d/node_modules", i))
+	}
+	packages := scaled(2200, scale)
+	for p := range packages {
+		root := roots[0]
+		if p%3 == 0 {
+			root = roots[1+rng.IntN(len(roots)-1)]
+		}
+		pkg := filepath.Join(repo, root, fmt.Sprintf("@scope%d", p%40), fmt.Sprintf("pkg-%d", p))
+		for d := range 14 {
+			dir := filepath.Join(pkg, "lib", fmt.Sprintf("d%d", d%5), fmt.Sprintf("e%d", d))
+			if err := os.MkdirAll(dir, 0o755); err != nil {
+				log.Fatal(err)
+			}
+			for f := range 8 {
+				name := filepath.Join(dir, fmt.Sprintf("f%d.js", f))
+				if err := os.WriteFile(name, []byte(fmt.Sprintf("module.exports = %d\n", rng.Int())), 0o644); err != nil {
+					log.Fatal(err)
+				}
+			}
+		}
 	}
 }
 

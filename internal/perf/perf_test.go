@@ -2,8 +2,8 @@
 // repositories generated with tools/synthrepo, or any repository named by
 // FORKIT_PERF_REPO. The tests are skipped when it is unset.
 //
-//	go run ./tools/synthrepo -profile busy-branches -out ~/forkit-perf/busy
-//	FORKIT_PERF_REPO=~/forkit-perf/busy/repo go test ./internal/perf -v
+//	go run ./tools/synthrepo -profile busy-branches -out test-repos/busy
+//	FORKIT_PERF_REPO=$PWD/test-repos/busy/repo go test ./internal/perf -v
 package perf
 
 import (
@@ -191,6 +191,31 @@ func TestBackendBudgets(t *testing.T) {
 		}
 		check(t, "file edit to status update", updated(t, since), changeBudget)
 		logSpans(t, spans, since)
+	})
+
+	t.Run("installing dependencies", func(t *testing.T) {
+		if _, err := os.Stat(filepath.Join(path, "node_modules")); err != nil {
+			t.Skip("the repository has no node_modules")
+		}
+		pkg := filepath.Join(path, "node_modules", "forkit-perf-install")
+		t.Cleanup(func() { os.RemoveAll(pkg) })
+		waitIdle()
+		since := time.Now()
+		for i := range 500 {
+			file := filepath.Join(pkg, fmt.Sprintf("d%d", i%25), fmt.Sprintf("f%d.js", i))
+			if err := os.MkdirAll(filepath.Dir(file), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(file, []byte("module.exports = 1\n"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}
+		waitIdle()
+		for _, span := range spans.Ended() {
+			if span.Name() == "git status" && span.StartTime().After(since) {
+				t.Errorf("writing ignored files read status at +%v", span.StartTime().Sub(since).Round(time.Millisecond))
+			}
+		}
 	})
 
 	t.Run("fetch updating many refs", func(t *testing.T) {

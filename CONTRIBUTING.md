@@ -57,7 +57,7 @@ go run ./tools/synthrepo -profile deep-history -out test-repos/deep    # slower;
 FORKIT_PERF_REPO=$PWD/test-repos/busy/repo go test ./internal/perf -v -count=1
 ```
 
-- `busy-branches` reproduces a squash-merge workflow: thousands of left-over remote branches, frequent release tags, a wide graph and a large pack. Repositories like this are slow to open in many clients.
+- `busy-branches` reproduces a squash-merge workflow: thousands of left-over remote branches, frequent release tags, a wide graph and a large pack spread over more than one pack file. Its working tree has a JavaScript project's dependencies installed, a quarter of a million ignored files, which is what makes repositories like this slow to open in many clients.
 - `deep-history` stresses history walking and layout.
 
 Each profile produces a bare `origin.git` and a `repo` clone, so fetches work against it. The test logs a span breakdown of any slow step. Any local repository works as `FORKIT_PERF_REPO` too.
