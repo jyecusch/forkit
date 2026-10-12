@@ -30,6 +30,8 @@
   --destructive: #f7768e;
   --success: #9ece6a;
   --warning: #e0af68;
+  /* Marks where the user is in the navigator: Tokyo Night's yellow. */
+  --highlight: #e0af68;
   --lane-0: #9aa5ce;
   --lane-1: #bb9af7;
   --lane-2: #7dcfff;
@@ -63,6 +65,7 @@
   --destructive: #d0164f;
   --success: #587539;
   --warning: #8c6c3e;
+  --highlight: #8c6c3e;
   --lane-0: #6b7089;
   --lane-1: #9854f1;
   --lane-2: #007197;
@@ -98,6 +101,7 @@
   --color-destructive: var(--destructive);
   --color-success: var(--success);
   --color-warning: var(--warning);
+  --color-highlight: var(--highlight);
   --font-sans: "IBM Plex Sans", system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, monospace;
 }

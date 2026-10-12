@@ -314,27 +314,29 @@ export const RepoNav = (props: RepoNavProps) => {
 interface NavButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   readonly depth: number
   readonly icon: ReactNode
-  /** Filled: the emphasized ref. */
+  /** Where the user is: the active worktree, or the emphasized ref. */
   readonly selected?: boolean
-  /** Bold without a fill: the active worktree. */
-  readonly current?: boolean
 }
 
-/** A navigator row: icon slot on the guide for its depth, then content. */
-const NavButton = ({ depth, icon, selected = false, current = false, children, className, ...rest }: NavButtonProps) => (
+/**
+ * A navigator row: icon slot on the guide for its depth, then content. The
+ * selected rows take the theme's highlight colour.
+ */
+const NavButton = ({ depth, icon, selected = false, children, className, ...rest }: NavButtonProps) => (
   <button
     {...rest}
     className={cn(
       "group flex h-full w-full items-center gap-2 rounded-md pr-2 text-left",
       "focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring",
       "data-[state=open]:shadow-[inset_0_0_0_1px_var(--ring)]",
-      selected ? "bg-foreground/[0.08] text-foreground" : "text-secondary-foreground hover:bg-foreground/[0.05] hover:text-foreground",
-      current && "font-medium text-foreground",
+      selected
+        ? "bg-highlight/15 font-medium text-foreground"
+        : "text-secondary-foreground hover:bg-foreground/[0.05] hover:text-foreground",
       className,
     )}
     style={{ paddingLeft: 8 + depth * levelIndent }}
   >
-    <span className={cn("flex size-4 flex-none items-center justify-center", current ? "text-foreground" : "text-subtle-foreground")}>
+    <span className={cn("flex size-4 flex-none items-center justify-center", selected ? "text-highlight" : "text-subtle-foreground")}>
       {icon}
     </span>
     {children}
@@ -353,7 +355,7 @@ const WorktreeRow = ({
   const changes = changeCount(worktree)
   const refsById = useMemo(() => new Map<string, Ref>(refs.map((ref) => [ref.id, ref])), [refs])
   const item = (
-    <NavButton {...tree} depth={0} current={active} aria-current={active} title={worktree.path} onClick={() => onSelectWorktree(worktree)} icon={<WorktreeIcon worktree={worktree} className="size-3.5" />}>
+    <NavButton {...tree} depth={0} selected={active} aria-selected={active} title={worktree.path} onClick={() => onSelectWorktree(worktree)} icon={<WorktreeIcon worktree={worktree} className="size-3.5" />}>
       <span className="truncate">{row.name}</span>
       <span className="min-w-0 flex-1 truncate text-xs text-subtle-foreground">{headLabel(worktree, refsById)}</span>
       {worktree.operation !== "none" && <span aria-label="Operation in progress" className="size-1.5 flex-none rounded-full bg-warning" />}
