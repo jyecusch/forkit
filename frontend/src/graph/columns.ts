@@ -1,52 +1,49 @@
 import { gutter, laneWidth } from "./geometry"
 
-/** Horizontal padding of the commit list, both sides together. */
-export const listPadding = 28
+/** Horizontal inset of the commit list's content, each side. */
+export const listInset = 12
 const gap = 12
-const commitWidth = 72
-const dateWidth = 100
-const authorWidth = 140
-const minDescription = 220
-const minGraph = 64
-/** The graph never takes more than this share of the pane. */
-const maxGraphShare = 0.35
+const commitWidth = 64
+const dateWidth = 96
+const authorWidth = 136
+const minDescription = 320
+const minGraph = 48
+const maxGraph = 160
 
 export interface Columns {
   /** Width of the graph column; lanes beyond it are reached by panning. */
   readonly graph: number
-  /** Width the graph would need to show every lane. */
+  /** Width the graph would need to show every lane on screen. */
   readonly graphNeeds: number
   readonly showAuthor: boolean
   readonly showDate: boolean
+  readonly showCommit: boolean
   /** CSS grid-template-columns for the header and every row. */
   readonly template: string
 }
 
+/** The graph width that shows lanes 0..widestLane. */
+export const graphWidthFor = (widestLane: number) => gutter * 2 + Math.max(widestLane, 0) * laneWidth
+
 /**
- * Sizes the commit list's columns for the pane width. The description gets
- * what is left after the others, never less than minDescription; author and
- * then date are dropped when the pane is too narrow for them.
+ * Sizes the commit list's columns. The description always keeps at least
+ * minDescription; author, then commit, then date make way for it on narrow
+ * panes. The graph takes what the lanes on screen need, up to maxGraph.
  */
-export const layoutColumns = (paneWidth: number, laneCount: number): Columns => {
-  const graphNeeds = gutter * 2 + Math.max(laneCount - 1, 0) * laneWidth
+export const layoutColumns = (paneWidth: number, widestLane: number): Columns => {
+  const graphNeeds = graphWidthFor(widestLane)
   const choices = [
-    { showAuthor: true, showDate: true },
-    { showAuthor: false, showDate: true },
-    { showAuthor: false, showDate: false },
+    { showAuthor: true, showDate: true, showCommit: true },
+    { showAuthor: false, showDate: true, showCommit: true },
+    { showAuthor: false, showDate: true, showCommit: false },
+    { showAuthor: false, showDate: false, showCommit: false },
   ]
-  const fixedWidth = ({ showAuthor, showDate }: (typeof choices)[number]) =>
-    listPadding + commitWidth + gap * (2 + Number(showAuthor) + Number(showDate)) + (showAuthor ? authorWidth : 0) + (showDate ? dateWidth : 0)
+  type Choice = (typeof choices)[number]
+  const optional = (c: Choice) =>
+    [c.showAuthor && authorWidth, c.showDate && dateWidth, c.showCommit && commitWidth].filter((w): w is number => typeof w === "number")
+  const fixedWidth = (c: Choice) => listInset * 2 + optional(c).reduce((sum, w) => sum + w + gap, gap)
   const choice = choices.find((c) => paneWidth - fixedWidth(c) >= minDescription + minGraph) ?? choices[choices.length - 1]!
-  const room = paneWidth - fixedWidth(choice) - minDescription
-  const graph = Math.max(minGraph, Math.min(graphNeeds, paneWidth * maxGraphShare, room))
-  const template = [
-    `${graph}px`,
-    "minmax(0,1fr)",
-    choice.showAuthor && `${authorWidth}px`,
-    choice.showDate && `${dateWidth}px`,
-    `${commitWidth}px`,
-  ]
-    .filter(Boolean)
-    .join(" ")
+  const graph = Math.max(minGraph, Math.min(graphNeeds, maxGraph, paneWidth - fixedWidth(choice) - minDescription))
+  const template = [`${graph}px`, "minmax(0,1fr)", ...optional(choice).map((w) => `${w}px`)].join(" ")
   return { graph, graphNeeds, ...choice, template }
 }

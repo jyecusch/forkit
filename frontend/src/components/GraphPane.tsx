@@ -2,9 +2,9 @@ import { useVirtualizer } from "@tanstack/react-virtual"
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type KeyboardEvent } from "react"
 import { useForkedEffect } from "@/app/hooks"
 import { useService } from "@/app/services"
-import { layoutColumns, listPadding } from "@/graph/columns"
+import { layoutColumns, listInset } from "@/graph/columns"
 import { drawGraph, readPalette, type GraphPalette } from "@/graph/draw"
-import { geometry, laneX, rowHeight } from "@/graph/geometry"
+import { geometry, laneX, laneWidth, rowHeight, widestLane } from "@/graph/geometry"
 import { formatDate, shortOid } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import type { GraphView, Preferences, Ref, RefId, RepoId } from "@/model/model.gen"
@@ -84,7 +84,8 @@ export const GraphPane = (props: GraphPaneProps) => {
     setPalette(readPalette(document.documentElement))
   }, [theme])
 
-  const columns = layoutColumns(paneWidth, view.laneCount)
+  const widest = useSettledMax(widestLane(first, last, (index) => graphData.peek(repo, index)), dataVersion)
+  const columns = layoutColumns(paneWidth, widest)
   const maxOffset = Math.max(columns.graphNeeds - columns.graph, 0)
   const clampedOffsetX = Math.min(offsetX, maxOffset)
 
@@ -174,17 +175,22 @@ export const GraphPane = (props: GraphPaneProps) => {
 
   const clippedLeft = clampedOffsetX > 0
   const clippedRight = clampedOffsetX < maxOffset
+  const hiddenLanes = Math.round(maxOffset / laneWidth)
+  const fade = 16
+  const canvasMask = `linear-gradient(to right, ${clippedLeft ? "transparent" : "black"}, black ${fade}px, black calc(100% - ${fade}px), ${clippedRight ? "transparent" : "black"})`
   return (
     <section ref={sectionRef} className="flex min-h-0 min-w-0 flex-1 flex-col" aria-label="History">
       <div
-        className="grid h-8 flex-none items-center gap-3 border-b text-xs font-medium whitespace-nowrap text-subtle-foreground"
-        style={{ gridTemplateColumns: columns.template, paddingInline: listPadding / 2 }}
+        className="grid h-8 flex-none items-center gap-3 overflow-y-hidden border-b text-xs font-medium whitespace-nowrap text-subtle-foreground [scrollbar-gutter:stable]"
+        style={{ gridTemplateColumns: columns.template, paddingInline: listInset }}
       >
-        <span>Graph</span>
+        <span className="text-[11px] tabular-nums" title={hiddenLanes > 0 ? "Scroll sideways over the graph to see more lanes" : undefined}>
+          {hiddenLanes > 0 && `+${hiddenLanes} lanes`}
+        </span>
         <span>Description</span>
         {columns.showAuthor && <span>Author</span>}
         {columns.showDate && <span>Date</span>}
-        <span>Commit</span>
+        {columns.showCommit && <span>Commit</span>}
       </div>
       <div
         ref={scrollRef}
@@ -193,7 +199,7 @@ export const GraphPane = (props: GraphPaneProps) => {
         tabIndex={0}
         onKeyDown={onKeyDown}
         onWheel={onWheel}
-        className="relative flex-1 overflow-y-auto outline-none"
+        className="relative flex-1 overflow-y-auto outline-none [scrollbar-gutter:stable]"
       >
         <div style={{ height: virtualizer.getTotalSize(), position: "relative" }}>
           {items.map((item) => (
@@ -205,6 +211,7 @@ export const GraphPane = (props: GraphPaneProps) => {
               columns={columns.template}
               showAuthor={columns.showAuthor}
               showDate={columns.showDate}
+              showCommit={columns.showCommit}
               selected={selectedOid !== undefined && graphData.peek(repo, item.index)?.row.oid === selectedOid}
               anyEmphasis={emphasized !== undefined}
               refsById={props.refsById}
@@ -217,29 +224,31 @@ export const GraphPane = (props: GraphPaneProps) => {
             ref={canvasRef}
             aria-hidden
             className="pointer-events-none absolute"
-            style={{ top: canvasTop, left: listPadding / 2, width: columns.graph, height: canvasHeight }}
+            style={{ top: canvasTop, left: listInset, width: columns.graph, height: canvasHeight, maskImage: canvasMask }}
           />
-        </div>
-        <div className="pointer-events-none sticky bottom-0 h-0">
-          {clippedLeft && <EdgeFade side="left" left={listPadding / 2} height={viewportHeight} />}
-          {clippedRight && <EdgeFade side="right" left={listPadding / 2 + columns.graph - 24} height={viewportHeight} />}
         </div>
       </div>
     </section>
   )
 }
 
-/** Shades the edge of the graph where lanes continue out of view. */
-const EdgeFade = ({ side, left, height }: { side: "left" | "right"; left: number; height: number }) => (
-  <div
-    className="absolute bottom-0 w-6"
-    style={{
-      left,
-      height,
-      background: `linear-gradient(to ${side === "left" ? "right" : "left"}, var(--background), transparent)`,
-    }}
-  />
-)
+/**
+ * Follows a value that changes while scrolling: increases apply at once, and
+ * decreases wait until it has been stable for a moment, so columns sized
+ * from it do not shift back and forth during a scroll.
+ */
+const useSettledMax = (value: number, revision: number) => {
+  const [settled, setSettled] = useState(value)
+  useEffect(() => {
+    if (value >= settled) {
+      setSettled(value)
+      return
+    }
+    const timer = setTimeout(() => setSettled(value), 600)
+    return () => clearTimeout(timer)
+  }, [value, settled, revision])
+  return Math.max(value, settled)
+}
 
 /** Tracks an element's size as it is resized. */
 const useSize = (ref: React.RefObject<HTMLElement | null>) => {
@@ -263,6 +272,7 @@ interface CommitRowProps {
   readonly columns: string
   readonly showAuthor: boolean
   readonly showDate: boolean
+  readonly showCommit: boolean
   readonly selected: boolean
   readonly anyEmphasis: boolean
   readonly refsById: ReadonlyMap<string, Ref>
@@ -278,6 +288,7 @@ const CommitRow = memo(function CommitRow({
   columns,
   showAuthor,
   showDate,
+  showCommit,
   selected,
   anyEmphasis,
   refsById,
@@ -285,7 +296,7 @@ const CommitRow = memo(function CommitRow({
   dateFormat,
   onSelect,
 }: CommitRowProps) {
-  const style = { top, height: rowHeight, gridTemplateColumns: columns, paddingInline: listPadding / 2 }
+  const style = { top, height: rowHeight, gridTemplateColumns: columns, paddingInline: listInset }
   if (!loaded) {
     return (
       <div role="row" aria-rowindex={index + 1} className="absolute inset-x-0 grid items-center gap-3" style={style}>
@@ -331,7 +342,7 @@ const CommitRow = memo(function CommitRow({
       </span>
       {showAuthor && <span className={meta}>{commit.authorName}</span>}
       {showDate && <span className={meta}>{formatDate(commit.authorTime, dateFormat)}</span>}
-      <span className={cn("font-mono text-xs", dim ? "text-muted-foreground" : "text-secondary-foreground")}>{shortOid(row.oid)}</span>
+      {showCommit && <span className={cn("font-mono text-xs", dim ? "text-muted-foreground" : "text-secondary-foreground")}>{shortOid(row.oid)}</span>}
     </div>
   )
 })

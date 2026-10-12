@@ -1,8 +1,9 @@
+import type { EdgeKind } from "@/model/model.gen"
 import type { LoadedRow } from "@/services/GraphData"
 
 /** Sizes the graph is drawn at, in CSS pixels. */
 export const rowHeight = 28
-export const laneWidth = 16
+export const laneWidth = 18
 export const gutter = 12
 
 export const laneX = (lane: number) => gutter + lane * laneWidth
@@ -13,22 +14,29 @@ export interface Segment {
   readonly y1: number
   readonly x2: number
   readonly y2: number
+  readonly kind: EdgeKind
   readonly thread: number
   readonly emphasized: boolean
 }
+
+/**
+ * How a commit is drawn: ordinary commits are solid, merges are rings, and
+ * the commit a worktree has checked out is solid with an outer ring.
+ */
+export type DotShape = "commit" | "merge" | "head"
 
 export interface Dot {
   readonly x: number
   readonly y: number
   readonly thread: number
   readonly emphasized: boolean
-  /** Merges and the checked-out commit are drawn as rings. */
-  readonly hollow: boolean
+  readonly shape: DotShape
 }
 
 export interface Geometry {
   /** Ordered so emphasized lines are drawn over the rest. */
   readonly segments: ReadonlyArray<Segment>
+  /** Ordered so emphasized dots are drawn over the rest. */
   readonly dots: ReadonlyArray<Dot>
 }
 
@@ -50,8 +58,7 @@ export const geometry = (options: {
   const { first, last, originY, offsetX, rowAt, headOids, anyEmphasis } = options
   const centerY = (index: number) => index * rowHeight + rowHeight / 2 - originY
   const x = (lane: number) => laneX(lane) - offsetX
-  const plain: Array<Segment> = []
-  const strong: Array<Segment> = []
+  const segments: Array<Segment> = []
   const dots: Array<Dot> = []
   for (let index = Math.max(0, first - 1); index <= last; index++) {
     const loaded = rowAt(index)
@@ -60,14 +67,14 @@ export const geometry = (options: {
     }
     const { row, commit } = loaded
     for (const edge of row.edges) {
-      const emphasized = !anyEmphasis || edge.onEmphasized
-      ;(emphasized ? strong : plain).push({
+      segments.push({
         x1: x(edge.fromLane),
         y1: centerY(index),
         x2: x(edge.toLane),
         y2: centerY(index + 1),
+        kind: edge.kind,
         thread: edge.threadId,
-        emphasized,
+        emphasized: !anyEmphasis || edge.onEmphasized,
       })
     }
     dots.push({
@@ -75,8 +82,22 @@ export const geometry = (options: {
       y: centerY(index),
       thread: row.threadId,
       emphasized: !anyEmphasis || row.onEmphasized,
-      hollow: commit.parents.length > 1 || headOids.has(row.oid),
+      shape: headOids.has(row.oid) ? "head" : commit.parents.length > 1 ? "merge" : "commit",
     })
   }
-  return { segments: [...plain, ...strong], dots }
+  const emphasizedLast = <T extends { readonly emphasized: boolean }>(items: Array<T>) =>
+    items.sort((a, b) => Number(a.emphasized) - Number(b.emphasized))
+  return { segments: emphasizedLast(segments), dots: emphasizedLast(dots) }
+}
+
+/** The widest lane any loaded row in [first, last] draws on, or -1 if none. */
+export const widestLane = (first: number, last: number, rowAt: (index: number) => LoadedRow | undefined): number => {
+  let widest = -1
+  for (let index = Math.max(0, first - 1); index <= last; index++) {
+    const loaded = rowAt(index)
+    if (!loaded) continue
+    widest = Math.max(widest, loaded.row.lane)
+    for (const edge of loaded.row.edges) widest = Math.max(widest, edge.fromLane, edge.toLane)
+  }
+  return widest
 }

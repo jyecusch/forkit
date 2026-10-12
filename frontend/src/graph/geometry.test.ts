@@ -30,15 +30,17 @@ describe("geometry", () => {
     anyEmphasis: true,
   })
 
-  it("draws emphasized lines last so they sit on top", () => {
+  it("draws emphasized lines and dots last so they sit on top", () => {
+    expect(result.dots.map((d) => d.emphasized)).toEqual([false, true, true])
     expect(result.segments.map((s) => s.emphasized)).toEqual([false, true, true])
   })
 
   it("positions rows relative to the canvas origin", () => {
-    expect(result.dots[1]).toMatchObject({ x: laneX(1), y: rowHeight / 2 })
+    expect(result.dots.find((d) => d.x === laneX(1))).toMatchObject({ y: rowHeight / 2 })
   })
 
-  it("draws merges and checked-out commits as rings", () => {
-    expect(result.dots.map((d) => d.hollow)).toEqual([true, false, true])
+  it("tells merges and checked-out commits apart from ordinary ones", () => {
+    const shapes = Object.fromEntries(result.dots.map((d) => [d.y, d.shape]))
+    expect(Object.values(shapes).sort()).toEqual(["commit", "head", "merge"])
   })
 })
