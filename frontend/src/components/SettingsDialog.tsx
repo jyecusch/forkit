@@ -24,14 +24,14 @@ export const SettingsDialog = ({ open, onOpenChange, preferences: p }: SettingsD
       <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-[520px]">
         <DialogHeader>
           <DialogTitle>Preferences</DialogTitle>
-          <DialogDescription>Changes apply straight away. They are stored in Forkit's preferences file, which you can also edit by hand.</DialogDescription>
+          <DialogDescription>Changes are saved as you make them.</DialogDescription>
         </DialogHeader>
 
         <Group title="Appearance">
           <Row label="Theme">
             <Choice
               value={p.appearance.theme}
-              options={{ "tokyo-night": "Tokyo Night", "tokyo-night-day": "Tokyo Night Day" }}
+              options={{ system: "Match system", "tokyo-night": "Tokyo Night", "tokyo-night-day": "Tokyo Night Day" }}
               onChange={(v) => set("appearance.theme", v)}
             />
           </Row>
@@ -57,7 +57,7 @@ export const SettingsDialog = ({ open, onOpenChange, preferences: p }: SettingsD
           <Row label="Show tags">
             <Switch checked={p.graph.showTags} onCheckedChange={(v) => set("graph.showTags", v)} />
           </Row>
-          <Row label="Dim other history to">
+          <Row label="Strength of other history">
             <OpacitySlider value={p.graph.dimmedOpacity} onCommit={(v) => set("graph.dimmedOpacity", v)} />
           </Row>
         </Group>
@@ -101,25 +101,26 @@ export const SettingsDialog = ({ open, onOpenChange, preferences: p }: SettingsD
 }
 
 const Group = ({ title, children }: { title: string; children: ReactNode }) => (
-  <section className="flex flex-col gap-2">
+  <section className="flex flex-col">
     <h3 className="text-xs font-medium text-subtle-foreground">{title}</h3>
     {children}
   </section>
 )
 
+/** Labels on the left, every control in one 200 px column on the right. */
 const Row = ({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) => (
-  <div className="flex items-center justify-between gap-4">
-    <div className="flex flex-col">
+  <div className="grid min-h-9 grid-cols-[minmax(0,1fr)_200px] items-center gap-4 py-1">
+    <div className="flex min-w-0 flex-col">
       <span>{label}</span>
       {hint && <span className="text-xs text-subtle-foreground">{hint}</span>}
     </div>
-    {children}
+    <div className="flex justify-end">{children}</div>
   </div>
 )
 
 const Choice = <V extends string>({ value, options, onChange }: { value: V; options: Record<V, string>; onChange: (value: V) => void }) => (
   <Select value={value} onValueChange={(v) => onChange(v as V)}>
-    <SelectTrigger className="w-44">
+    <SelectTrigger className="w-full">
       <SelectValue />
     </SelectTrigger>
     <SelectContent>
@@ -146,7 +147,7 @@ const TextInput = ({ value, placeholder, onCommit }: { value: string; placeholde
   }
   return (
     <Input
-      className="w-56"
+      className="w-full"
       value={draft}
       placeholder={placeholder}
       onChange={(event) => setDraft(event.target.value)}
@@ -160,8 +161,9 @@ const TextInput = ({ value, placeholder, onCommit }: { value: string; placeholde
 const OpacitySlider = ({ value, onCommit }: { value: number; onCommit: (value: number) => void }) => {
   const [draft, setDraft] = useState<number>()
   return (
+    <div className="flex w-full items-center gap-3">
     <Slider
-      className="w-40"
+      className="flex-1"
       min={0.1}
       max={0.8}
       step={0.05}
@@ -172,6 +174,8 @@ const OpacitySlider = ({ value, onCommit }: { value: number; onCommit: (value: n
         if (v !== undefined && v !== value) onCommit(v)
       }}
     />
+    <span className="w-9 text-right text-xs text-subtle-foreground tabular-nums">{Math.round((draft ?? value) * 100)}%</span>
+    </div>
   )
 }
 

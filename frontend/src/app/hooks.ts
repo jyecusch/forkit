@@ -1,8 +1,8 @@
 import { useLiveQuery } from "@tanstack/react-db"
 import { Cause, Effect, Exit, Fiber, Option } from "effect"
-import { useCallback, useEffect, type DependencyList } from "react"
+import { useCallback, useEffect, useSyncExternalStore, type DependencyList } from "react"
 import { preferencesCollection, sessionCollection } from "@/data/collections"
-import type { Preferences, Session } from "@/model/model.gen"
+import type { Preferences, Session, Theme } from "@/model/model.gen"
 import { appRuntime, type AppServices } from "@/services/runtime"
 import { notify } from "./notifications"
 
@@ -50,3 +50,22 @@ export const usePreferences = (): Preferences | undefined =>
 /** The current session, or undefined until the first snapshot arrives. */
 export const useSession = (): Session | undefined =>
   useLiveQuery({ query: (q) => q.from({ session: sessionCollection }) }).data[0]
+
+const darkQuery = typeof matchMedia === "function" ? matchMedia("(prefers-color-scheme: dark)") : undefined
+
+/**
+ * The theme actually shown: the chosen one, or for "system" whichever
+ * matches the operating system's appearance, following it as it changes.
+ */
+export const useResolvedTheme = (): Exclude<Theme, "system"> => {
+  const choice = usePreferences()?.appearance.theme ?? "tokyo-night"
+  const systemDark = useSyncExternalStore(
+    (listener) => {
+      darkQuery?.addEventListener("change", listener)
+      return () => darkQuery?.removeEventListener("change", listener)
+    },
+    () => darkQuery?.matches ?? true,
+  )
+  if (choice !== "system") return choice
+  return systemDark ? "tokyo-night" : "tokyo-night-day"
+}

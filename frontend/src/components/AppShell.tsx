@@ -1,7 +1,7 @@
 import { useLiveQuery } from "@tanstack/react-db"
 import { Outlet, useNavigate } from "@tanstack/react-router"
 import { useEffect, useLayoutEffect, useMemo } from "react"
-import { usePreferences, useSession } from "@/app/hooks"
+import { usePreferences, useResolvedTheme, useSession } from "@/app/hooks"
 import { useService } from "@/app/services"
 import { GraphData } from "@/services/GraphData"
 import { TooltipProvider } from "@/components/ui/tooltip"
@@ -25,9 +25,12 @@ export const AppShell = () => {
 
   // A layout effect, so the theme is applied before any child's passive
   // effects read colours from it, such as the graph canvas palette.
+  const theme = useResolvedTheme()
+  useLayoutEffect(() => {
+    document.documentElement.dataset.theme = theme
+  }, [theme])
   useLayoutEffect(() => {
     if (!preferences) return
-    document.documentElement.dataset.theme = preferences.appearance.theme
     document.documentElement.style.setProperty("--app-font-size", `${preferences.appearance.fontSize}px`)
   }, [preferences])
 

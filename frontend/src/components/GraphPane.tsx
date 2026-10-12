@@ -1,6 +1,6 @@
 import { useVirtualizer } from "@tanstack/react-virtual"
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type KeyboardEvent } from "react"
-import { useForkedEffect } from "@/app/hooks"
+import { useForkedEffect, useResolvedTheme } from "@/app/hooks"
 import { useService } from "@/app/services"
 import { layoutColumns, listInset } from "@/graph/columns"
 import { drawGraph, readPalette, type GraphPalette } from "@/graph/draw"
@@ -79,7 +79,7 @@ export const GraphPane = (props: GraphPaneProps) => {
     }
   }, [scrollRequest, virtualizer])
 
-  const theme = preferences.appearance.theme
+  const theme = useResolvedTheme()
   useEffect(() => {
     setPalette(readPalette(document.documentElement))
   }, [theme])
@@ -199,7 +199,7 @@ export const GraphPane = (props: GraphPaneProps) => {
         tabIndex={0}
         onKeyDown={onKeyDown}
         onWheel={onWheel}
-        className="relative flex-1 overflow-y-auto outline-none [scrollbar-gutter:stable]"
+        className="relative flex-1 overflow-y-auto [scrollbar-gutter:stable]"
       >
         <div style={{ height: virtualizer.getTotalSize(), position: "relative" }}>
           {items.map((item) => (

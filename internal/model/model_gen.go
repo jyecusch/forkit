@@ -204,9 +204,11 @@ type CheckoutResult struct {
 	ReapplyConflicted bool `json:"reapplyConflicted"`
 }
 
+// system follows the operating system's light or dark appearance.
 type Theme string
 
 const (
+	ThemeSystem        Theme = "system"
 	ThemeTokyoNight    Theme = "tokyo-night"
 	ThemeTokyoNightDay Theme = "tokyo-night-day"
 )

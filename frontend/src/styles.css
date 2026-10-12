@@ -11,13 +11,13 @@
 :root,
 [data-theme="tokyo-night"] {
   --background: #1a1b26;
-  --sidebar: #16161e;
+  --sidebar: #121219;
   --card: #24283b;
   --popover: #24283b;
   --foreground: #c0caf5;
   --secondary-foreground: #a9b1d6;
-  --muted-foreground: #565f89;
-  --subtle-foreground: #737aa2;
+  --muted-foreground: #6f77a3;
+  --subtle-foreground: #8189b3;
   --border: #292e42;
   --input: #292e42;
   --ring: #7aa2f7;
@@ -41,21 +41,21 @@
 }
 
 [data-theme="tokyo-night-day"] {
-  --background: #e1e2e7;
-  --sidebar: #d0d5e3;
-  --card: #e9e9ed;
-  --popover: #e9e9ed;
-  --foreground: #3760bf;
-  --secondary-foreground: #6172b0;
-  --muted-foreground: #848cb5;
-  --subtle-foreground: #6172b0;
-  --border: #c4c8da;
-  --input: #c4c8da;
+  --background: #eeeef2;
+  --sidebar: #e1e2e7;
+  --card: #f7f7f9;
+  --popover: #f7f7f9;
+  --foreground: #2b3047;
+  --secondary-foreground: #4a5070;
+  --muted-foreground: #7a7f9a;
+  --subtle-foreground: #5a6080;
+  --border: #d3d5df;
+  --input: #d3d5df;
   --ring: #2e7de9;
-  --selection: #b7c1e3;
-  --accent: #c4c8da;
-  --muted: #d0d5e3;
-  --secondary: #c4c8da;
+  --selection: #d6def5;
+  --accent: #dfe0e8;
+  --muted: #e4e5ec;
+  --secondary: #dfe0e8;
   --primary: #2e7de9;
   --primary-foreground: #e1e2e7;
   --destructive: #f52a65;
@@ -101,7 +101,18 @@
 
 @layer base {
   * {
-    @apply border-border outline-ring/50;
+    @apply border-border;
+  }
+  /* One focus treatment everywhere: rows draw it inside, controls outside. */
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+  [role="row"]:focus-visible,
+  [role="tab"]:focus-visible,
+  [role="grid"]:focus-visible,
+  nav button:focus-visible {
+    outline-offset: -2px;
   }
   html,
   body,

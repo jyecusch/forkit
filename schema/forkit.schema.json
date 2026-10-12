@@ -155,7 +155,7 @@
       }
     },
 
-    "Theme": { "enum": ["tokyo-night", "tokyo-night-day"] },
+    "Theme": { "enum": ["system", "tokyo-night", "tokyo-night-day"], "description": "system follows the operating system's light or dark appearance." },
     "DateFormat": { "enum": ["relative", "absolute", "iso"] },
     "GraphOrder": { "enum": ["topo", "date"] },
     "DirtyCheckout": { "enum": ["ask", "stash", "carry"] },

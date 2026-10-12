@@ -168,7 +168,8 @@ export const CheckoutResult = Schema.Struct({
 })
 export type CheckoutResult = typeof CheckoutResult.Type
 
-export const Theme = Schema.Literals(["tokyo-night", "tokyo-night-day"])
+/** system follows the operating system's light or dark appearance. */
+export const Theme = Schema.Literals(["system", "tokyo-night", "tokyo-night-day"])
 export type Theme = typeof Theme.Type
 
 export const DateFormat = Schema.Literals(["relative", "absolute", "iso"])
