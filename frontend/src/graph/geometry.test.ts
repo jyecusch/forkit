@@ -23,7 +23,7 @@ describe("geometry", () => {
   const result = geometry({
     first: 0,
     last: 2,
-    scrollTop: rowHeight,
+    originY: rowHeight,
     offsetX: 0,
     rowAt: (i) => rows[i],
     headOids: new Set(["c2"]),
@@ -34,7 +34,7 @@ describe("geometry", () => {
     expect(result.segments.map((s) => s.emphasized)).toEqual([false, true, true])
   })
 
-  it("positions rows relative to the scrolled viewport", () => {
+  it("positions rows relative to the canvas origin", () => {
     expect(result.dots[1]).toMatchObject({ x: laneX(1), y: rowHeight / 2 })
   })
 

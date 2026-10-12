@@ -26,7 +26,7 @@ export const DetailsPanel = ({ repo, selected, worktree, preferences }: DetailsP
   const tab = chosen.oid === oid ? chosen.tab : "commit"
   const setTab = (next: Tab) => setChosen({ tab: next, oid })
   return (
-    <aside aria-label="Details" className="flex w-[340px] min-w-[280px] flex-none flex-col border-l">
+    <aside aria-label="Details" className="flex w-[clamp(260px,26vw,340px)] flex-none flex-col border-l">
       <div role="tablist" className="flex gap-1 border-b px-3 pt-2">
         <TabButton active={tab === "commit"} onClick={() => setTab("commit")}>
           Commit

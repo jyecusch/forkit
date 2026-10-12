@@ -34,20 +34,21 @@ export interface Geometry {
 
 /**
  * Lays out the lines and dots for rows [first, last], positioned relative to
- * the top of the viewport. Rows that have not loaded yet are skipped.
+ * originY, the list position of the canvas's top edge. Rows that have not
+ * loaded yet are skipped.
  */
 export const geometry = (options: {
   readonly first: number
   readonly last: number
-  readonly scrollTop: number
+  readonly originY: number
   readonly offsetX: number
   readonly rowAt: (index: number) => LoadedRow | undefined
   readonly headOids: ReadonlySet<string>
   /** With no emphasized history, everything is drawn at full strength. */
   readonly anyEmphasis: boolean
 }): Geometry => {
-  const { first, last, scrollTop, offsetX, rowAt, headOids, anyEmphasis } = options
-  const centerY = (index: number) => index * rowHeight + rowHeight / 2 - scrollTop
+  const { first, last, originY, offsetX, rowAt, headOids, anyEmphasis } = options
+  const centerY = (index: number) => index * rowHeight + rowHeight / 2 - originY
   const x = (lane: number) => laneX(lane) - offsetX
   const plain: Array<Segment> = []
   const strong: Array<Segment> = []

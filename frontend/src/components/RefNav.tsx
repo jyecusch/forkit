@@ -113,7 +113,7 @@ export const RefNav = ({ refs, remotes, worktrees, activeWorktree, emphasized, o
   }
 
   return (
-    <nav aria-label="References" className="flex w-[260px] flex-none flex-col border-r bg-sidebar">
+    <nav aria-label="References" className="flex w-[clamp(200px,20vw,260px)] flex-none flex-col border-r bg-sidebar">
       <label className="block px-3.5 pt-2.5 pb-1">
         <span className="sr-only">Filter references</span>
         <input

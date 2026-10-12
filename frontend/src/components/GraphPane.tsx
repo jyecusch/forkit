@@ -2,16 +2,19 @@ import { useVirtualizer } from "@tanstack/react-virtual"
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type KeyboardEvent } from "react"
 import { useForkedEffect } from "@/app/hooks"
 import { useService } from "@/app/services"
+import { layoutColumns, listPadding } from "@/graph/columns"
 import { drawGraph, readPalette, type GraphPalette } from "@/graph/draw"
-import { geometry, gutter, laneWidth, rowHeight } from "@/graph/geometry"
+import { geometry, laneX, rowHeight } from "@/graph/geometry"
 import { formatDate, shortOid } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import type { GraphView, Preferences, Ref, RefId, RepoId } from "@/model/model.gen"
 import { GraphData, type LoadedRow } from "@/services/GraphData"
 import { RefBadge } from "./RefBadge"
 
-const minGraphWidth = 96
-const maxGraphWidth = 360
+/** Rows rendered beyond the viewport on each side, for rows and graph alike. */
+const overscan = 30
+/** Badges shown before the rest are summarised as "+N". */
+const maxBadges = 2
 
 export interface ScrollRequest {
   readonly row: number
@@ -36,27 +39,32 @@ interface GraphPaneProps {
 
 /**
  * The commit list: virtualized DOM rows for text, with the graph drawn on a
- * canvas pinned over the visible part of the first column.
+ * canvas behind the rendered rows. The canvas is part of the scrolled
+ * content, so it moves with the rows on every frame and only needs redrawing
+ * when the rendered range changes.
  */
 export const GraphPane = (props: GraphPaneProps) => {
   const { repo, view, emphasized, preferences, scrollRequest } = props
   const graphData = useService(GraphData)
+  const sectionRef = useRef<HTMLElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [offsetX, setOffsetX] = useState(0)
   const [palette, setPalette] = useState<GraphPalette>()
+  const [panToRow, setPanToRow] = useState<number>()
 
   const dataVersion = useSyncExternalStore(
     useCallback((listener) => graphData.subscribe(repo, listener), [graphData, repo]),
     useCallback(() => graphData.revision(repo), [graphData, repo]),
   )
-  const viewportHeight = useHeight(scrollRef)
+  const paneWidth = useSize(sectionRef).width
+  const viewportHeight = useSize(scrollRef).height
 
   const virtualizer = useVirtualizer({
     count: view.totalRows,
     getScrollElement: () => scrollRef.current,
     estimateSize: () => rowHeight,
-    overscan: 30,
+    overscan,
   })
   const items = virtualizer.getVirtualItems()
   const first = items[0]?.index ?? 0
@@ -67,6 +75,7 @@ export const GraphPane = (props: GraphPaneProps) => {
   useEffect(() => {
     if (scrollRequest && scrollRequest.row >= 0) {
       virtualizer.scrollToIndex(scrollRequest.row, { align: "center" })
+      setPanToRow(scrollRequest.row)
     }
   }, [scrollRequest, virtualizer])
 
@@ -75,38 +84,46 @@ export const GraphPane = (props: GraphPaneProps) => {
     setPalette(readPalette(document.documentElement))
   }, [theme])
 
-  const fullWidth = gutter * 2 + Math.max(view.laneCount - 1, 0) * laneWidth
-  const graphWidth = Math.min(Math.max(fullWidth, minGraphWidth), maxGraphWidth)
-  const maxOffset = Math.max(fullWidth - graphWidth, 0)
+  const columns = layoutColumns(paneWidth, view.laneCount)
+  const maxOffset = Math.max(columns.graphNeeds - columns.graph, 0)
   const clampedOffsetX = Math.min(offsetX, maxOffset)
 
-  // Resizing a canvas reallocates and clears it, so it happens only when the
-  // size changes, not on every scroll frame.
+  // Bring a row the user jumped to into view sideways once it has loaded.
+  const panTarget = panToRow === undefined ? undefined : graphData.peek(repo, panToRow)
+  useEffect(() => {
+    if (!panTarget) return
+    const x = laneX(panTarget.row.lane)
+    if (x < clampedOffsetX || x > clampedOffsetX + columns.graph) {
+      setOffsetX(Math.min(Math.max(x - columns.graph / 2, 0), maxOffset))
+    }
+    setPanToRow(undefined)
+  }, [panTarget, clampedOffsetX, columns.graph, maxOffset])
+
+  // The canvas covers every rendered row. Its height only changes with the
+  // viewport, and resizing reallocates it, so that is kept out of drawing.
+  const canvasRows = Math.ceil(viewportHeight / rowHeight) + overscan * 2 + 1
+  const canvasHeight = canvasRows * rowHeight
   useLayoutEffect(() => {
     const canvas = canvasRef.current
     const context = canvas?.getContext("2d")
-    if (!canvas || !context) {
-      return
-    }
+    if (!canvas || !context) return
     const dpr = window.devicePixelRatio || 1
-    canvas.width = Math.round(graphWidth * dpr)
-    canvas.height = Math.round(viewportHeight * dpr)
+    canvas.width = Math.round(columns.graph * dpr)
+    canvas.height = Math.round(canvasHeight * dpr)
     context.setTransform(dpr, 0, 0, dpr, 0, 0)
-  }, [graphWidth, viewportHeight])
+  }, [columns.graph, canvasHeight])
 
-  const scrollTop = virtualizer.scrollOffset ?? 0
+  const canvasTop = first * rowHeight
   useLayoutEffect(() => {
     const context = canvasRef.current?.getContext("2d")
-    if (!context || !palette) {
-      return
-    }
-    context.clearRect(0, 0, graphWidth, viewportHeight)
+    if (!context || !palette) return
+    context.clearRect(0, 0, columns.graph, canvasHeight)
     drawGraph(
       context,
       geometry({
-        first: Math.floor(scrollTop / rowHeight),
-        last: Math.min(Math.ceil((scrollTop + viewportHeight) / rowHeight), view.totalRows - 1),
-        scrollTop,
+        first,
+        last: Math.min(first + canvasRows, view.totalRows - 1),
+        originY: canvasTop,
         offsetX: clampedOffsetX,
         rowAt: (index) => graphData.peek(repo, index),
         headOids: props.headOids,
@@ -118,10 +135,12 @@ export const GraphPane = (props: GraphPaneProps) => {
   }, [
     graphData,
     repo,
-    scrollTop,
-    viewportHeight,
+    first,
+    canvasTop,
+    canvasRows,
+    canvasHeight,
     clampedOffsetX,
-    graphWidth,
+    columns.graph,
     palette,
     dataVersion,
     emphasized,
@@ -133,7 +152,7 @@ export const GraphPane = (props: GraphPaneProps) => {
   const onWheel = (event: React.WheelEvent) => {
     const dx = event.shiftKey ? event.deltaY : event.deltaX
     if (dx !== 0 && maxOffset > 0) {
-      setOffsetX((x) => Math.min(Math.max(x + dx, 0), maxOffset))
+      setOffsetX((x) => Math.min(Math.max(Math.min(x, maxOffset) + dx, 0), maxOffset))
     }
   }
 
@@ -143,9 +162,7 @@ export const GraphPane = (props: GraphPaneProps) => {
   const selectedIndex = () =>
     items.find((item) => graphData.peek(repo, item.index)?.row.oid === selectedOid)?.index ?? props.selected?.row.index ?? -1
   const onKeyDown = (event: KeyboardEvent) => {
-    if (event.key !== "ArrowDown" && event.key !== "ArrowUp") {
-      return
-    }
+    if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return
     event.preventDefault()
     const next = selectedIndex() + (event.key === "ArrowDown" ? 1 : -1)
     const loaded = next >= 0 ? graphData.peek(repo, next) : undefined
@@ -155,17 +172,18 @@ export const GraphPane = (props: GraphPaneProps) => {
     }
   }
 
-  const columns = `${graphWidth}px minmax(0,1fr) 150px 110px 72px`
+  const clippedLeft = clampedOffsetX > 0
+  const clippedRight = clampedOffsetX < maxOffset
   return (
-    <section className="flex min-h-0 min-w-0 flex-1 flex-col" aria-label="History">
+    <section ref={sectionRef} className="flex min-h-0 min-w-0 flex-1 flex-col" aria-label="History">
       <div
-        className="grid gap-3 border-b px-3.5 py-1.5 text-[11px] font-semibold tracking-wider text-subtle-foreground uppercase"
-        style={{ gridTemplateColumns: columns }}
+        className="grid gap-3 border-b py-1.5 text-[11px] font-semibold tracking-wider whitespace-nowrap text-subtle-foreground uppercase"
+        style={{ gridTemplateColumns: columns.template, paddingInline: listPadding / 2 }}
       >
         <span>Graph</span>
         <span>Description</span>
-        <span>Author</span>
-        <span>Date</span>
+        {columns.showAuthor && <span>Author</span>}
+        {columns.showDate && <span>Date</span>}
         <span>Commit</span>
       </div>
       <div
@@ -177,14 +195,6 @@ export const GraphPane = (props: GraphPaneProps) => {
         onWheel={onWheel}
         className="relative flex-1 overflow-y-auto outline-none"
       >
-        <div className="pointer-events-none sticky top-0 z-10 h-0">
-          <canvas
-            ref={canvasRef}
-            aria-hidden
-            className="absolute top-0 left-3.5"
-            style={{ width: graphWidth, height: viewportHeight }}
-          />
-        </div>
         <div style={{ height: virtualizer.getTotalSize(), position: "relative" }}>
           {items.map((item) => (
             <CommitRow
@@ -192,7 +202,9 @@ export const GraphPane = (props: GraphPaneProps) => {
               index={item.index}
               top={item.start}
               loaded={graphData.peek(repo, item.index)}
-              columns={columns}
+              columns={columns.template}
+              showAuthor={columns.showAuthor}
+              showDate={columns.showDate}
               selected={selectedOid !== undefined && graphData.peek(repo, item.index)?.row.oid === selectedOid}
               anyEmphasis={emphasized !== undefined}
               refsById={props.refsById}
@@ -201,26 +213,47 @@ export const GraphPane = (props: GraphPaneProps) => {
               onSelect={props.onSelect}
             />
           ))}
+          <canvas
+            ref={canvasRef}
+            aria-hidden
+            className="pointer-events-none absolute"
+            style={{ top: canvasTop, left: listPadding / 2, width: columns.graph, height: canvasHeight }}
+          />
+        </div>
+        <div className="pointer-events-none sticky bottom-0 h-0">
+          {clippedLeft && <EdgeFade side="left" left={listPadding / 2} height={viewportHeight} />}
+          {clippedRight && <EdgeFade side="right" left={listPadding / 2 + columns.graph - 24} height={viewportHeight} />}
         </div>
       </div>
     </section>
   )
 }
 
-/** Tracks an element's height as it is resized. */
-const useHeight = (ref: React.RefObject<HTMLElement | null>) => {
-  const [height, setHeight] = useState(0)
+/** Shades the edge of the graph where lanes continue out of view. */
+const EdgeFade = ({ side, left, height }: { side: "left" | "right"; left: number; height: number }) => (
+  <div
+    className="absolute bottom-0 w-6"
+    style={{
+      left,
+      height,
+      background: `linear-gradient(to ${side === "left" ? "right" : "left"}, var(--background), transparent)`,
+    }}
+  />
+)
+
+/** Tracks an element's size as it is resized. */
+const useSize = (ref: React.RefObject<HTMLElement | null>) => {
+  const [size, setSize] = useState({ width: 0, height: 0 })
   useLayoutEffect(() => {
     const element = ref.current
-    if (!element) {
-      return
-    }
-    const observer = new ResizeObserver(() => setHeight(element.clientHeight))
+    if (!element) return
+    const measure = () => setSize({ width: element.clientWidth, height: element.clientHeight })
+    const observer = new ResizeObserver(measure)
     observer.observe(element)
-    setHeight(element.clientHeight)
+    measure()
     return () => observer.disconnect()
   }, [ref])
-  return height
+  return size
 }
 
 interface CommitRowProps {
@@ -228,6 +261,8 @@ interface CommitRowProps {
   readonly top: number
   readonly loaded: LoadedRow | undefined
   readonly columns: string
+  readonly showAuthor: boolean
+  readonly showDate: boolean
   readonly selected: boolean
   readonly anyEmphasis: boolean
   readonly refsById: ReadonlyMap<string, Ref>
@@ -241,6 +276,8 @@ const CommitRow = memo(function CommitRow({
   top,
   loaded,
   columns,
+  showAuthor,
+  showDate,
   selected,
   anyEmphasis,
   refsById,
@@ -248,10 +285,10 @@ const CommitRow = memo(function CommitRow({
   dateFormat,
   onSelect,
 }: CommitRowProps) {
-  const style = { top, height: rowHeight, gridTemplateColumns: columns }
+  const style = { top, height: rowHeight, gridTemplateColumns: columns, paddingInline: listPadding / 2 }
   if (!loaded) {
     return (
-      <div role="row" aria-rowindex={index + 1} className="absolute inset-x-0 grid items-center gap-3 px-3.5" style={style}>
+      <div role="row" aria-rowindex={index + 1} className="absolute inset-x-0 grid items-center gap-3" style={style}>
         <span />
         <span className="h-2 w-2/3 rounded bg-muted" />
       </div>
@@ -260,37 +297,41 @@ const CommitRow = memo(function CommitRow({
   const { row, commit } = loaded
   const dim = anyEmphasis && !row.onEmphasized
   const isHead = headRef !== undefined && row.refIds.includes(headRef)
+  // The checked-out branch first, so it is never hidden behind "+N".
+  const refs = row.refIds.flatMap((id) => refsById.get(id) ?? []).sort((a, b) => Number(b.id === headRef) - Number(a.id === headRef))
+  const meta = cn("truncate text-xs", dim ? "text-muted-foreground" : "text-secondary-foreground")
   return (
     <div
       role="row"
       aria-rowindex={index + 1}
       aria-selected={selected}
       onClick={() => onSelect(loaded)}
-      className={cn(
-        "absolute inset-x-0 grid cursor-default items-center gap-3 px-3.5",
-        selected ? "bg-selection" : "hover:bg-accent/40",
-      )}
+      className={cn("absolute inset-x-0 grid cursor-default items-center gap-3", selected ? "bg-selection" : "hover:bg-accent/40")}
       style={style}
     >
       <span />
-      <span className="flex min-w-0 items-center gap-1.5">
-        {row.refIds.map((id) => {
-          const ref = refsById.get(id)
-          return ref && <RefBadge key={id} refEntity={ref} thread={row.threadId} dim={dim} isHead={id === headRef} />
-        })}
-        <span className={cn("truncate", dim ? "text-subtle-foreground" : "text-foreground", isHead && "font-semibold")}>
+      <span className="flex min-w-0 items-center gap-1.5 overflow-hidden">
+        {refs.slice(0, maxBadges).map((ref) => (
+          <RefBadge key={ref.id} refEntity={ref} thread={row.threadId} dim={dim} isHead={ref.id === headRef} />
+        ))}
+        {refs.length > maxBadges && (
+          <span
+            className="flex-none text-[11px] text-subtle-foreground"
+            title={refs.slice(maxBadges).map((ref) => ref.shortName).join("\n")}
+          >
+            +{refs.length - maxBadges}
+          </span>
+        )}
+        <span
+          className={cn("min-w-[4ch] flex-1 truncate", dim ? "text-subtle-foreground" : "text-foreground", isHead && "font-semibold")}
+          title={commit.subject}
+        >
           {commit.subject}
         </span>
       </span>
-      <span className={cn("truncate text-xs", dim ? "text-muted-foreground" : "text-secondary-foreground")}>
-        {commit.authorName}
-      </span>
-      <span className={cn("truncate text-xs", dim ? "text-muted-foreground" : "text-secondary-foreground")}>
-        {formatDate(commit.authorTime, dateFormat)}
-      </span>
-      <span className={cn("font-mono text-xs", dim ? "text-muted-foreground" : "text-secondary-foreground")}>
-        {shortOid(row.oid)}
-      </span>
+      {showAuthor && <span className={meta}>{commit.authorName}</span>}
+      {showDate && <span className={meta}>{formatDate(commit.authorTime, dateFormat)}</span>}
+      <span className={cn("font-mono text-xs", dim ? "text-muted-foreground" : "text-secondary-foreground")}>{shortOid(row.oid)}</span>
     </div>
   )
 })

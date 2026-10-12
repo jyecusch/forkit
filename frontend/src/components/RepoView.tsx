@@ -124,14 +124,14 @@ export const RepoView = ({ repo, openRepo, preferences, onOpenSettings }: RepoVi
           onNewWorktree={setNewWorktreeBase}
         />
         <main className="flex min-h-0 min-w-0 flex-1 flex-col">
-          <div className="flex flex-wrap items-center gap-2.5 border-b px-3.5 py-2 text-xs text-secondary-foreground">
+          <div className="flex items-center gap-2.5 border-b px-3.5 py-2 text-xs whitespace-nowrap text-secondary-foreground">
             {emphasizedRef ? (
               <>
                 <span>Emphasized</span>
                 <span className="rounded bg-primary/20 px-2 py-0.5 font-medium text-primary">
                   {emphasizedRef.shortName}
                 </span>
-                <span className="text-subtle-foreground">First-parent history at full strength, other threads dimmed</span>
+                <span className="min-w-0 truncate text-subtle-foreground">First-parent history at full strength, other threads dimmed</span>
               </>
             ) : (
               <span className="text-subtle-foreground">Click a branch to emphasize its history</span>

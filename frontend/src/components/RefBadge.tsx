@@ -25,8 +25,9 @@ export const RefBadge = ({ refEntity, thread, dim, isHead }: { refEntity: Ref; t
   }
   return (
     <span
-      className={cn("flex-none rounded px-1.5 text-[11px] leading-[18px] font-medium whitespace-nowrap", dim && "opacity-60")}
+      className={cn("max-w-48 min-w-12 shrink truncate rounded px-1.5 text-[11px] leading-[18px] font-medium whitespace-nowrap", dim && "opacity-60")}
       style={style}
+      title={refEntity.shortName}
     >
       {isHead && "HEAD → "}
       {refEntity.shortName}
