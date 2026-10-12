@@ -200,14 +200,9 @@ func Classify(layout Layout, paths []string) Change {
 }
 
 // normalize puts a path in one form whether it came from git, which prints
-// forward slashes everywhere, or from the file system's events. Windows
-// paths are compared without regard to case, as Windows does.
+// forward slashes everywhere, or from the file system's events.
 func normalize(path string) string {
-	path = filepath.Clean(filepath.FromSlash(path))
-	if runtime.GOOS == "windows" {
-		path = strings.ToLower(path)
-	}
-	return path
+	return filepath.Clean(filepath.FromSlash(path))
 }
 
 func normalizeLayout(layout Layout) Layout {
@@ -299,14 +294,26 @@ func classifyGitDirPath(rel string, id model.WorktreeID, change *Change) {
 	}
 }
 
+// within reports whether path is dir or inside it. Windows paths compare
+// without regard to case, as Windows does.
 func within(path, dir string) bool {
-	return path == dir || strings.HasPrefix(path, dir+string(filepath.Separator))
+	if len(path) < len(dir) || !samePath(path[:len(dir)], dir) {
+		return false
+	}
+	return len(path) == len(dir) || path[len(dir)] == filepath.Separator
 }
 
-func relative(dir, path string) string {
-	rel, err := filepath.Rel(dir, path)
-	if err != nil {
-		return path
+func samePath(a, b string) bool {
+	if runtime.GOOS == "windows" {
+		return strings.EqualFold(a, b)
 	}
-	return rel
+	return a == b
+}
+
+// relative returns path relative to dir, which must contain it.
+func relative(dir, path string) string {
+	if len(path) == len(dir) {
+		return "."
+	}
+	return path[len(dir)+1:]
 }
