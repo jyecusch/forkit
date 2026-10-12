@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import type { Ref, RefId, Remote, Worktree } from "@/model/model.gen"
-import { buildNavRows, type NavInput, type NavRow } from "./navTree"
+import { buildNavRows, revealedNodes, type NavInput, type NavRow } from "./navTree"
 
 const ref = (kind: Ref["kind"], shortName: string, remoteId?: string) =>
   ({ id: `r:${kind}:${shortName}`, kind, shortName, ...(remoteId && { remoteId }) }) as unknown as Ref
@@ -24,18 +24,22 @@ const describeRows = (rows: Array<NavRow>) =>
     }
   })
 
+const refs = [
+  ref("localBranch", "main"),
+  ref("localBranch", "feature/tabs"),
+  ref("remoteBranch", "origin/main", "r:origin"),
+  ref("remoteBranch", "fork/fix/crlf", "r:fork"),
+  ref("tag", "v1.0"),
+]
+const remotes = [remote("fork"), remote("origin")]
+const crlf = "r:remoteBranch:fork/fix/crlf" as RefId
+
 const input = (overrides: Partial<NavInput> = {}): NavInput => ({
-  refs: [
-    ref("localBranch", "main"),
-    ref("localBranch", "feature/tabs"),
-    ref("remoteBranch", "origin/main", "r:origin"),
-    ref("remoteBranch", "fork/fix/crlf", "r:fork"),
-    ref("tag", "v1.0"),
-  ],
-  remotes: [remote("fork"), remote("origin")],
+  refs,
+  remotes,
   worktrees: [worktree("/w/app-tabs", false, "feature/tabs"), worktree("/w/app", true, "main")],
-  reveal: [],
-  toggled: new Set(),
+  revealed: new Set(),
+  choices: new Map(),
   filter: "",
   ...overrides,
 })
@@ -58,10 +62,18 @@ describe("buildNavRows", () => {
   })
 
   it("opens the remote and folders holding a revealed ref", () => {
-    const rows = describeRows(buildNavRows(input({ reveal: ["r:remoteBranch:fork/fix/crlf" as RefId] })))
+    const rows = describeRows(buildNavRows(input({ revealed: revealedNodes(refs, remotes, [crlf]) })))
     expect(rows).toContain("  @fork (1)")
     expect(rows).toContain("    fix/")
     expect(rows).toContain("      crlf")
+  })
+
+  it("keeps a folder the user closed closed, even when it holds a revealed ref", () => {
+    const rows = describeRows(
+      buildNavRows(input({ revealed: revealedNodes(refs, remotes, [crlf]), choices: new Map([["remote:fork", false]]) })),
+    )
+    expect(rows).toContain("  @fork (1) +")
+    expect(rows).not.toContain("    fix/")
   })
 
   it("shows every match while filtering", () => {

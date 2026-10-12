@@ -1,8 +1,8 @@
 import { useVirtualizer } from "@tanstack/react-virtual"
-import { Archive, Check, ChevronRight, Folder, GitBranch, Plus, Search, Tag, X } from "lucide-react"
+import { Archive, Check, ChevronRight, Folder, GitBranch, Plus, Search, Server, Tag, X } from "lucide-react"
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react"
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu"
-import { buildNavRows, type NavRow } from "@/lib/navTree"
+import { buildNavRows, revealedNodes, type NavRow } from "@/lib/navTree"
 import { cn } from "@/lib/utils"
 import { changeCount, headLabel } from "@/lib/worktree"
 import type { Ref, RefId, Remote, Worktree, WorktreeId } from "@/model/model.gen"
@@ -12,8 +12,13 @@ const rowHeight = 28
 const sectionHeight = 36
 /** Each nesting level moves the icon slot right by one slot. */
 const levelIndent = 16
-/** How long a click waits to see whether it becomes a double-click. */
-const doubleClickWindow = 220
+
+interface TreeItemProps {
+  readonly role: "treeitem"
+  readonly "aria-level": number
+  readonly tabIndex: number
+  readonly onFocus: () => void
+}
 
 interface RepoNavProps {
   readonly refs: ReadonlyArray<Ref>
@@ -41,19 +46,35 @@ interface RepoNavProps {
 export const RepoNav = (props: RepoNavProps) => {
   const { refs, remotes, worktrees, activeWorktree, emphasized, reveal } = props
   const [filter, setFilter] = useState("")
-  const [toggled, setToggled] = useState<ReadonlySet<string>>(new Set())
+  // Open and closed choices made while filtering are forgotten with the filter.
+  const [choices, setChoices] = useState<ReadonlyMap<string, boolean>>(new Map())
+  const [filterChoices, setFilterChoices] = useState<ReadonlyMap<string, boolean>>(new Map())
+  const changeFilter = (value: string) => {
+    setFilter(value)
+    setFilterChoices(new Map())
+  }
+  // Folders opened to reveal a ref stay open after it moves on.
+  const revealing = useMemo(() => revealedNodes(refs, remotes, reveal), [refs, remotes, reveal])
+  const [revealed, setRevealed] = useState<ReadonlySet<string>>(revealing)
+  if ([...revealing].some((node) => !revealed.has(node))) {
+    setRevealed(new Set([...revealed, ...revealing]))
+  }
+
   const filterRef = useRef<HTMLInputElement>(null)
+  const filtering = filter.trim() !== ""
   const rows = useMemo(
-    () => buildNavRows({ refs, remotes, worktrees, reveal, toggled, filter }),
-    [refs, remotes, worktrees, reveal, toggled, filter],
+    () => buildNavRows({ refs, remotes, worktrees, revealed, choices: filtering ? filterChoices : choices, filter }),
+    [refs, remotes, worktrees, revealed, filtering, filterChoices, choices, filter],
   )
   const worktreeNames = useMemo(() => new Map(worktrees.map((wt) => [wt.id, wt.path.split(/[\\/]/).pop() ?? wt.path])), [worktrees])
+  const showHosts = new Set(remotes.map((remote) => hostOf(remote.fetchUrl))).size > 1
 
-  // "/" jumps to the filter from anywhere outside a text field.
+  // "/" jumps to the filter from anywhere outside a text field or dialog.
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement
-      if (event.key === "/" && !["INPUT", "TEXTAREA"].includes(target.tagName)) {
+      const modalOpen = document.querySelector("[role=dialog][data-state=open]") !== null
+      if (event.key === "/" && !modalOpen && !["INPUT", "TEXTAREA"].includes(target.tagName)) {
         event.preventDefault()
         filterRef.current?.focus()
       }
@@ -70,56 +91,62 @@ export const RepoNav = (props: RepoNavProps) => {
     overscan: 20,
   })
   useEffect(() => virtualizer.measure(), [rows, virtualizer])
+  const items = virtualizer.getVirtualItems()
 
-  const toggle = (id: string) =>
-    setToggled((current) => {
-      const next = new Set(current)
-      if (!next.delete(id)) next.add(id)
-      return next
-    })
+  // The tree is one tab stop: the row last focused, or the first on screen.
+  const [focusId, setFocusId] = useState<string>()
+  const tabbableId = items.some((item) => rows[item.index]?.id === focusId) ? focusId : rows[items[0]?.index ?? -1]?.id
+  const treeItem = (row: NavRow, level: number): TreeItemProps => ({
+    role: "treeitem",
+    "aria-level": level,
+    tabIndex: row.id === tabbableId ? 0 : -1,
+    onFocus: () => setFocusId(row.id),
+  })
 
-  // A single click emphasizes, but only once it is clear it was not the
-  // first half of a double-click, which checks out instead.
-  const pendingClick = useRef<ReturnType<typeof setTimeout>>(undefined)
-  const clickRef = (ref: Ref) => {
-    clearTimeout(pendingClick.current)
-    pendingClick.current = setTimeout(() => props.onEmphasize(ref), doubleClickWindow)
-  }
-  const doubleClickRef = (ref: Ref) => {
-    clearTimeout(pendingClick.current)
-    props.onCheckout(ref)
-  }
+  const setOpen = (id: string, open: boolean) =>
+    (filtering ? setFilterChoices : setChoices)((current) => new Map(current).set(id, open))
 
-  // Arrow keys move between rows; left and right close and open folders.
-  const onRowsKeyDown = (event: ReactKeyboardEvent) => {
-    const buttons = [...(scrollRef.current?.querySelectorAll("button") ?? [])]
-    const current = buttons.indexOf(document.activeElement as HTMLButtonElement)
-    const expanded = (document.activeElement as HTMLElement | null)?.getAttribute("aria-expanded")
-    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
-      event.preventDefault()
-      const next = buttons[current + (event.key === "ArrowDown" ? 1 : -1)]
-      if (next) next.focus()
-      else if (event.key === "ArrowUp") filterRef.current?.focus()
-    } else if ((event.key === "ArrowRight" && expanded === "false") || (event.key === "ArrowLeft" && expanded === "true")) {
-      event.preventDefault()
-      buttons[current]?.click()
-    }
+  const onTreeKeyDown = (event: ReactKeyboardEvent) => {
+    const items = [...(scrollRef.current?.querySelectorAll<HTMLElement>("[role=treeitem]") ?? [])]
+    const current = items.indexOf(document.activeElement as HTMLElement)
+    if (current < 0) return
+    const item = items[current]!
+    const expanded = item.getAttribute("aria-expanded")
+    const level = Number(item.getAttribute("aria-level"))
+    const parent = () =>
+      items
+        .slice(0, current)
+        .reverse()
+        .find((other) => Number(other.getAttribute("aria-level")) < level)
+    const action = {
+      ArrowDown: () => items[current + 1]?.focus(),
+      ArrowUp: () => (current === 0 ? filterRef.current : items[current - 1])?.focus(),
+      ArrowRight: () => (expanded === "false" ? item.click() : expanded === "true" ? items[current + 1]?.focus() : undefined),
+      ArrowLeft: () => (expanded === "true" ? item.click() : parent()?.focus()),
+    }[event.key]
+    if (!action) return
+    event.preventDefault()
+    action()
   }
 
   const renderRow = (row: NavRow) => {
     switch (row.type) {
       case "section":
         return (
-          <div className="group flex h-full items-end pb-1">
+          <div className="flex h-full items-end pb-1">
             <button
-              onClick={() => toggle(row.id)}
+              {...treeItem(row, 1)}
+              onClick={() => setOpen(row.id, row.collapsed)}
               aria-expanded={!row.collapsed}
-              className="flex h-6 flex-1 items-center gap-1 rounded-md px-2 text-xs font-medium text-subtle-foreground hover:text-secondary-foreground"
+              className="group/section flex h-6 flex-1 items-center gap-1 rounded-md px-2 text-xs font-medium text-subtle-foreground hover:text-secondary-foreground"
             >
               {row.title}
               <ChevronRight
                 aria-hidden
-                className={cn("size-3 opacity-0 transition group-hover:opacity-100", !row.collapsed && "rotate-90")}
+                className={cn(
+                  "size-3 transition",
+                  row.collapsed ? "opacity-60" : "rotate-90 opacity-0 group-hover/section:opacity-100 group-focus-visible/section:opacity-100",
+                )}
               />
               {row.collapsed && <span className="ml-auto text-[11px] tabular-nums">{row.count}</span>}
             </button>
@@ -127,8 +154,9 @@ export const RepoNav = (props: RepoNavProps) => {
               <button
                 aria-label="New worktree"
                 title="New worktree"
+                tabIndex={-1}
                 onClick={() => props.onNewWorktree(undefined)}
-                className="flex size-6 flex-none items-center justify-center rounded-md text-subtle-foreground hover:bg-foreground/[0.06] hover:text-foreground"
+                className="mr-[3px] flex size-6 flex-none items-center justify-center rounded-md text-subtle-foreground hover:bg-foreground/[0.05] hover:text-foreground"
               >
                 <Plus className="size-3.5" />
               </button>
@@ -136,19 +164,37 @@ export const RepoNav = (props: RepoNavProps) => {
           </div>
         )
       case "worktree":
-        return <WorktreeRow {...props} row={row} active={row.worktree.id === activeWorktree} />
-      case "remote":
+        return <WorktreeRow {...props} row={row} active={row.worktree.id === activeWorktree} tree={treeItem(row, 2)} />
+      case "remote": {
+        const host = hostOf(row.remote.fetchUrl)
         return (
-          <NavButton depth={0} onClick={() => toggle(row.id)} aria-expanded={!row.collapsed} icon={<Chevron open={!row.collapsed} />}>
+          <NavButton
+            {...treeItem(row, 2)}
+            depth={0}
+            onClick={() => setOpen(row.id, row.collapsed)}
+            aria-expanded={!row.collapsed}
+            title={row.remote.fetchUrl}
+            icon={<Server aria-hidden className="size-3.5" />}
+          >
             <span className="truncate">{row.remote.name}</span>
-            <span className="min-w-0 flex-1 truncate text-xs text-subtle-foreground">{hostOf(row.remote.fetchUrl)}</span>
-            <Meta>{row.count}</Meta>
+            <span className="min-w-0 flex-1 truncate text-xs text-subtle-foreground">{showHosts && host !== "local" ? host : ""}</span>
+            {row.collapsed && <Meta>{row.count}</Meta>}
+            <Chevron open={!row.collapsed} />
           </NavButton>
         )
+      }
       case "folder":
         return (
-          <NavButton depth={row.depth} onClick={() => toggle(row.id)} aria-expanded={!row.collapsed} icon={<Chevron open={!row.collapsed} />}>
-            <span className="truncate">{row.name}</span>
+          <NavButton
+            {...treeItem(row, row.depth + 2)}
+            depth={row.depth}
+            onClick={() => setOpen(row.id, row.collapsed)}
+            aria-expanded={!row.collapsed}
+            icon={<Chevron open={!row.collapsed} />}
+          >
+            <span className="truncate">
+              <Highlight text={row.name} query={filter} />
+            </span>
           </NavButton>
         )
       case "ref": {
@@ -156,11 +202,13 @@ export const RepoNav = (props: RepoNavProps) => {
         const elsewhere = row.ref.checkedOutInWorktreeId && !current ? worktreeNames.get(row.ref.checkedOutInWorktreeId) : undefined
         const item = (
           <NavButton
+            {...treeItem(row, row.depth + 2)}
             depth={row.depth}
             selected={row.ref.id === emphasized}
+            aria-selected={row.ref.id === emphasized}
             title={row.ref.shortName}
-            onClick={() => clickRef(row.ref)}
-            onDoubleClick={() => doubleClickRef(row.ref)}
+            onClick={() => props.onEmphasize(row.ref)}
+            onDoubleClick={() => props.onCheckout(row.ref)}
             icon={<RefIcon kind={row.ref.kind} />}
           >
             <span className="min-w-0 flex-1 truncate">
@@ -174,9 +222,9 @@ export const RepoNav = (props: RepoNavProps) => {
         return (
           <ContextMenu>
             <ContextMenuTrigger asChild>{item}</ContextMenuTrigger>
-            <ContextMenuContent className="w-52">
+            <ContextMenuContent className="w-56">
               <ContextMenuItem disabled={current} onSelect={() => props.onCheckout(row.ref)}>
-                Check out
+                {row.ref.kind === "remoteBranch" ? "Check out as local branch…" : "Check out"}
               </ContextMenuItem>
               {row.ref.kind !== "stash" && (
                 <ContextMenuItem onSelect={() => props.onNewWorktree(row.ref)}>New worktree from here…</ContextMenuItem>
@@ -198,22 +246,22 @@ export const RepoNav = (props: RepoNavProps) => {
         <input
           ref={filterRef}
           value={filter}
-          onChange={(event) => setFilter(event.target.value)}
+          onChange={(event) => changeFilter(event.target.value)}
           onKeyDown={(event) => {
-            if (event.key === "Escape") setFilter("")
+            if (event.key === "Escape") changeFilter("")
             if (event.key === "ArrowDown") {
               event.preventDefault()
-              scrollRef.current?.querySelector("button")?.focus()
+              scrollRef.current?.querySelector<HTMLElement>("[role=treeitem]")?.focus()
             }
           }}
           placeholder="Filter"
           aria-label="Filter worktrees and refs"
-          className="h-8 w-full rounded-md bg-foreground/[0.05] pr-8 pl-8 outline-none placeholder:text-subtle-foreground focus-visible:ring-2 focus-visible:ring-ring"
+          className="h-8 w-full rounded-md bg-foreground/[0.05] pr-8 pl-8 outline-none placeholder:text-subtle-foreground focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-ring"
         />
         {filter ? (
           <button
             aria-label="Clear filter"
-            onClick={() => setFilter("")}
+            onClick={() => changeFilter("")}
             className="absolute top-1.5 right-1.5 flex size-5 items-center justify-center rounded text-subtle-foreground hover:text-foreground"
           >
             <X className="size-3.5" />
@@ -222,10 +270,16 @@ export const RepoNav = (props: RepoNavProps) => {
           <kbd className="pointer-events-none absolute top-2 right-2 font-sans text-[11px] text-subtle-foreground">/</kbd>
         )}
       </div>
-      <div ref={scrollRef} onKeyDown={onRowsKeyDown} className="mt-1 flex-1 overflow-y-auto pb-2">
+      <div
+        ref={scrollRef}
+        role="tree"
+        aria-label="Worktrees and refs"
+        onKeyDown={onTreeKeyDown}
+        className="mt-1 flex-1 overflow-y-auto pb-2 [mask-image:linear-gradient(to_bottom,black_calc(100%-12px),transparent)]"
+      >
         <div style={{ height: virtualizer.getTotalSize(), position: "relative" }}>
-          {virtualizer.getVirtualItems().map((item) => (
-            <div key={rows[item.index]!.id} className="absolute inset-x-2" style={{ top: item.start, height: item.size }}>
+          {items.map((item) => (
+            <div key={rows[item.index]!.id} role="none" className="absolute inset-x-2" style={{ top: item.start, height: item.size }}>
               {renderRow(rows[item.index]!)}
             </div>
           ))}
@@ -238,22 +292,29 @@ export const RepoNav = (props: RepoNavProps) => {
 interface NavButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   readonly depth: number
   readonly icon: ReactNode
+  /** Filled: the emphasized ref. */
   readonly selected?: boolean
+  /** Bold without a fill: the active worktree. */
+  readonly current?: boolean
 }
 
 /** A navigator row: icon slot on the guide for its depth, then content. */
-const NavButton = ({ depth, icon, selected = false, children, className, ...rest }: NavButtonProps) => (
+const NavButton = ({ depth, icon, selected = false, current = false, children, className, ...rest }: NavButtonProps) => (
   <button
     {...rest}
     className={cn(
       "flex h-full w-full items-center gap-2 rounded-md pr-2 text-left",
       "focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring",
-      selected ? "bg-foreground/[0.08] text-foreground" : "text-secondary-foreground hover:bg-foreground/[0.04] hover:text-foreground",
+      "data-[state=open]:shadow-[inset_0_0_0_1px_var(--ring)]",
+      selected ? "bg-foreground/[0.08] text-foreground" : "text-secondary-foreground hover:bg-foreground/[0.05] hover:text-foreground",
+      current && "font-medium text-foreground",
       className,
     )}
     style={{ paddingLeft: 8 + depth * levelIndent }}
   >
-    <span className="flex size-4 flex-none items-center justify-center text-subtle-foreground">{icon}</span>
+    <span className={cn("flex size-4 flex-none items-center justify-center", current ? "text-foreground" : "text-subtle-foreground")}>
+      {icon}
+    </span>
     {children}
   </button>
 )
@@ -264,12 +325,13 @@ const WorktreeRow = ({
   refs,
   onSelectWorktree,
   onRemoveWorktree,
-}: { row: Extract<NavRow, { type: "worktree" }>; active: boolean } & RepoNavProps) => {
+  tree,
+}: { row: Extract<NavRow, { type: "worktree" }>; active: boolean; tree: TreeItemProps } & RepoNavProps) => {
   const { worktree } = row
   const changes = changeCount(worktree)
   const refsById = useMemo(() => new Map<string, Ref>(refs.map((ref) => [ref.id, ref])), [refs])
   const item = (
-    <NavButton depth={0} selected={active} title={worktree.path} onClick={() => onSelectWorktree(worktree)} icon={<Folder className="size-3.5" />}>
+    <NavButton {...tree} depth={0} current={active} aria-current={active} title={worktree.path} onClick={() => onSelectWorktree(worktree)} icon={<Folder className="size-3.5" />}>
       <span className="truncate">{row.name}</span>
       <span className="min-w-0 flex-1 truncate text-xs text-subtle-foreground">{headLabel(worktree, refsById)}</span>
       {worktree.operation !== "none" && <span aria-label="Operation in progress" className="size-1.5 flex-none rounded-full bg-warning" />}
@@ -312,7 +374,7 @@ const AheadBehind = ({ ahead, behind }: { ahead: number | undefined; behind: num
 }
 
 const Chevron = ({ open }: { open: boolean }) => (
-  <ChevronRight aria-hidden className={cn("size-3.5 transition-transform", open && "rotate-90")} />
+  <ChevronRight aria-hidden className={cn("size-3.5 flex-none transition-transform", open && "rotate-90")} />
 )
 
 const RefIcon = ({ kind }: { kind: Ref["kind"] }) => {
@@ -321,7 +383,9 @@ const RefIcon = ({ kind }: { kind: Ref["kind"] }) => {
       return <Tag aria-hidden className="size-3.5" />
     case "stash":
       return <Archive aria-hidden className="size-3.5" />
-    default:
+    case "remoteBranch":
+      return <GitBranch aria-hidden className="size-3.5 opacity-60" />
+    case "localBranch":
       return <GitBranch aria-hidden className="size-3.5" />
   }
 }
@@ -334,7 +398,7 @@ const Highlight = ({ text, query }: { text: string; query: string }) => {
   return (
     <>
       {text.slice(0, at)}
-      <span className="font-semibold text-foreground">{text.slice(at, end)}</span>
+      <mark className="rounded-sm bg-primary/20 text-foreground">{text.slice(at, end)}</mark>
       {text.slice(end)}
     </>
   )

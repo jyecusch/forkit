@@ -15,10 +15,10 @@ export interface NavInput {
   readonly refs: ReadonlyArray<Ref>
   readonly remotes: ReadonlyArray<Remote>
   readonly worktrees: ReadonlyArray<Worktree>
-  /** Refs whose folders are always open, such as the checked-out branch. */
-  readonly reveal: ReadonlyArray<RefId>
-  /** Node IDs the user expanded or collapsed, flipping their default. */
-  readonly toggled: ReadonlySet<string>
+  /** Node IDs open by default because they hold a ref worth showing; see revealedNodes. */
+  readonly revealed: ReadonlySet<string>
+  /** Node IDs the user opened (true) or closed (false), which beat every default. */
+  readonly choices: ReadonlyMap<string, boolean>
   readonly filter: string
 }
 
@@ -30,12 +30,14 @@ const byName = (a: string, b: string) => a.localeCompare(b, undefined, { numeric
  * remotes (each holding its branches), tags and stashes, with "/"-separated
  * names nested as folders. While filtering, every match is shown.
  */
-export const buildNavRows = ({ refs, remotes, worktrees, reveal, toggled, filter }: NavInput): Array<NavRow> => {
+export const buildNavRows = ({ refs, remotes, worktrees, revealed, choices, filter }: NavInput): Array<NavRow> => {
   const query = filter.trim().toLowerCase()
   const matches = (text: string) => query === "" || text.toLowerCase().includes(query)
-  const revealed = revealedNodes(refs, remotes, reveal)
-  const isCollapsed = (id: string, byDefault: boolean) =>
-    query === "" && (revealed.has(id) ? false : byDefault !== toggled.has(id))
+  const isCollapsed = (id: string, byDefault: boolean) => {
+    const choice = choices.get(id)
+    if (choice !== undefined) return !choice
+    return query === "" && !revealed.has(id) && byDefault
+  }
 
   const rows: Array<NavRow> = []
   const section = (id: SectionId, title: string, count: number, byDefault: boolean, fill: () => void) => {
@@ -88,8 +90,8 @@ export const buildNavRows = ({ refs, remotes, worktrees, reveal, toggled, filter
 const branchOf = (worktree: Worktree, refs: ReadonlyArray<Ref>) =>
   refs.find((ref) => ref.id === worktree.head.refId)?.shortName ?? ""
 
-/** The IDs of every section, remote and folder that contains a revealed ref. */
-const revealedNodes = (refs: ReadonlyArray<Ref>, remotes: ReadonlyArray<Remote>, reveal: ReadonlyArray<RefId>) => {
+/** The IDs of every section, remote and folder that contains one of the given refs. */
+export const revealedNodes = (refs: ReadonlyArray<Ref>, remotes: ReadonlyArray<Remote>, reveal: ReadonlyArray<RefId>): Set<string> => {
   const nodes = new Set<string>()
   for (const ref of refs) {
     if (!reveal.includes(ref.id)) continue

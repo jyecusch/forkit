@@ -11,12 +11,12 @@ export const SidebarFooter = ({ children }: { children?: ReactNode }) => {
   const preferences = usePreferences()
   const [settingsOpen, setSettingsOpen] = useState(false)
   return (
-    <footer className="flex h-10 flex-none items-center gap-2 pr-2.5 pl-4 text-xs text-subtle-foreground">
+    <footer className="flex h-10 flex-none items-center gap-2 pr-[11px] pl-4 text-xs text-subtle-foreground">
       <div className="flex min-w-0 flex-1 items-center gap-2">{children}</div>
       <button
         aria-label="Preferences"
         onClick={() => setSettingsOpen(true)}
-        className="flex size-6 items-center justify-center rounded-md hover:bg-accent/50 hover:text-foreground"
+        className="flex size-6 items-center justify-center rounded-md hover:bg-foreground/[0.05] hover:text-foreground"
       >
         <Settings className="size-3.5" />
       </button>
