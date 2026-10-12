@@ -143,16 +143,24 @@ func (w *Workspace) Close(ctx context.Context, id model.RepoID) error {
 		return apperr.New(model.ErrorCodeRepoNotOpen, "repository is not open")
 	}
 	r.close(ctx)
-	w.publishRepos(ctx)
-	return w.session.Update(ctx, func(s *model.Session) {
-		s.OpenRepos = slices.DeleteFunc(s.OpenRepos, func(o model.OpenRepo) bool { return o.ID == id })
+	// The session moves on before the repository disappears, so the
+	// frontend never has an active repository it cannot find.
+	err := w.session.Update(ctx, func(s *model.Session) {
+		closed := slices.IndexFunc(s.OpenRepos, func(o model.OpenRepo) bool { return o.ID == id })
+		if closed < 0 {
+			return
+		}
+		s.OpenRepos = slices.Delete(s.OpenRepos, closed, closed+1)
 		if s.ActiveRepoID == id {
 			s.ActiveRepoID = ""
+			// Like closing a browser tab: the one to its right, or else its left.
 			if len(s.OpenRepos) > 0 {
-				s.ActiveRepoID = s.OpenRepos[0].ID
+				s.ActiveRepoID = s.OpenRepos[min(closed, len(s.OpenRepos)-1)].ID
 			}
 		}
 	})
+	w.publishRepos(ctx)
+	return err
 }
 
 // Shutdown closes every repository without changing the session, and

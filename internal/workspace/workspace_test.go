@@ -122,6 +122,40 @@ func TestOpenPublishesRepositoryAndFollowsChanges(t *testing.T) {
 	}
 }
 
+func TestClosingTheActiveRepositoryActivatesItsNeighbour(t *testing.T) {
+	ctx := context.Background()
+	ws, _, session := newWorkspace(t)
+	var ids []model.RepoID
+	for range 3 {
+		fixture := gittest.New(t)
+		fixture.Commit("initial")
+		opened, err := ws.Open(ctx, fixture.Dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		ids = append(ids, opened.ID)
+	}
+
+	// The last of three is active; closing it falls back to its left.
+	if err := ws.Close(ctx, ids[2]); err != nil {
+		t.Fatal(err)
+	}
+	if got := session.Get().ActiveRepoID; got != ids[1] {
+		t.Fatalf("active after closing the last = %s, want %s", got, ids[1])
+	}
+
+	// Closing the first activates the one that was to its right.
+	if err := session.Update(ctx, func(s *model.Session) { s.ActiveRepoID = ids[0] }); err != nil {
+		t.Fatal(err)
+	}
+	if err := ws.Close(ctx, ids[0]); err != nil {
+		t.Fatal(err)
+	}
+	if got := session.Get().ActiveRepoID; got != ids[1] {
+		t.Fatalf("active after closing the first = %s, want %s", got, ids[1])
+	}
+}
+
 func waitUntil(t *testing.T, condition func() bool) {
 	t.Helper()
 	deadline := time.Now().Add(5 * time.Second)
