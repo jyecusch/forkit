@@ -61,11 +61,14 @@ export const drawGraph = (context: CanvasRenderingContext2D, geometry: Geometry,
   context.lineCap = "butt"
   context.lineJoin = "round"
   for (const segment of geometry.segments) {
-    context.strokeStyle = colorOf(segment.thread, segment.emphasized)
+    // The uncommitted changes' line has no branch colour of its own.
+    context.strokeStyle = segment.uncommitted ? palette.lanes[0]! : colorOf(segment.thread, segment.emphasized)
+    context.setLineDash(segment.uncommitted ? [3, 3] : [])
     context.beginPath()
     traceSegment(context, segment)
     context.stroke()
   }
+  context.setLineDash([])
 
   const clipped: Array<Dot> = []
   for (const dot of geometry.dots) {

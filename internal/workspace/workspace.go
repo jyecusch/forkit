@@ -241,5 +241,13 @@ func nowMillis() model.UnixMillis {
 // Preferences is the store the workspace follows.
 func (w *Workspace) Preferences() *prefs.Store { return w.prefs }
 
+// ActiveWorktreeChanged tells a repository that another of its worktrees is
+// active, so its graph shows that worktree's uncommitted changes.
+func (w *Workspace) ActiveWorktreeChanged(ctx context.Context, id model.RepoID) {
+	if r, err := w.repo(id); err == nil {
+		r.requestGraphRefresh(ctx)
+	}
+}
+
 // Git is the git binary the workspace runs.
 func (w *Workspace) Git() *gitexec.Git { return w.git }

@@ -17,6 +17,8 @@ export interface Segment {
   readonly kind: EdgeKind
   readonly thread: number
   readonly emphasized: boolean
+  /** Part of the line from uncommitted changes, drawn dashed in the neutral lane colour. */
+  readonly uncommitted: boolean
 }
 
 /**
@@ -78,7 +80,9 @@ export const geometry = (options: {
         y2: centerY(index + 1),
         kind: edge.kind,
         thread: edge.threadId,
-        emphasized: !anyEmphasis || edge.onEmphasized,
+        // The uncommitted changes' line is never toned down.
+        emphasized: !anyEmphasis || edge.onEmphasized || edge.uncommitted === true,
+        uncommitted: edge.uncommitted === true,
       })
     }
     dots.push({

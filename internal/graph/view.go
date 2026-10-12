@@ -23,6 +23,9 @@ type Options struct {
 	Order          model.GraphOrder
 	IncludeRemotes bool
 	IncludeTags    bool
+	// Uncommitted is the commit the active worktree's uncommitted changes
+	// build on, which gets a lane of their own from the top; empty for none.
+	Uncommitted model.OID
 }
 
 // View is the laid-out history of one repository. It is safe for concurrent
@@ -88,10 +91,17 @@ func (v *View) Refresh(ctx context.Context, refs []model.Ref, heads []model.OID,
 	v.mu.RUnlock()
 
 	sameView := current != nil && currentOptions == options
+	// Only the uncommitted changes' lane differs: the history is laid out again
+	// in memory rather than read again.
+	sameHistory := current != nil && sameHistoryOptions(currentOptions, options)
 	switch {
 	case sameView && complete && slices.Equal(currentTips, tips):
 		span.SetAttributes(attribute.String("graph.refresh", "refs"))
 		v.install(ctx, current, tips, options, complete, refs)
+		return nil
+	case sameHistory && complete && slices.Equal(currentTips, tips):
+		span.SetAttributes(attribute.String("graph.refresh", "relayout"))
+		v.install(ctx, Layout(current.history, options.Uncommitted), tips, options, complete, refs)
 		return nil
 	case sameView && complete:
 		onlyAdded, err := allReachable(ctx, v.repo, currentTips, tips)
@@ -119,7 +129,7 @@ func (v *View) prepend(ctx context.Context, current *Graph, currentTips, tips []
 	if err != nil {
 		return err
 	}
-	v.install(ctx, Layout(merged), tips, options, true, refs)
+	v.install(ctx, Layout(merged, options.Uncommitted), tips, options, true, refs)
 	return nil
 }
 
@@ -127,7 +137,7 @@ func (v *View) prepend(ctx context.Context, current *Graph, currentTips, tips []
 // rows is laid out and growing it as git produces more.
 func (v *View) reload(ctx context.Context, tips []model.OID, options Options, refs []model.Ref) error {
 	history := newHistory()
-	g := Layout(history)
+	g := Layout(history, options.Uncommitted)
 	if len(tips) == 0 {
 		v.install(ctx, g, tips, options, true, refs)
 		return nil
@@ -249,6 +259,9 @@ func (v *View) row(g *Graph, row int, oid model.OID, edges []edge, emphasis []ui
 			Kind:         edgeKinds[e.kind],
 			OnEmphasized: hasBit(emphasis, e.firstParentOf),
 		}
+		if e.uncommitted {
+			graphRow.Edges[i].Uncommitted = &e.uncommitted
+		}
 	}
 	return graphRow
 }
@@ -257,6 +270,13 @@ var edgeKinds = map[edgeKind]model.EdgeKind{
 	edgeStraight: model.EdgeKindStraight,
 	edgeMerge:    model.EdgeKindMerge,
 	edgeFork:     model.EdgeKindFork,
+}
+
+// sameHistoryOptions reports whether two option sets show the same commits,
+// differing at most in the uncommitted changes' lane.
+func sameHistoryOptions(a, b Options) bool {
+	a.Uncommitted, b.Uncommitted = "", ""
+	return a == b
 }
 
 // RowOfRef returns the row of the commit a ref points at, or -1 when the ref

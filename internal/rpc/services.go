@@ -197,7 +197,11 @@ func position(ids []model.RepoID, id model.RepoID) int {
 
 // SetActiveWorktree selects a worktree sub-tab of a repository.
 func (x *Session) SetActiveWorktree(meta model.CallMeta, repoID model.RepoID, worktreeID model.WorktreeID) error {
-	return x.updateOpenRepo(meta, "Session.SetActiveWorktree", repoID, func(o *model.OpenRepo) { o.ActiveWorktreeID = worktreeID })
+	err := x.updateOpenRepo(meta, "Session.SetActiveWorktree", repoID, func(o *model.OpenRepo) { o.ActiveWorktreeID = worktreeID })
+	if err == nil {
+		x.s.deps.Workspace.ActiveWorktreeChanged(context.Background(), repoID)
+	}
+	return err
 }
 
 // SetEmphasizedRef chooses whose history the graph emphasizes.

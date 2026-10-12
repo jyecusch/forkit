@@ -15,7 +15,7 @@ import { cn } from "@/lib/utils"
 import type { GraphView, Preferences, Ref, RefId, RepoId } from "@/model/model.gen"
 import { GraphData, type LoadedRow } from "@/services/GraphData"
 import { focusIsLost } from "./Chrome"
-import { laneColor, RefBadge } from "./RefBadge"
+import { RefBadge } from "./RefBadge"
 
 /** Rows rendered beyond the viewport on each side, for rows and graph alike. */
 const overscan = 30
@@ -163,21 +163,11 @@ export const GraphPane = (props: GraphPaneProps) => {
   const resting = !useScrolling(scrollRef, restAfter) && !pointerOver && !menuOpen && !scrolling
   const viewportFirst = jump.landing ?? Math.floor((virtualizer.scrollOffset ?? 0) / rowHeight)
   const viewportWidest = widestLane(viewportFirst - 3, viewportFirst + viewportRows + 3, (index) => graphData.peek(repo, index))
+
   const lanes = useRatchet(viewportWidest < 0 ? 0 : Math.max(viewportWidest + 2, 2), { scrolling, resting, reset: jump.nonce })
   const columns = layoutColumns(paneWidth, lanes)
   const maxOffset = Math.max(laneX(viewportWidest) + gutter - columns.graph, 0)
 
-  // The line from the uncommitted changes needs the checked-out commit's
-  // lane, so its row is loaded even when it is far below the screen.
-  const headLoaded = props.headRow === undefined ? undefined : graphData.peek(repo, props.headRow)
-  const headRow = props.headRow
-  useForkedEffect(
-    () =>
-      active && wip && headRow !== undefined
-        ? graphData.ensure({ repo, view, emphasized, first: headRow, last: headRow })
-        : Effect.void,
-    [active, wip, graphData, repo, view, emphasized, headRow],
-  )
 
   // When the column grows enough for the rows on screen, stop panning.
   useEffect(() => {
@@ -411,13 +401,13 @@ export const GraphPane = (props: GraphPaneProps) => {
             className="pointer-events-none absolute"
             style={{ top: canvasTop, left: listInset, width: columns.graph, height: canvasHeight }}
           />
-          {wip && headLoaded && (
-            <ChangesLine
-              x={laneX(headLoaded.row.lane) - clampedOffsetX}
+          {wip && (
+            <ChangesNode
+              x={laneX(0) - clampedOffsetX}
               width={columns.graph}
-              to={wipHeight + headLoaded.row.index * rowHeight + rowHeight / 2}
-              color={laneColor(headLoaded.row.threadId)}
-              crossings={crossings(headLoaded, first, last, (index) => graphData.peek(repo, index), wipHeight)}
+              // The line continues down the first lane, which the layout keeps
+              // for it, unless the changes build on the first commit itself.
+              joinsFirstRow={props.headRow === 0}
             />
           )}
         </div>
@@ -454,61 +444,23 @@ const ChangesRow = ({ columns, count, selected, onSelect }: { columns: string; c
  * The uncommitted changes' node, drawn hollow as not yet a commit, and a
  * dashed line down to the commit they build on.
  */
-interface ChangesLineProps {
-  readonly x: number
-  readonly width: number
-  readonly to: number
-  readonly color: string
-  /** Where other commits' dots sit on the line, which it breaks around. */
-  readonly crossings: ReadonlyArray<number>
-}
-
 /**
- * The heights of commits drawn in the checked-out commit's lane above it,
- * among the rows drawn; elsewhere the line is out of sight.
+ * The uncommitted changes' node, hollow as not yet a commit, at the top of
+ * the first lane, which the layout keeps for them down to the commit they
+ * build on; the canvas draws that dashed line, and this joins it.
  */
-const crossings = (head: LoadedRow, first: number, last: number, rowAt: (index: number) => LoadedRow | undefined, top: number) => {
-  const ys: Array<number> = []
-  for (let index = first; index <= Math.min(last, head.row.index - 1); index++) {
-    if (rowAt(index)?.row.lane === head.row.lane) ys.push(top + index * rowHeight + rowHeight / 2)
-  }
-  return ys
-}
-
-const ChangesLine = ({ x, width, to, color, crossings }: ChangesLineProps) => {
+const ChangesNode = ({ x, width, joinsFirstRow }: { x: number; width: number; joinsFirstRow: boolean }) => {
   if (x < 0 || x > width) return null
   const nodeY = rowHeight / 2
   const radius = 4
+  // The first row's centre, or just clear of its ring when it is the commit built on.
+  const end = rowHeight + rowHeight / 2 - (joinsFirstRow ? 7 : 0)
   return (
-    <svg
-      aria-hidden
-      className="pointer-events-none absolute top-0"
-      style={{ left: listInset, width, height: to }}
-      fill="none"
-      strokeWidth={2}
-    >
-      {/* Drawn over the graph, with a halo, so it stays its own line where it crosses other commits. */}
-      {segments(nodeY + radius, to - radius - 3, crossings, 7).map(([from, end]) => (
-        <g key={from}>
-          <line x1={x} x2={x} y1={from} y2={end} stroke="var(--background)" strokeWidth={4} />
-          <line x1={x} x2={x} y1={from} y2={end} stroke={color} strokeDasharray="3 3" />
-        </g>
-      ))}
-      <circle cx={x} cy={nodeY} r={radius - 1} stroke={color} fill="var(--background)" />
+    <svg aria-hidden className="pointer-events-none absolute top-0" style={{ left: listInset, width, height: end }} fill="none" strokeWidth={2}>
+      <line x1={x} x2={x} y1={nodeY + radius} y2={end} stroke="var(--lane-0)" strokeDasharray="3 3" />
+      <circle cx={x} cy={nodeY} r={radius - 1} stroke="var(--lane-0)" fill="var(--background)" />
     </svg>
   )
-}
-
-/** Splits [from, to] into pieces that leave a gap of clearance around each crossing. */
-const segments = (from: number, to: number, crossings: ReadonlyArray<number>, clearance: number) => {
-  const pieces: Array<[number, number]> = []
-  let start = from
-  for (const y of crossings) {
-    if (y - clearance > start) pieces.push([start, y - clearance])
-    start = Math.max(start, y + clearance)
-  }
-  if (to > start) pieces.push([start, to])
-  return pieces
 }
 
 const copySha = (oid: string) =>

@@ -370,6 +370,8 @@ type GraphEdge struct {
 	Kind     EdgeKind `json:"kind"`
 	// Part of the emphasized ref's first-parent history.
 	OnEmphasized bool `json:"onEmphasized"`
+	// Part of the line from the active worktree's uncommitted changes, above the first row, to the commit they build on.
+	Uncommitted *bool `json:"uncommitted,omitempty"`
 }
 
 type GraphRow struct {

@@ -15,7 +15,14 @@ type lane struct {
 	// forkedAt is the row whose commit opened this lane for a non-first
 	// parent, so no line enters it from above at that row.
 	forkedAt int32
+	// uncommitted marks the lane reserved for a worktree's uncommitted
+	// changes, which runs down to the commit they build on.
+	uncommitted bool
 }
+
+// uncommittedThread is the thread of the uncommitted changes' lane. It is not
+// numbered with the branches', so their colours stay put as changes come and go.
+const uncommittedThread = -1
 
 // edge is a line from a lane at one row to a lane at the next.
 type edge struct {
@@ -23,6 +30,7 @@ type edge struct {
 	thread           int32
 	kind             edgeKind
 	firstParentOf    int32
+	uncommitted      bool
 }
 
 type edgeKind uint8
@@ -49,8 +57,15 @@ type layout struct {
 	forks      []int32
 }
 
-func newLayout() *layout {
-	return &layout{row: noRow}
+// newLayout starts a layout. With uncommitted >= 0, the first lane is kept
+// for uncommitted changes building on that commit, so every row above it is
+// placed clear of their line.
+func newLayout(uncommitted int32) *layout {
+	l := &layout{row: noRow}
+	if uncommitted >= 0 {
+		l.lanes = []lane{{expect: uncommitted, thread: uncommittedThread, firstParentOf: noRow, forkedAt: noRow, uncommitted: true}}
+	}
+	return l
 }
 
 func (l *layout) clone() *layout {
@@ -71,7 +86,7 @@ func (l *layout) place(id int32, parents []int32, edges *[]edge) placement {
 	}
 
 	thread := l.lanes[target].thread
-	if l.lanes[target].expect != id {
+	if l.lanes[target].expect != id || l.lanes[target].uncommitted {
 		thread = l.newThread()
 	}
 	for i := range l.lanes {
@@ -126,7 +141,7 @@ func (l *layout) appendEdgesInto(id, target int32, edges *[]edge) {
 		if to != lane {
 			kind = edgeMerge
 		}
-		*edges = append(*edges, edge{fromLane: lane, toLane: to, thread: ln.thread, kind: kind, firstParentOf: ln.firstParentOf})
+		*edges = append(*edges, edge{fromLane: lane, toLane: to, thread: ln.thread, kind: kind, firstParentOf: ln.firstParentOf, uncommitted: ln.uncommitted})
 	}
 	for _, forkLane := range l.forks {
 		to := destination(forkLane)
@@ -140,7 +155,7 @@ func (l *layout) appendTrailingEdges(edges *[]edge) {
 	for i, ln := range l.lanes {
 		if ln.expect >= 0 {
 			lane := int32(i)
-			*edges = append(*edges, edge{fromLane: lane, toLane: lane, thread: ln.thread, kind: edgeStraight, firstParentOf: ln.firstParentOf})
+			*edges = append(*edges, edge{fromLane: lane, toLane: lane, thread: ln.thread, kind: edgeStraight, firstParentOf: ln.firstParentOf, uncommitted: ln.uncommitted})
 		}
 	}
 }
