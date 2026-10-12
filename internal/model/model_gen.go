@@ -204,13 +204,42 @@ type CheckoutResult struct {
 	ReapplyConflicted bool `json:"reapplyConflicted"`
 }
 
-// system follows the operating system's light or dark appearance.
-type Theme string
+// Which of the light and dark themes is used; system follows the operating system.
+type Appearance string
 
 const (
-	ThemeSystem        Theme = "system"
-	ThemeTokyoNight    Theme = "tokyo-night"
-	ThemeTokyoNightDay Theme = "tokyo-night-day"
+	AppearanceSystem Appearance = "system"
+	AppearanceLight  Appearance = "light"
+	AppearanceDark   Appearance = "dark"
+)
+
+type LightTheme string
+
+const (
+	LightThemeTokyoNightDay   LightTheme = "tokyo-night-day"
+	LightThemeCatppuccinLatte LightTheme = "catppuccin-latte"
+	LightThemeGithubLight     LightTheme = "github-light"
+	LightThemeOneLight        LightTheme = "one-light"
+	LightThemeGruvboxLight    LightTheme = "gruvbox-light"
+	LightThemeSolarizedLight  LightTheme = "solarized-light"
+	LightThemeRosePineDawn    LightTheme = "rose-pine-dawn"
+)
+
+type DarkTheme string
+
+const (
+	DarkThemeTokyoNight          DarkTheme = "tokyo-night"
+	DarkThemeCatppuccinMocha     DarkTheme = "catppuccin-mocha"
+	DarkThemeCatppuccinMacchiato DarkTheme = "catppuccin-macchiato"
+	DarkThemeCatppuccinFrappe    DarkTheme = "catppuccin-frappe"
+	DarkThemeDracula             DarkTheme = "dracula"
+	DarkThemeNord                DarkTheme = "nord"
+	DarkThemeOneDark             DarkTheme = "one-dark"
+	DarkThemeGithubDark          DarkTheme = "github-dark"
+	DarkThemeGruvboxDark         DarkTheme = "gruvbox-dark"
+	DarkThemeSolarizedDark       DarkTheme = "solarized-dark"
+	DarkThemeRosePine            DarkTheme = "rose-pine"
+	DarkThemeRosePineMoon        DarkTheme = "rose-pine-moon"
 )
 
 type DateFormat string
@@ -244,7 +273,9 @@ const (
 )
 
 type AppearancePreferences struct {
-	Theme      Theme      `json:"theme"`
+	Appearance Appearance `json:"appearance"`
+	LightTheme LightTheme `json:"lightTheme"`
+	DarkTheme  DarkTheme  `json:"darkTheme"`
 	FontSize   int        `json:"fontSize"`
 	DateFormat DateFormat `json:"dateFormat"`
 }

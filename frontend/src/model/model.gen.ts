@@ -168,9 +168,15 @@ export const CheckoutResult = Schema.Struct({
 })
 export type CheckoutResult = typeof CheckoutResult.Type
 
-/** system follows the operating system's light or dark appearance. */
-export const Theme = Schema.Literals(["system", "tokyo-night", "tokyo-night-day"])
-export type Theme = typeof Theme.Type
+/** Which of the light and dark themes is used; system follows the operating system. */
+export const Appearance = Schema.Literals(["system", "light", "dark"])
+export type Appearance = typeof Appearance.Type
+
+export const LightTheme = Schema.Literals(["tokyo-night-day", "catppuccin-latte", "github-light", "one-light", "gruvbox-light", "solarized-light", "rose-pine-dawn"])
+export type LightTheme = typeof LightTheme.Type
+
+export const DarkTheme = Schema.Literals(["tokyo-night", "catppuccin-mocha", "catppuccin-macchiato", "catppuccin-frappe", "dracula", "nord", "one-dark", "github-dark", "gruvbox-dark", "solarized-dark", "rose-pine", "rose-pine-moon"])
+export type DarkTheme = typeof DarkTheme.Type
 
 export const DateFormat = Schema.Literals(["relative", "absolute", "iso"])
 export type DateFormat = typeof DateFormat.Type
@@ -185,7 +191,9 @@ export const TelemetryMode = Schema.Literals(["local", "otlp"])
 export type TelemetryMode = typeof TelemetryMode.Type
 
 export const AppearancePreferences = Schema.Struct({
-  theme: Theme,
+  appearance: Appearance,
+  lightTheme: LightTheme,
+  darkTheme: DarkTheme,
   fontSize: Schema.Int.pipe(Schema.check(Schema.isBetween({ minimum: 10, maximum: 20 }))),
   dateFormat: DateFormat,
 })

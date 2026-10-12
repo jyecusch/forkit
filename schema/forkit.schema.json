@@ -155,7 +155,9 @@
       }
     },
 
-    "Theme": { "enum": ["system", "tokyo-night", "tokyo-night-day"], "description": "system follows the operating system's light or dark appearance." },
+    "Appearance": { "enum": ["system", "light", "dark"], "description": "Which of the light and dark themes is used; system follows the operating system." },
+    "LightTheme": { "enum": ["tokyo-night-day", "catppuccin-latte", "github-light", "one-light", "gruvbox-light", "solarized-light", "rose-pine-dawn"] },
+    "DarkTheme": { "enum": ["tokyo-night", "catppuccin-mocha", "catppuccin-macchiato", "catppuccin-frappe", "dracula", "nord", "one-dark", "github-dark", "gruvbox-dark", "solarized-dark", "rose-pine", "rose-pine-moon"] },
     "DateFormat": { "enum": ["relative", "absolute", "iso"] },
     "GraphOrder": { "enum": ["topo", "date"] },
     "DirtyCheckout": { "enum": ["ask", "stash", "carry"] },
@@ -163,9 +165,11 @@
     "AppearancePreferences": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["theme", "fontSize", "dateFormat"],
+      "required": ["appearance", "lightTheme", "darkTheme", "fontSize", "dateFormat"],
       "properties": {
-        "theme": { "$ref": "#/$defs/Theme" },
+        "appearance": { "$ref": "#/$defs/Appearance" },
+        "lightTheme": { "$ref": "#/$defs/LightTheme" },
+        "darkTheme": { "$ref": "#/$defs/DarkTheme" },
         "fontSize": { "type": "integer", "minimum": 10, "maximum": 20 },
         "dateFormat": { "$ref": "#/$defs/DateFormat" }
       }
