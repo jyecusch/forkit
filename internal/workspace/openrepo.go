@@ -2,6 +2,7 @@ package workspace
 
 import (
 	"context"
+	"maps"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -21,15 +22,24 @@ import (
 const statusConcurrency = 4
 
 // openRepo is one open repository and the latest state read from it.
+//
+// Locks are taken in the order Workspace.mu, refreshMu, mu. Everything
+// published for the repository happens under refreshMu, or under mu for
+// operations, so close can drop its scopes without a late publish
+// recreating them.
 type openRepo struct {
-	ws     *Workspace
-	loc    repo.Location
-	ctx    context.Context // ends when the repository is closed
-	cancel context.CancelFunc
-	view   *graph.View
+	ws       *Workspace
+	loc      repo.Location
+	lifetime context.Context // ends when the repository is closed
+	cancel   context.CancelFunc
+	view     *graph.View
 
-	refreshMu sync.Mutex // serializes refresh
+	refreshMu sync.Mutex
+	closed    bool
 	watcher   *watch.Watcher
+
+	graphRequests chan struct{}
+	graphDone     chan struct{}
 
 	mu            sync.Mutex
 	state         model.LoadState
@@ -42,22 +52,21 @@ type openRepo struct {
 	graphOptions  graph.Options
 	graphTrace    trace.SpanContext
 	operations    map[string]model.Operation
-
-	graphRequests chan struct{}
 }
 
-func newOpenRepo(w *Workspace, loc repo.Location) *openRepo {
-	ctx, cancel := context.WithCancel(context.Background())
+func newOpenRepo(w *Workspace, loc repo.Location, options graph.Options) *openRepo {
+	lifetime, cancel := context.WithCancel(context.Background())
 	r := &openRepo{
 		ws:            w,
 		loc:           loc,
-		ctx:           ctx,
+		lifetime:      lifetime,
 		cancel:        cancel,
-		view:          graph.NewView(ctx, loc.ID, w.git.Repo(loc.CommonDir, loc.WorkDir), w.channels.GraphViews, w.tracer),
+		view:          graph.NewView(lifetime, loc.ID, w.git.Repo(loc.CommonDir, loc.WorkDir), w.channels.GraphViews, w.tracer),
+		graphRequests: make(chan struct{}, 1),
+		graphDone:     make(chan struct{}),
 		state:         model.LoadStateLoading,
 		openedAt:      nowMillis(),
-		graphOptions:  graphOptions(w.prefs.Get()),
-		graphRequests: make(chan struct{}, 1),
+		graphOptions:  options,
 		operations:    map[string]model.Operation{},
 	}
 	go r.graphLoop()
@@ -92,14 +101,17 @@ func repoName(loc repo.Location) string {
 	return filepath.Base(loc.WorkDir)
 }
 
-// load reads everything about the repository, then keeps it current.
-func (r *openRepo) load(ctx context.Context) {
+// load reads everything about the repository, then keeps it current. It
+// runs for the repository's lifetime, continuing the trace of the request
+// that opened it.
+func (r *openRepo) load(trigger trace.SpanContext) {
+	ctx := trace.ContextWithSpanContext(r.lifetime, trigger)
 	ctx, span := r.ws.tracer.Start(ctx, "repo.load", trace.WithAttributes(attribute.String("repo.id", string(r.loc.ID))))
 	defer span.End()
 
 	if r.ws.prefs.Get().Git.MaintainCommitGraph {
 		go func() {
-			if err := repo.EnsureCommitGraph(r.ctx, r.ws.git, r.loc); err != nil {
+			if err := repo.EnsureCommitGraph(r.lifetime, r.ws.git, r.loc); err != nil {
 				r.ws.logger.WarnContext(ctx, "writing commit-graph failed", "error", err)
 			}
 		}()
@@ -107,19 +119,28 @@ func (r *openRepo) load(ctx context.Context) {
 
 	err := r.refresh(ctx, watch.Change{Refs: true, Remotes: true, Worktrees: true, Status: map[model.WorktreeID]bool{}})
 	if err == nil {
-		r.refreshMu.Lock()
-		r.watcher, err = watch.Start(r.watchLayout(), r.onFilesChanged, r.ws.logger)
-		r.refreshMu.Unlock()
+		err = r.startWatching()
 	}
 
 	r.mu.Lock()
 	r.state = model.LoadStateReady
-	if err != nil && r.ctx.Err() == nil {
+	if err != nil && r.lifetime.Err() == nil {
 		span.RecordError(err)
 		r.state, r.loadErr = model.LoadStateError, err.Error()
 	}
 	r.mu.Unlock()
 	r.ws.publishRepos(ctx)
+}
+
+func (r *openRepo) startWatching() error {
+	r.refreshMu.Lock()
+	defer r.refreshMu.Unlock()
+	if r.closed {
+		return nil
+	}
+	watcher, err := watch.Start(r.watchLayout(), r.onFilesChanged, r.ws.logger)
+	r.watcher = watcher
+	return err
 }
 
 func (r *openRepo) onFilesChanged(ctx context.Context, change watch.Change) {
@@ -129,7 +150,7 @@ func (r *openRepo) onFilesChanged(ctx context.Context, change watch.Change) {
 		attribute.Int("change.status", len(change.Status)),
 	))
 	defer span.End()
-	if err := r.refresh(ctx, change); err != nil && r.ctx.Err() == nil {
+	if err := r.refresh(ctx, change); err != nil && r.lifetime.Err() == nil {
 		span.RecordError(err)
 		r.ws.logger.WarnContext(ctx, "refreshing repository failed", "error", err)
 	}
@@ -141,6 +162,13 @@ func (r *openRepo) onFilesChanged(ctx context.Context, change watch.Change) {
 func (r *openRepo) refresh(ctx context.Context, change watch.Change) error {
 	r.refreshMu.Lock()
 	defer r.refreshMu.Unlock()
+	if r.closed {
+		return nil
+	}
+	statusOf := maps.Clone(change.Status)
+	if statusOf == nil {
+		statusOf = map[model.WorktreeID]bool{}
+	}
 	channels := r.ws.channels
 	scope := string(r.loc.ID)
 
@@ -157,7 +185,7 @@ func (r *openRepo) refresh(ctx context.Context, change watch.Change) error {
 		}
 	}
 
-	worktreesChanged := change.Worktrees || len(change.Status) > 0
+	worktreesChanged := change.Worktrees || len(statusOf) > 0
 	var newWorktrees []model.WorktreeID
 	if change.Worktrees {
 		added, removed, err := r.reloadWorktrees(ctx)
@@ -166,7 +194,7 @@ func (r *openRepo) refresh(ctx context.Context, change watch.Change) error {
 		}
 		newWorktrees = added
 		for _, id := range added {
-			change.Status[id] = true
+			statusOf[id] = true
 		}
 		for _, id := range removed {
 			channels.FileStatus.Drop(ctx, string(id))
@@ -188,7 +216,7 @@ func (r *openRepo) refresh(ctx context.Context, change watch.Change) error {
 	}
 
 	r.refreshIndexes(ctx, newWorktrees)
-	if err := r.reloadStatus(ctx, change.Status); err != nil {
+	if err := r.reloadStatus(ctx, statusOf); err != nil {
 		return err
 	}
 	if worktreesChanged {
@@ -317,12 +345,16 @@ func (r *openRepo) watchLayout() watch.Layout {
 	return layout
 }
 
-// setGraphOptions changes what the graph shows and refreshes it.
+// setGraphOptions changes what the graph shows, refreshing it if that is
+// different from before.
 func (r *openRepo) setGraphOptions(ctx context.Context, options graph.Options) {
 	r.mu.Lock()
+	changed := r.graphOptions != options
 	r.graphOptions = options
 	r.mu.Unlock()
-	r.requestGraphRefresh(ctx)
+	if changed {
+		r.requestGraphRefresh(ctx)
+	}
 }
 
 // requestGraphRefresh asks the graph loop to refresh. Requests made while a
@@ -338,15 +370,16 @@ func (r *openRepo) requestGraphRefresh(ctx context.Context) {
 }
 
 func (r *openRepo) graphLoop() {
+	defer close(r.graphDone)
 	for {
 		select {
-		case <-r.ctx.Done():
+		case <-r.lifetime.Done():
 			return
 		case <-r.graphRequests:
 		}
 		r.mu.Lock()
 		refs, options := r.refs, r.graphOptions
-		ctx := trace.ContextWithSpanContext(r.ctx, r.graphTrace)
+		ctx := trace.ContextWithSpanContext(r.lifetime, r.graphTrace)
 		var heads []model.OID
 		for _, wt := range r.worktrees {
 			if wt.Head.Kind == model.HeadKindDetached {
@@ -354,21 +387,22 @@ func (r *openRepo) graphLoop() {
 			}
 		}
 		r.mu.Unlock()
-		if err := r.view.Refresh(ctx, refs, heads, options); err != nil && r.ctx.Err() == nil {
+		if err := r.view.Refresh(ctx, refs, heads, options); err != nil && r.lifetime.Err() == nil {
 			r.ws.logger.WarnContext(ctx, "refreshing graph failed", "error", err)
 		}
 	}
 }
 
+// close stops all work for the repository and drops its synced entities.
 func (r *openRepo) close(ctx context.Context) {
 	r.cancel()
+	<-r.graphDone
+
 	r.refreshMu.Lock()
+	r.closed = true
 	if r.watcher != nil {
 		r.watcher.Close()
 	}
-	r.refreshMu.Unlock()
-	r.view.Close()
-
 	r.mu.Lock()
 	worktrees := r.worktrees
 	r.mu.Unlock()
@@ -381,5 +415,10 @@ func (r *openRepo) close(ctx context.Context) {
 	channels.Refs.Drop(ctx, scope)
 	channels.Remotes.Drop(ctx, scope)
 	channels.GraphViews.Drop(ctx, scope)
+	r.refreshMu.Unlock()
+	r.view.Close()
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	channels.Operations.Drop(ctx, scope)
 }

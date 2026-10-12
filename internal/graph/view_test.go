@@ -138,3 +138,17 @@ func TestWindowMarksEmphasizedHistoryAndRefs(t *testing.T) {
 		t.Errorf("tag v1 not found on its commit's row (refs %v)", refs)
 	}
 }
+
+func TestWindowRejectsNegativeRangesAndClampsTheEnd(t *testing.T) {
+	f := newViewFixture(t)
+	f.refresh()
+	if _, err := f.view.Window(context.Background(), -1, 10, ""); err == nil {
+		t.Fatal("negative start was accepted")
+	}
+	window, err := f.view.Window(context.Background(), 5, 10, "")
+	if err != nil || len(window.Rows) != 0 {
+		t.Fatalf("window past the end = %+v, %v", window, err)
+	}
+	// The view must still be usable afterwards.
+	f.refresh()
+}

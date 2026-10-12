@@ -36,6 +36,12 @@ func IsNotARepo(err error) bool {
 	return stderrContains(err, "not a git repository")
 }
 
+// IsWorktreeDirty reports whether git refused to remove a worktree because
+// it has uncommitted changes.
+func IsWorktreeDirty(err error) bool {
+	return stderrContains(err, "contains modified or untracked files")
+}
+
 func stderrContains(err error, text string) bool {
 	var gitErr *Error
 	return errors.As(err, &gitErr) && strings.Contains(gitErr.Stderr, text)

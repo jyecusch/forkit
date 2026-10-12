@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -57,10 +58,21 @@ type Store struct {
 	validator *jsonschema.Schema
 	logger    *slog.Logger
 
+	// mu guards current and listeners. notifyMu keeps listeners seeing
+	// changes in order; it is taken before mu is released, and listeners run
+	// without mu so they may call the store.
 	mu        sync.Mutex
+	notifyMu  sync.Mutex
 	current   model.Preferences
 	listeners []func(context.Context, model.Preferences)
 }
+
+// InvalidPreferenceError is a change the schema does not allow, or a path
+// that names no preference.
+type InvalidPreferenceError struct{ Err error }
+
+func (e *InvalidPreferenceError) Error() string { return e.Err.Error() }
+func (e *InvalidPreferenceError) Unwrap() error { return e.Err }
 
 // OpenStore loads preferences from dir, falling back to defaults when the
 // file is missing or invalid, and publishes them.
@@ -86,9 +98,8 @@ func compileValidator() (*jsonschema.Schema, error) {
 	return compiler.Compile("forkit.schema.json#/$defs/Preferences")
 }
 
-// OnChange registers listen to be called with the new preferences after
-// every change, including hand edits picked up by Watch. listen runs while
-// the store is locked, so it must return quickly and not call the store.
+// OnChange registers listen to be called, in order, with the new
+// preferences after every change, including hand edits picked up by Watch.
 func (s *Store) OnChange(listen func(context.Context, model.Preferences)) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -106,19 +117,23 @@ func (s *Store) Get() model.Preferences {
 // "graph.dimmedOpacity", rejecting values the schema does not allow.
 func (s *Store) Set(ctx context.Context, path string, value any) error {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	tree, err := toTree(s.current)
+	if err == nil {
+		err = setPath(tree, path, value)
+	}
+	var next model.Preferences
+	if err == nil {
+		next, err = s.decode(tree)
+	}
 	if err != nil {
+		s.mu.Unlock()
+		return &InvalidPreferenceError{err}
+	}
+	if err := writeJSONAtomic(s.path, next); err != nil {
+		s.mu.Unlock()
 		return err
 	}
-	if err := setPath(tree, path, value); err != nil {
-		return err
-	}
-	next, err := s.decode(tree)
-	if err != nil {
-		return err
-	}
-	return s.save(ctx, next)
+	return s.replaceLocked(ctx, next)
 }
 
 // Reset restores the default value at path.
@@ -129,24 +144,28 @@ func (s *Store) Reset(ctx context.Context, path string) error {
 	}
 	value, err := getPath(defaults, path)
 	if err != nil {
-		return err
+		return &InvalidPreferenceError{err}
 	}
 	return s.Set(ctx, path, value)
 }
 
-func (s *Store) save(ctx context.Context, next model.Preferences) error {
-	if err := writeJSONAtomic(s.path, next); err != nil {
-		return err
+// replaceLocked installs next, publishes it and notifies listeners. It is
+// called with s.mu held and releases it.
+func (s *Store) replaceLocked(ctx context.Context, next model.Preferences) error {
+	if next == s.current {
+		s.mu.Unlock()
+		return nil
 	}
 	s.current = next
-	return s.publish(ctx)
-}
-
-func (s *Store) publish(ctx context.Context) error {
-	for _, listen := range s.listeners {
-		listen(ctx, s.current)
+	listeners := slices.Clone(s.listeners)
+	err := s.channel.Publish(ctx, preferencesID, []model.Preferences{next})
+	s.notifyMu.Lock()
+	defer s.notifyMu.Unlock()
+	s.mu.Unlock()
+	for _, listen := range listeners {
+		listen(ctx, next)
 	}
-	return s.channel.Publish(ctx, preferencesID, []model.Preferences{s.current})
+	return err
 }
 
 // Watch reloads the file when it is edited by hand until ctx ends.
@@ -182,9 +201,7 @@ func (s *Store) Watch(ctx context.Context) error {
 
 func (s *Store) reload(ctx context.Context) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.current = s.load()
-	if err := s.publish(ctx); err != nil {
+	if err := s.replaceLocked(ctx, s.load()); err != nil {
 		s.logger.ErrorContext(ctx, "publishing preferences failed", "error", err)
 	}
 }

@@ -3,12 +3,15 @@ package rpc
 import (
 	"context"
 	"encoding/base64"
+	"errors"
+	"regexp"
 	"slices"
 
 	"go.opentelemetry.io/otel/attribute"
 
 	"github.com/jyecusch/forkit/internal/apperr"
 	"github.com/jyecusch/forkit/internal/model"
+	"github.com/jyecusch/forkit/internal/prefs"
 	"github.com/jyecusch/forkit/internal/repo"
 )
 
@@ -32,7 +35,10 @@ func (x *Telemetry) Ingest(payload string) error {
 	if err != nil {
 		return callError{apperr.ToRPC(apperr.New(model.ErrorCodeInvalidArgument, "payload is not base64"))}
 	}
-	return x.s.deps.Telemetry.Ingest(x.s.deps.Ctx, decoded)
+	if err := x.s.deps.Telemetry.Ingest(x.s.deps.Ctx, decoded); err != nil {
+		return callError{apperr.ToRPC(err)}
+	}
+	return nil
 }
 
 // Repos opens repositories and reads their history.
@@ -89,6 +95,9 @@ func (x *Repos) RowOfRef(meta model.CallMeta, id model.RepoID, ref model.RefID) 
 // CommitDetail returns a commit's message and changed files.
 func (x *Repos) CommitDetail(meta model.CallMeta, id model.RepoID, oid model.OID) (model.CommitDetail, error) {
 	return call(x.s, meta, "Repos.CommitDetail", func(ctx context.Context) (model.CommitDetail, error) {
+		if !isOID(oid) {
+			return model.CommitDetail{}, apperr.New(model.ErrorCodeInvalidArgument, "not a commit hash")
+		}
 		loc, err := x.s.deps.Workspace.Location(id)
 		if err != nil {
 			return model.CommitDetail{}, err
@@ -97,27 +106,35 @@ func (x *Repos) CommitDetail(meta model.CallMeta, id model.RepoID, oid model.OID
 	}, attribute.String("repo.id", string(id)))
 }
 
+var oidPattern = regexp.MustCompile(`^(?:[0-9a-f]{40}|[0-9a-f]{64})$`)
+
+// isOID reports whether oid is a full SHA-1 or SHA-256 hash, so it can be
+// passed to git without being mistaken for an option.
+func isOID(oid model.OID) bool { return oidPattern.MatchString(string(oid)) }
+
 // Preferences changes user preferences.
 type Preferences struct{ s *Server }
 
 // Set changes the preference at a dot-separated path.
 func (x *Preferences) Set(meta model.CallMeta, path string, value any) error {
 	return callNoResult(x.s, meta, "Preferences.Set", func(ctx context.Context) error {
-		if err := x.s.deps.Prefs.Set(ctx, path, value); err != nil {
-			return apperr.New(model.ErrorCodeInvalidArgument, err.Error())
-		}
-		return nil
+		return preferenceError(x.s.deps.Prefs.Set(ctx, path, value))
 	}, attribute.String("preference.path", path))
 }
 
 // Reset restores the default value of a preference.
 func (x *Preferences) Reset(meta model.CallMeta, path string) error {
 	return callNoResult(x.s, meta, "Preferences.Reset", func(ctx context.Context) error {
-		if err := x.s.deps.Prefs.Reset(ctx, path); err != nil {
-			return apperr.New(model.ErrorCodeInvalidArgument, err.Error())
-		}
-		return nil
+		return preferenceError(x.s.deps.Prefs.Reset(ctx, path))
 	}, attribute.String("preference.path", path))
+}
+
+func preferenceError(err error) error {
+	var invalid *prefs.InvalidPreferenceError
+	if errors.As(err, &invalid) {
+		return apperr.New(model.ErrorCodeInvalidArgument, invalid.Error())
+	}
+	return err
 }
 
 // Session records which tab, worktree and history the user is looking at.

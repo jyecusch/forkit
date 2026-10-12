@@ -139,3 +139,58 @@ func runGit(dir string, args ...string) error {
 	cmd.Env = append(os.Environ(), "GIT_AUTHOR_NAME=Ada", "GIT_AUTHOR_EMAIL=a@example.com", "GIT_COMMITTER_NAME=Ada", "GIT_COMMITTER_EMAIL=a@example.com")
 	return cmd.Run()
 }
+
+func TestCloseWhileLoadingLeavesNothingBehind(t *testing.T) {
+	ctx := context.Background()
+	fixture := gittest.New(t)
+	fixture.Commit("initial")
+	ws, rec, _ := newWorkspace(t)
+	for range 20 {
+		opened, err := ws.Open(ctx, fixture.Dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := ws.Close(ctx, opened.ID); err != nil {
+			t.Fatal(err)
+		}
+	}
+	time.Sleep(200 * time.Millisecond)
+	rec.mu.Lock()
+	count := len(rec.events)
+	rec.mu.Unlock()
+
+	fixture.Commit("after close")
+	time.Sleep(300 * time.Millisecond)
+	rec.mu.Lock()
+	defer rec.mu.Unlock()
+	if len(rec.events) != count {
+		t.Fatal("a closed repository still publishes after files change")
+	}
+}
+
+func TestOpeningWhilePreferencesChangeDoesNotDeadlock(t *testing.T) {
+	ctx := context.Background()
+	fixture := gittest.New(t)
+	fixture.Commit("initial")
+	ws, _, _ := newWorkspace(t)
+	store := ws.Preferences()
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for i := range 50 {
+			_ = store.Set(ctx, "graph.showTags", i%2 == 0)
+		}
+	}()
+	for range 20 {
+		opened, err := ws.Open(ctx, fixture.Dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = ws.Close(ctx, opened.ID)
+	}
+	select {
+	case <-done:
+	case <-time.After(10 * time.Second):
+		t.Fatal("deadlocked")
+	}
+}

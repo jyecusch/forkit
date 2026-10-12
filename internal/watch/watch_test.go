@@ -18,6 +18,7 @@ var layout = watch.Layout{
 	Worktrees: []watch.Worktree{
 		{ID: "main", Path: "/r", GitDir: "/r/.git"},
 		{ID: "linked", Path: "/wt", GitDir: "/r/.git/worktrees/wt"},
+		{ID: "nested", Path: "/r/.worktrees/n", GitDir: "/r/.git/worktrees/n"},
 	},
 }
 

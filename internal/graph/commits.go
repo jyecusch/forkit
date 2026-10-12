@@ -42,7 +42,7 @@ func (c *commitReader) Read(oids []model.OID) ([]model.Commit, error) {
 	}
 	commits, err := c.readBatch(oids)
 	if err != nil {
-		_ = c.proc.Close()
+		c.proc.Close()
 		c.proc = nil
 	}
 	return commits, err
@@ -75,7 +75,7 @@ func (c *commitReader) Close() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.proc != nil {
-		_ = c.proc.Close()
+		c.proc.Close()
 		c.proc = nil
 	}
 }

@@ -6,9 +6,9 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"strings"
 
 	"github.com/jyecusch/forkit/internal/apperr"
+	"github.com/jyecusch/forkit/internal/gitexec"
 	"github.com/jyecusch/forkit/internal/model"
 	"github.com/jyecusch/forkit/internal/repo"
 	"github.com/jyecusch/forkit/internal/watch"
@@ -35,8 +35,11 @@ func (w *Workspace) CreateWorktree(ctx context.Context, repoID model.RepoID, bas
 	} else if err := r.validateBranchName(ctx, newBranch); err != nil {
 		return model.Worktree{}, err
 	}
-	if path == "" {
+	switch {
+	case path == "":
 		path = r.defaultWorktreePath(branch)
+	case !filepath.IsAbs(path):
+		return model.Worktree{}, apperr.New(model.ErrorCodeInvalidArgument, "The worktree location must be an absolute path.")
 	}
 	if _, err := os.Stat(path); err == nil {
 		return model.Worktree{}, apperr.New(model.ErrorCodeInvalidArgument, fmt.Sprintf("%s already exists.", path))
@@ -75,7 +78,7 @@ func (w *Workspace) RemoveWorktree(ctx context.Context, worktreeID model.Worktre
 	}
 	err = r.runOperation(ctx, model.OperationKindRemoveWorktree, wt.ID, func(ctx context.Context) error {
 		_, err := w.git.Repo(r.loc.CommonDir, r.loc.WorkDir).Mutate(ctx, args...)
-		if err != nil && !force && strings.Contains(err.Error(), "modified or untracked files") {
+		if !force && gitexec.IsWorktreeDirty(err) {
 			return apperr.New(model.ErrorCodeDirtyWorktree, fmt.Sprintf("%s has uncommitted changes.", filepath.Base(wt.Path)))
 		}
 		return err

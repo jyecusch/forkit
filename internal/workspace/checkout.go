@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/jyecusch/forkit/internal/apperr"
+	"github.com/jyecusch/forkit/internal/gitexec"
 	"github.com/jyecusch/forkit/internal/model"
 	"github.com/jyecusch/forkit/internal/repo"
 	"github.com/jyecusch/forkit/internal/watch"
@@ -74,26 +75,29 @@ func (r *openRepo) checkoutArgs(ref model.Ref, wt repo.WorktreeInfo) ([]string, 
 // creating it when there is none.
 func (r *openRepo) remoteCheckoutArgs(remote model.Ref, wt repo.WorktreeInfo) ([]string, error) {
 	r.mu.Lock()
-	remoteName := ""
+	remoteName, known := "", false
 	for _, rm := range r.remotes {
 		if rm.ID == remote.RemoteID {
-			remoteName = rm.Name
+			remoteName, known = rm.Name, true
 		}
 	}
 	name := strings.TrimPrefix(remote.ShortName, remoteName+"/")
-	var local *model.Ref
-	for i := range r.refs {
-		if r.refs[i].Kind == model.RefKindLocalBranch && r.refs[i].ShortName == name {
-			local = &r.refs[i]
+	var local model.Ref
+	hasLocal := false
+	for _, ref := range r.refs {
+		if ref.Kind == model.RefKindLocalBranch && ref.ShortName == name {
+			local, hasLocal = ref, true
 		}
 	}
 	r.mu.Unlock()
 
 	switch {
-	case local == nil:
+	case !known:
+		return nil, apperr.New(model.ErrorCodeInvalidArgument, fmt.Sprintf("%s does not belong to a configured remote.", remote.ShortName))
+	case !hasLocal:
 		return []string{"checkout", "--track", "-b", name, remote.FullName, "--"}, nil
 	case local.UpstreamRefID == remote.ID:
-		return r.checkoutArgs(*local, wt)
+		return r.checkoutArgs(local, wt)
 	}
 	return nil, apperr.New(model.ErrorCodeInvalidArgument,
 		fmt.Sprintf("A local branch named %s already exists and does not track %s.", name, remote.ShortName))
@@ -116,14 +120,26 @@ func (r *openRepo) checkout(ctx context.Context, wt repo.WorktreeInfo, ref model
 			WithDetail("changes", fmt.Sprint(changes))
 	}
 
+	before, err := stashTip(ctx, git)
+	if err != nil {
+		return model.CheckoutResult{}, err
+	}
 	if _, err := git.Mutate(ctx, "stash", "push", "-m", "Forkit: before checking out "+ref.ShortName); err != nil {
 		return model.CheckoutResult{}, err
 	}
-	if _, err := git.Mutate(ctx, args...); err != nil {
-		_, popErr := git.Mutate(ctx, "stash", "pop")
-		return model.CheckoutResult{}, joinRestoreError(err, popErr)
+	ours, err := stashTip(ctx, git)
+	if err != nil {
+		return model.CheckoutResult{}, err
 	}
-	if _, popErr := git.Mutate(ctx, "stash", "pop"); popErr != nil {
+	if ours == before {
+		// Nothing was stashed after all, so there is nothing to reapply.
+		_, err := git.Mutate(ctx, args...)
+		return model.CheckoutResult{}, err
+	}
+	if _, err := git.Mutate(ctx, args...); err != nil {
+		return model.CheckoutResult{}, joinRestoreError(err, popStash(ctx, git, ours))
+	}
+	if popErr := popStash(ctx, git, ours); popErr != nil {
 		// A conflicting pop leaves the stash in place and the files unmerged.
 		_, after, err := repo.ReadStatus(ctx, r.ws.git, wt.ID, wt.Path)
 		if err == nil && after.Conflicted > 0 {
@@ -132,6 +148,29 @@ func (r *openRepo) checkout(ctx context.Context, wt repo.WorktreeInfo, ref model
 		return model.CheckoutResult{}, popErr
 	}
 	return model.CheckoutResult{}, nil
+}
+
+// stashTip returns the commit of the newest stash, or "" when there is none.
+func stashTip(ctx context.Context, git *gitexec.Repo) (string, error) {
+	out, err := git.Run(ctx, "rev-parse", "-q", "--verify", "refs/stash")
+	if gitexec.ExitCode(err) == 1 {
+		return "", nil
+	}
+	return strings.TrimSpace(string(out)), err
+}
+
+// popStash reapplies the stash entry made for a checkout, refusing if
+// something else has stashed since, which would put the wrong changes back.
+func popStash(ctx context.Context, git *gitexec.Repo, ours string) error {
+	tip, err := stashTip(ctx, git)
+	if err != nil {
+		return err
+	}
+	if tip != ours {
+		return apperr.New(model.ErrorCodeGitFailed, "Another stash was made during checkout, so your changes were left in the stash.")
+	}
+	_, err = git.Mutate(ctx, "stash", "pop", "stash@{0}")
+	return err
 }
 
 // joinRestoreError reports a failed checkout, noting if the changes stashed

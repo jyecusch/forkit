@@ -57,13 +57,15 @@ func (r *openRepo) removeOperation(ctx context.Context, id string) {
 	r.publishOperations(ctx)
 }
 
+// publishOperations publishes under mu, so it cannot race close, which drops
+// the scope under mu after cancelling the lifetime.
 func (r *openRepo) publishOperations(ctx context.Context) {
-	if r.ctx.Err() != nil {
-		return // closed; its operations were dropped with it
-	}
 	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.lifetime.Err() != nil {
+		return
+	}
 	ops := slices.SortedFunc(maps.Values(r.operations), func(a, b model.Operation) int { return strings.Compare(a.ID, b.ID) })
-	r.mu.Unlock()
 	if err := r.ws.channels.Operations.Publish(ctx, string(r.loc.ID), ops); err != nil {
 		r.ws.logger.ErrorContext(ctx, "publishing operations failed", "error", err)
 	}

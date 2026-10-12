@@ -49,7 +49,8 @@ func NewChannels(hub *synchub.Hub) Channels {
 // ReposScope is the single scope of the Repos channel.
 const ReposScope = "all"
 
-// Workspace is the set of open repositories.
+// Workspace is the set of open repositories. Its mu is taken before any
+// openRepo lock.
 type Workspace struct {
 	git      *gitexec.Git
 	channels Channels
@@ -58,8 +59,9 @@ type Workspace struct {
 	tracer   trace.Tracer
 	logger   *slog.Logger
 
-	mu    sync.Mutex
-	repos map[model.RepoID]*openRepo
+	mu       sync.Mutex
+	repos    map[model.RepoID]*openRepo
+	shutDown bool
 }
 
 // New creates an empty workspace. Call Restore to reopen the last session.
@@ -111,17 +113,22 @@ func (w *Workspace) open(ctx context.Context, path string) (*openRepo, error) {
 	if err != nil {
 		return nil, err
 	}
+	options := graphOptions(w.prefs.Get())
 	w.mu.Lock()
+	if w.shutDown {
+		w.mu.Unlock()
+		return nil, apperr.New(model.ErrorCodeCancelled, "Forkit is shutting down")
+	}
 	if existing, ok := w.repos[loc.ID]; ok {
 		w.mu.Unlock()
 		return existing, nil
 	}
-	r := newOpenRepo(w, loc)
+	r := newOpenRepo(w, loc, options)
 	w.repos[loc.ID] = r
 	w.mu.Unlock()
 
 	w.publishRepos(ctx)
-	go r.load(trace.ContextWithSpanContext(context.Background(), trace.SpanContextFromContext(ctx)))
+	go r.load(trace.SpanContextFromContext(ctx))
 	return r, nil
 }
 
@@ -148,9 +155,11 @@ func (w *Workspace) Close(ctx context.Context, id model.RepoID) error {
 	})
 }
 
-// Shutdown closes every repository without changing the session.
+// Shutdown closes every repository without changing the session, and
+// refuses to open more.
 func (w *Workspace) Shutdown(ctx context.Context) {
 	w.mu.Lock()
+	w.shutDown = true
 	repos := slices.Collect(maps.Values(w.repos))
 	w.repos = map[model.RepoID]*openRepo{}
 	w.mu.Unlock()
@@ -220,6 +229,9 @@ func graphOptions(p model.Preferences) graph.Options {
 func nowMillis() model.UnixMillis {
 	return model.UnixMillis(time.Now().UnixMilli())
 }
+
+// Preferences is the store the workspace follows.
+func (w *Workspace) Preferences() *prefs.Store { return w.prefs }
 
 // Git is the git binary the workspace runs.
 func (w *Workspace) Git() *gitexec.Git { return w.git }

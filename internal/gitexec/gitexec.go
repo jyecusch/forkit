@@ -158,10 +158,12 @@ func (r *Repo) Start(ctx context.Context, args ...string) (*Process, error) {
 	return &Process{cmd: cmd, Stdin: stdin, Stdout: bufio.NewReaderSize(stdout, 64*1024)}, nil
 }
 
-// Close ends the process by closing its stdin and waits for it to exit.
-func (p *Process) Close() error {
+// Close stops the process. It is killed rather than asked to finish, since
+// it may be blocked writing output nobody will read.
+func (p *Process) Close() {
 	_ = p.Stdin.Close()
-	return p.cmd.Wait()
+	_ = p.cmd.Process.Kill()
+	_ = p.cmd.Wait()
 }
 
 func withDefaultTimeout(ctx context.Context) (context.Context, context.CancelFunc) {

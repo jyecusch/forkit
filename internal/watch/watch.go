@@ -83,18 +83,22 @@ type Watcher struct {
 // burst of filesystem activity.
 func Start(layout Layout, onChange func(context.Context, Change), logger *slog.Logger) (*Watcher, error) {
 	w := &Watcher{onChange: onChange, logger: logger}
-	return w, w.Update(layout)
+	if err := w.Update(layout); err != nil {
+		return nil, err
+	}
+	return w, nil
 }
 
-// Update re-targets the watcher after worktrees are added or removed.
+// Update re-targets the watcher after worktrees are added or removed. If the
+// new layout cannot be watched, the old one stays in place.
 func (w *Watcher) Update(layout Layout) error {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	w.stopLocked()
 	src, err := newSource(roots(layout))
 	if err != nil {
 		return err
 	}
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.stopLocked()
 	ctx, cancel := context.WithCancel(context.Background())
 	w.layout, w.source, w.cancel = layout, src, cancel
 	if unwatched := src.Unwatched(); len(unwatched) > 0 {
@@ -212,12 +216,22 @@ func classifyPath(layout Layout, path string, change *Change) {
 		classifyCommonDirPath(layout, rel, change)
 		return
 	}
+	if wt, ok := innermostWorktree(layout, path); ok {
+		change.Status[wt.ID] = true
+	}
+}
+
+// innermostWorktree finds the worktree containing path. A worktree may be
+// nested inside another, so the deepest match wins.
+func innermostWorktree(layout Layout, path string) (Worktree, bool) {
+	var best Worktree
+	found := false
 	for _, wt := range layout.Worktrees {
-		if within(path, wt.Path) {
-			change.Status[wt.ID] = true
-			return
+		if within(path, wt.Path) && len(wt.Path) > len(best.Path) {
+			best, found = wt, true
 		}
 	}
+	return best, found
 }
 
 func classifyCommonDirPath(layout Layout, rel string, change *Change) {

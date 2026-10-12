@@ -9,6 +9,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 
+	"github.com/jyecusch/forkit/internal/apperr"
 	"github.com/jyecusch/forkit/internal/gitexec"
 	"github.com/jyecusch/forkit/internal/model"
 	"github.com/jyecusch/forkit/internal/synchub"
@@ -25,7 +26,8 @@ type Options struct {
 }
 
 // View is the laid-out history of one repository. It is safe for concurrent
-// use; Refresh calls are serialized.
+// use; Refresh calls are serialized. Locks are taken in the order refreshMu,
+// mu, emphasisMu.
 type View struct {
 	repoID  model.RepoID
 	repo    *gitexec.Repo
@@ -87,9 +89,9 @@ func (v *View) Refresh(ctx context.Context, refs []model.Ref, heads []model.OID,
 
 	sameView := current != nil && currentOptions == options
 	switch {
-	case sameView && slices.Equal(currentTips, tips):
+	case sameView && complete && slices.Equal(currentTips, tips):
 		span.SetAttributes(attribute.String("graph.refresh", "refs"))
-		v.swap(ctx, current, tips, options, complete, refs)
+		v.install(ctx, current, tips, options, complete, refs)
 		return nil
 	case sameView && complete:
 		onlyAdded, err := allReachable(ctx, v.repo, currentTips, tips)
@@ -117,7 +119,7 @@ func (v *View) prepend(ctx context.Context, current *Graph, currentTips, tips []
 	if err != nil {
 		return err
 	}
-	v.swap(ctx, Layout(merged), tips, options, true, refs)
+	v.install(ctx, Layout(merged), tips, options, true, refs)
 	return nil
 }
 
@@ -127,7 +129,7 @@ func (v *View) reload(ctx context.Context, tips []model.OID, options Options, re
 	history := newHistory()
 	g := Layout(history)
 	if len(tips) == 0 {
-		v.swap(ctx, g, tips, options, true, refs)
+		v.install(ctx, g, tips, options, true, refs)
 		return nil
 	}
 	shown := false
@@ -147,7 +149,7 @@ func (v *View) reload(ctx context.Context, tips []model.OID, options Options, re
 		}
 		if !shown {
 			shown = true
-			v.swap(ctx, g, tips, options, false, refs)
+			v.install(ctx, g, tips, options, false, refs)
 			lastPublish = time.Now()
 		} else if time.Since(lastPublish) >= publishInterval {
 			v.publish(ctx)
@@ -158,11 +160,12 @@ func (v *View) reload(ctx context.Context, tips []model.OID, options Options, re
 	if err != nil {
 		return err
 	}
-	v.swap(ctx, g, tips, options, true, refs)
+	v.install(ctx, g, tips, options, true, refs)
 	return nil
 }
 
-func (v *View) swap(ctx context.Context, g *Graph, tips []model.OID, options Options, complete bool, refs []model.Ref) {
+// install makes g the shown layout, bumps the version and publishes it.
+func (v *View) install(ctx context.Context, g *Graph, tips []model.OID, options Options, complete bool, refs []model.Ref) {
 	v.mu.Lock()
 	v.graph, v.tips, v.options, v.complete = g, tips, options, complete
 	v.refTips, v.refsAt = indexRefs(refs)
@@ -193,30 +196,38 @@ func (v *View) Window(ctx context.Context, start, count int, emphasized model.Re
 		attribute.Int("rows.start", start), attribute.Int("rows.requested", count)))
 	defer span.End()
 
-	v.mu.RLock()
-	window := model.GraphWindow{Version: v.version, Start: start}
-	if v.graph == nil {
-		v.mu.RUnlock()
-		return window, nil
+	if start < 0 || count < 0 {
+		return model.GraphWindow{}, apperr.New(model.ErrorCodeInvalidArgument, "row window must not be negative")
 	}
-	g := v.graph
-	end := min(start+count, g.Len())
-	edges := g.edgesBelow(start, end)
-	bits := v.emphasisBits(g, v.refTips[emphasized])
-	oids := make([]model.OID, 0, max(end-start, 0))
-	for row := start; row < end; row++ {
-		oid := g.history.OID(row)
-		oids = append(oids, oid)
-		window.Rows = append(window.Rows, v.row(g, row, oid, edges[row-start], bits))
-	}
-	v.mu.RUnlock()
-
+	window, oids := v.layoutWindow(start, count, emphasized)
 	commits, err := v.commits.Read(oids)
 	if err != nil {
 		return model.GraphWindow{}, err
 	}
 	window.Commits = commits
 	return window, nil
+}
+
+// layoutWindow copies the rows of a window out of the graph. Rows past the
+// end are left out.
+func (v *View) layoutWindow(start, count int, emphasized model.RefID) (model.GraphWindow, []model.OID) {
+	v.mu.RLock()
+	defer v.mu.RUnlock()
+	window := model.GraphWindow{Version: v.version, Start: start}
+	g := v.graph
+	if g == nil || start >= g.Len() {
+		return window, nil
+	}
+	end := min(start+count, g.Len())
+	edges := g.edgesBelow(start, end)
+	bits := v.emphasisBits(g, v.refTips[emphasized])
+	oids := make([]model.OID, 0, end-start)
+	for row := start; row < end; row++ {
+		oid := g.history.OID(row)
+		oids = append(oids, oid)
+		window.Rows = append(window.Rows, v.row(g, row, oid, edges[row-start], bits))
+	}
+	return window, oids
 }
 
 func (v *View) row(g *Graph, row int, oid model.OID, edges []edge, emphasis []uint64) model.GraphRow {
