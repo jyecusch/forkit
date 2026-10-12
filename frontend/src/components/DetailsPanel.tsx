@@ -27,7 +27,7 @@ export const DetailsPanel = ({ repo, selected, worktree, preferences }: DetailsP
   const setTab = (next: Tab) => setChosen({ tab: next, oid })
   return (
     <aside aria-label="Details" className="flex w-[clamp(260px,26vw,340px)] flex-none flex-col border-l">
-      <div role="tablist" className="flex gap-1 border-b px-3 pt-2">
+      <div role="tablist" className="flex h-8 flex-none items-center gap-0.5 border-b px-2">
         <TabButton active={tab === "commit"} onClick={() => setTab("commit")}>
           Commit
         </TabButton>
@@ -53,7 +53,10 @@ const TabButton = ({ active, onClick, children }: { active: boolean; onClick: ()
     role="tab"
     aria-selected={active}
     onClick={onClick}
-    className={cn("-mb-px border-b-2 px-2 pb-2 text-xs font-medium", active ? "border-primary text-foreground" : "border-transparent text-subtle-foreground")}
+    className={cn(
+      "flex h-6 items-center rounded-md px-2 text-xs font-medium",
+      active ? "bg-accent text-foreground" : "text-subtle-foreground hover:bg-accent/50 hover:text-foreground",
+    )}
   >
     {children}
   </button>
@@ -108,7 +111,7 @@ const CommitTab = ({ repo, selected, preferences }: { repo: RepoId; selected: Lo
           )}
         </dl>
       </div>
-      <div className="flex justify-between px-4 pt-3 pb-1.5 text-[11px] font-semibold tracking-wider text-subtle-foreground uppercase">
+      <div className="flex justify-between px-4 pt-3 pb-1.5 text-xs font-medium text-subtle-foreground">
         <span>Changed files</span>
         <span>{detail?.files.length ?? ""}</span>
       </div>
@@ -155,7 +158,7 @@ const ChangesTab = ({ worktree }: { worktree: WorktreeId }) => {
         if (entries.length === 0) return null
         return (
           <section key={title}>
-            <h3 className="flex justify-between px-4 pt-3 pb-1.5 text-[11px] font-semibold tracking-wider text-subtle-foreground uppercase">
+            <h3 className="flex justify-between px-4 pt-3 pb-1.5 text-xs font-medium text-subtle-foreground">
               <span>{title}</span>
               <span>{entries.length}</span>
             </h3>

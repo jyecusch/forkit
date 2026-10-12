@@ -102,7 +102,7 @@ export const SettingsDialog = ({ open, onOpenChange, preferences: p }: SettingsD
 
 const Group = ({ title, children }: { title: string; children: ReactNode }) => (
   <section className="flex flex-col gap-2">
-    <h3 className="text-[11px] font-semibold tracking-wider text-subtle-foreground uppercase">{title}</h3>
+    <h3 className="text-xs font-medium text-subtle-foreground">{title}</h3>
     {children}
   </section>
 )

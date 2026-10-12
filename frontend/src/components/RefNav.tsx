@@ -7,7 +7,9 @@ import { cn } from "@/lib/utils"
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu"
 import type { Ref, RefId, Remote, Worktree, WorktreeId } from "@/model/model.gen"
 
-const navRowHeight = 26
+const navRowHeight = 28
+/** Indent per nesting level, so children line up with their folder's name. */
+const levelIndent = 16
 
 interface RefNavProps {
   readonly refs: ReadonlyArray<Ref>
@@ -58,11 +60,11 @@ export const RefNav = ({ refs, remotes, worktrees, activeWorktree, emphasized, o
         return (
           <button
             onClick={() => toggle(row.id)}
-            className="flex h-full w-full items-center justify-between px-2 pt-2 text-[11px] font-semibold tracking-wider text-subtle-foreground uppercase"
+            className="flex h-full w-full items-end justify-between pr-2 pb-1 pl-2 text-xs font-medium text-subtle-foreground hover:text-secondary-foreground"
           >
             <span className="flex items-center gap-1">
-              <Chevron open={!row.collapsed} />
               {row.title}
+              <Chevron open={!row.collapsed} />
             </span>
             <span>{row.count}</span>
           </button>
@@ -71,8 +73,8 @@ export const RefNav = ({ refs, remotes, worktrees, activeWorktree, emphasized, o
         return (
           <button
             onClick={() => toggle(row.id)}
-            className="flex h-full w-full items-center gap-1.5 rounded-md pr-2 text-secondary-foreground hover:bg-accent/50"
-            style={{ paddingLeft: 8 + row.depth * 14 }}
+            className="flex h-full w-full items-center gap-1 rounded-md pr-2 text-secondary-foreground hover:bg-accent/50"
+            style={{ paddingLeft: 8 + row.depth * levelIndent }}
           >
             <Chevron open={!row.collapsed} />
             <span className="truncate">{row.name}</span>
@@ -87,9 +89,9 @@ export const RefNav = ({ refs, remotes, worktrees, activeWorktree, emphasized, o
             onDoubleClick={() => onCheckout(row.ref)}
             className={cn(
               "flex h-full w-full items-center gap-2 rounded-md pr-2 text-left",
-              on ? "bg-selection text-foreground ring-1 ring-primary/50 ring-inset" : "text-secondary-foreground hover:bg-accent/50",
+              on ? "bg-accent text-foreground" : "text-secondary-foreground hover:bg-accent/50",
             )}
-            style={{ paddingLeft: 22 + row.depth * 14 }}
+            style={{ paddingLeft: 8 + row.depth * levelIndent }}
           >
             <RefMarker kind={row.ref.kind} />
             <span className="min-w-0 flex-1 truncate">{row.name}</span>
@@ -113,14 +115,14 @@ export const RefNav = ({ refs, remotes, worktrees, activeWorktree, emphasized, o
   }
 
   return (
-    <nav aria-label="References" className="flex w-[clamp(200px,20vw,260px)] flex-none flex-col border-r bg-sidebar">
-      <label className="block px-3.5 pt-2.5 pb-1">
+    <nav aria-label="References" className="flex min-h-0 flex-1 flex-col">
+      <label className="block flex-none px-2 pb-2">
         <span className="sr-only">Filter references</span>
         <input
           value={filter}
           onChange={(event) => setFilter(event.target.value)}
-          placeholder="Filter"
-          className="w-full rounded-md border bg-background px-2 py-1.5 outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          placeholder="Filter branches and tags"
+          className="h-8 w-full rounded-md bg-accent/40 px-2 outline-none placeholder:text-subtle-foreground focus-visible:ring-1 focus-visible:ring-ring"
         />
       </label>
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-2 pb-2">

@@ -177,7 +177,7 @@ export const GraphPane = (props: GraphPaneProps) => {
   return (
     <section ref={sectionRef} className="flex min-h-0 min-w-0 flex-1 flex-col" aria-label="History">
       <div
-        className="grid gap-3 border-b py-1.5 text-[11px] font-semibold tracking-wider whitespace-nowrap text-subtle-foreground uppercase"
+        className="grid h-8 flex-none items-center gap-3 border-b text-xs font-medium whitespace-nowrap text-subtle-foreground"
         style={{ gridTemplateColumns: columns.template, paddingInline: listPadding / 2 }}
       >
         <span>Graph</span>

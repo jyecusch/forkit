@@ -17,7 +17,9 @@ import type { LoadedRow } from "@/services/GraphData"
 import { DetailsPanel } from "./DetailsPanel"
 import { GraphPane, type ScrollRequest } from "./GraphPane"
 import { RefNav } from "./RefNav"
-import { StatusBar } from "./StatusBar"
+import { Chrome } from "./Chrome"
+import { RepoTabs } from "./RepoTabs"
+import { SidebarFooter } from "./SidebarFooter"
 import { NewWorktreeDialog } from "./NewWorktreeDialog"
 import { Prompt, type PromptSpec } from "./Prompt"
 import { useCheckout } from "./useCheckout"
@@ -27,11 +29,10 @@ interface RepoViewProps {
   readonly repo: Repo
   readonly openRepo: OpenRepo | undefined
   readonly preferences: Preferences
-  readonly onOpenSettings: () => void
 }
 
 /** Everything below the repository tabs for one repository. */
-export const RepoView = ({ repo, openRepo, preferences, onOpenSettings }: RepoViewProps) => {
+export const RepoView = ({ repo, openRepo, preferences }: RepoViewProps) => {
   const run = useRun()
   const id: RepoId = repo.id
   const { data: worktrees } = useLiveQuery({ query: (q) => q.from({ worktree: worktreesCollection(id) }) })
@@ -102,8 +103,32 @@ export const RepoView = ({ repo, openRepo, preferences, onOpenSettings }: RepoVi
   }
 
   const emphasizedRef = emphasized ? refsById.get(emphasized) : undefined
+  const sidebar = (
+    <>
+      <RefNav
+        refs={refs}
+        remotes={sortedRemotes}
+        worktrees={worktrees}
+        activeWorktree={activeWorktree?.id}
+        emphasized={emphasized}
+        onEmphasize={emphasize}
+        onCheckout={(ref) => checkout(ref, activeWorktree)}
+        onNewWorktree={setNewWorktreeBase}
+      />
+      <SidebarFooter>
+        {running.length > 0 ? (
+          <span className="animate-pulse truncate text-primary">{operationLabels[running[0]!.kind]}…</span>
+        ) : (
+          <span className="truncate" title={`Watching ${worktrees.length} ${worktrees.length === 1 ? "worktree" : "worktrees"}`}>
+            <span className="mr-1.5 inline-block size-1.5 rounded-full bg-success align-middle" />
+            {activeWorktree ? `${baseName(activeWorktree.path)} on ${headLabel(activeWorktree, refsById)}` : repo.name}
+          </span>
+        )}
+      </SidebarFooter>
+    </>
+  )
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <Chrome sidebar={sidebar} header={<RepoTabs />}>
       <WorktreeTabs
         worktrees={sortedWorktrees}
         refsById={refsById}
@@ -111,38 +136,27 @@ export const RepoView = ({ repo, openRepo, preferences, onOpenSettings }: RepoVi
         onSelect={selectWorktree}
         onCreate={() => setNewWorktreeBase(emphasizedRef ?? (headRef ? refsById.get(headRef) : undefined))}
         onRemove={removeWorktree}
-      />
-      <div className="flex min-h-0 flex-1">
-        <RefNav
-          refs={refs}
-          remotes={sortedRemotes}
-          worktrees={worktrees}
-          activeWorktree={activeWorktree?.id}
-          emphasized={emphasized}
-          onEmphasize={emphasize}
-          onCheckout={(ref) => checkout(ref, activeWorktree)}
-          onNewWorktree={setNewWorktreeBase}
-        />
-        <main className="flex min-h-0 min-w-0 flex-1 flex-col">
-          <div className="flex items-center gap-2.5 border-b px-3.5 py-2 text-xs whitespace-nowrap text-secondary-foreground">
-            {emphasizedRef ? (
-              <>
-                <span>Emphasized</span>
-                <span className="rounded bg-primary/20 px-2 py-0.5 font-medium text-primary">
-                  {emphasizedRef.shortName}
-                </span>
-                <span className="min-w-0 truncate text-subtle-foreground">First-parent history at full strength, other threads dimmed</span>
-              </>
-            ) : (
-              <span className="text-subtle-foreground">Click a branch to emphasize its history</span>
+        trailing={
+          <div className="flex flex-none items-center gap-3 text-xs whitespace-nowrap text-subtle-foreground">
+            {emphasizedRef && (
+              <span
+                className="flex items-center gap-1.5"
+                title="Its first-parent history is drawn at full strength; other history is dimmed"
+              >
+                <span className="size-1.5 rounded-full bg-primary" />
+                <span className="max-w-48 truncate text-secondary-foreground">{emphasizedRef.shortName}</span>
+              </span>
             )}
-            <div className="flex-1" />
             {view && (
-              <span className="font-mono text-subtle-foreground">
-                {view.totalRows.toLocaleString()} commits{view.complete ? "" : " (loading…)"}
+              <span className="tabular-nums">
+                {view.totalRows.toLocaleString()} commits{view.complete ? "" : "…"}
               </span>
             )}
           </div>
+        }
+      />
+      <div className="flex min-h-0 flex-1">
+        <main className="flex min-h-0 min-w-0 flex-1 flex-col">
           {view ? (
             <GraphPane
               repo={id}
@@ -164,25 +178,9 @@ export const RepoView = ({ repo, openRepo, preferences, onOpenSettings }: RepoVi
         </main>
         <DetailsPanel repo={id} selected={selected} worktree={activeWorktree?.id} preferences={preferences} />
       </div>
-      <StatusBar onOpenSettings={onOpenSettings}>
-        <span className="flex items-center gap-1.5">
-          <span className="size-[7px] rounded-full bg-success" />
-          Watching {worktrees.length} {worktrees.length === 1 ? "worktree" : "worktrees"}
-        </span>
-        {running.map((op) => (
-          <span key={op.id} className="animate-pulse text-primary">
-            {operationLabels[op.kind]}…
-          </span>
-        ))}
-        {activeWorktree && (
-          <span>
-            {baseName(activeWorktree.path)} on {headLabel(activeWorktree, refsById)}
-          </span>
-        )}
-      </StatusBar>
       <Prompt spec={prompt} onClose={() => setPrompt(undefined)} />
       <NewWorktreeDialog repo={repo} base={newWorktreeBase} onClose={() => setNewWorktreeBase(undefined)} />
-    </div>
+    </Chrome>
   )
 }
 
