@@ -4,6 +4,9 @@ import "slices"
 
 const noRow = -1
 
+// noLane marks a lane that is not set.
+const noLane = -1
+
 // lane is a vertical track heading down to a commit that has not been
 // reached yet.
 type lane struct {
@@ -53,14 +56,18 @@ type layout struct {
 	nextThread int32
 	row        int32 // last row placed
 	prevLane   int32 // lane of the last row's commit
-	forks      []int32
+	// rootLane is the lane of the last row's commit if it was a root, which
+	// the next row's new branch tip stays out of: a history starting right
+	// below where another ends would look like its continuation.
+	rootLane int32
+	forks    []int32
 }
 
 // newLayout starts a layout. With uncommitted >= 0, the first lane is kept
 // for uncommitted changes building on that commit, so every row above it is
 // placed clear of their line.
 func newLayout(uncommitted int32) *layout {
-	l := &layout{row: noRow}
+	l := &layout{row: noRow, rootLane: noLane}
 	if uncommitted >= 0 {
 		l.lanes = []lane{{expect: uncommitted, thread: uncommittedThread, firstParentOf: noRow, forkedAt: noRow, uncommitted: true}}
 	}
@@ -97,6 +104,7 @@ func (l *layout) place(id int32, parents []int32, edges *[]edge) placement {
 	l.forks = l.forks[:0]
 	if len(parents) == 0 {
 		l.finishPlacing(row, target)
+		l.rootLane = target
 		return placement{lane: target, thread: thread}
 	}
 	l.lanes[target] = lane{expect: parents[0], thread: thread, firstParentOf: row, forkedAt: noRow}
@@ -119,6 +127,7 @@ func (l *layout) finishPlacing(row, commitLane int32) {
 	l.trimFreeLanes()
 	l.row = row
 	l.prevLane = commitLane
+	l.rootLane = noLane
 }
 
 // appendEdgesInto emits every line between the previous row and the row of
@@ -178,7 +187,7 @@ func (l *layout) laneFor(id int32) int32 {
 	if fallback >= 0 {
 		return fallback
 	}
-	return l.freeLane(-1)
+	return l.freeLane(l.rootLane)
 }
 
 func (l *layout) laneExpecting(id, except int32) int32 {
@@ -191,7 +200,7 @@ func (l *layout) laneExpecting(id, except int32) int32 {
 }
 
 // freeLane returns the leftmost free lane other than except, adding one if
-// every lane is in use.
+// every lane is in use. A lane added never takes except's place.
 func (l *layout) freeLane(except int32) int32 {
 	for i, ln := range l.lanes {
 		if ln.expect < 0 && int32(i) != except {
@@ -199,6 +208,9 @@ func (l *layout) freeLane(except int32) int32 {
 		}
 	}
 	l.lanes = append(l.lanes, lane{expect: -1})
+	if int32(len(l.lanes)-1) == except {
+		l.lanes = append(l.lanes, lane{expect: -1})
+	}
 	return int32(len(l.lanes) - 1)
 }
 
