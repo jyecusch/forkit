@@ -48,13 +48,13 @@ CI fails if the generated files are out of date. Wails bindings in `frontend/src
 
 The budgets are 300 ms from opening a repository to its first graph window, 100 ms from a change on disk to the UI updating, 50 ms to switch emphasis, and 150 MB of memory per repository. `internal/perf` checks them end to end against a real repository.
 
-Repositories big enough to matter are too large to commit, so generate them locally:
+Repositories big enough to matter are too large to commit, so generate them locally, in `test-repos/`, which git ignores:
 
 ```sh
-go run ./tools/synthrepo -profile busy-branches -out ~/forkit-perf/busy
-go run ./tools/synthrepo -profile deep-history -out ~/forkit-perf/deep    # slower; over a million commits
+go run ./tools/synthrepo -profile busy-branches -out test-repos/busy
+go run ./tools/synthrepo -profile deep-history -out test-repos/deep    # slower; over a million commits
 
-FORKIT_PERF_REPO=~/forkit-perf/busy/repo go test ./internal/perf -v -count=1
+FORKIT_PERF_REPO=$PWD/test-repos/busy/repo go test ./internal/perf -v -count=1
 ```
 
 - `busy-branches` reproduces a squash-merge workflow: thousands of left-over remote branches, frequent release tags, a wide graph and a large pack. Repositories like this are slow to open in many clients.
