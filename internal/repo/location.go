@@ -75,9 +75,22 @@ func RepoIDFor(commonDir string) model.RepoID {
 	return model.RepoID(shortHash(commonDir))
 }
 
-// WorktreeIDFor derives a stable ID from a worktree's absolute path.
+// WorktreeIDFor derives a stable ID from a worktree's absolute path, in
+// whichever form it was written.
 func WorktreeIDFor(path string) model.WorktreeID {
-	return model.WorktreeID(shortHash(path))
+	return model.WorktreeID(shortHash(LocalPath(path)))
+}
+
+// LocalPath turns a path as git prints it, with forward slashes on every
+// platform, into this platform's canonical form, so that paths and the IDs
+// derived from them agree whichever tool reported them. A path that no
+// longer exists is still cleaned.
+func LocalPath(path string) string {
+	clean := filepath.Clean(filepath.FromSlash(path))
+	if canonical, err := canonicalPath(clean); err == nil {
+		return canonical
+	}
+	return clean
 }
 
 // RefIDFor combines a repository ID and a full ref name.

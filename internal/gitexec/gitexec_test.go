@@ -80,11 +80,11 @@ func TestParseVersion(t *testing.T) {
 func TestRedactArgs(t *testing.T) {
 	got := gitexec.RedactArgs([]string{
 		"clone", "https://example.com/r.git", "git@github.com:o/r.git", "/home/ada/r",
-		"--git-dir=/home/ada/r/.git", "refs/heads/main", "--", "secret/file.txt",
+		"--git-dir=/home/ada/r/.git", `C:\Users\ada\r`, "d:/r", "refs/heads/main", "--", "secret/file.txt",
 	})
 	want := []string{
 		"clone", "<url>", "<url>", "<path>",
-		"--git-dir=<path>", "refs/heads/main", "--", "<path>",
+		"--git-dir=<path>", "<path>", "<path>", "refs/heads/main", "--", "<path>",
 	}
 	for i := range want {
 		if got[i] != want[i] {

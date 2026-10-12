@@ -6,6 +6,7 @@ import (
 	"context"
 	"log/slog"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"sync"
@@ -190,11 +191,35 @@ func (w *Watcher) run(ctx context.Context, layout Layout, src source) {
 // database writes, reflogs and lock files are ignored: they either change
 // nothing visible or are followed by an event that does.
 func Classify(layout Layout, paths []string) Change {
+	layout = normalizeLayout(layout)
 	change := Change{Status: map[model.WorktreeID]bool{}}
 	for _, path := range paths {
-		classifyPath(layout, filepath.Clean(path), &change)
+		classifyPath(layout, normalize(path), &change)
 	}
 	return change
+}
+
+// normalize puts a path in one form whether it came from git, which prints
+// forward slashes everywhere, or from the file system's events. Windows
+// paths are compared without regard to case, as Windows does.
+func normalize(path string) string {
+	path = filepath.Clean(filepath.FromSlash(path))
+	if runtime.GOOS == "windows" {
+		path = strings.ToLower(path)
+	}
+	return path
+}
+
+func normalizeLayout(layout Layout) Layout {
+	worktrees := make([]Worktree, len(layout.Worktrees))
+	for i, wt := range layout.Worktrees {
+		wt.Path = normalize(wt.Path)
+		if wt.GitDir != "" {
+			wt.GitDir = normalize(wt.GitDir)
+		}
+		worktrees[i] = wt
+	}
+	return Layout{CommonDir: normalize(layout.CommonDir), Worktrees: worktrees}
 }
 
 func classifyPath(layout Layout, path string, change *Change) {

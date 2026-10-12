@@ -51,8 +51,8 @@ func parseWorktreeRecord(repoID model.RepoID, record string) (wt WorktreeInfo, i
 		key, value, _ := strings.Cut(field, " ")
 		switch key {
 		case "worktree":
-			wt.Path = value
-			wt.ID = WorktreeIDFor(value)
+			wt.Path = LocalPath(value)
+			wt.ID = WorktreeIDFor(wt.Path)
 		case "HEAD":
 			wt.Head.OID = model.OID(value)
 		case "branch":

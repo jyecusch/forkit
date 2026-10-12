@@ -75,7 +75,7 @@ func redactArg(arg string) string {
 	switch {
 	case strings.Contains(arg, "://") || scpLikeURL.MatchString(arg):
 		return "<url>"
-	case filepath.IsAbs(arg) || strings.HasPrefix(arg, "~"):
+	case looksLikePath(arg):
 		return "<path>"
 	}
 	return arg
@@ -89,4 +89,14 @@ func ExitCode(err error) int {
 		return gitErr.ExitCode
 	}
 	return -1
+}
+
+// windowsDrive matches a path starting with a drive letter, such as C:\ or c:/.
+var windowsDrive = regexp.MustCompile(`^[A-Za-z]:[\\/]`)
+
+// looksLikePath reports whether arg is an absolute or home-relative path in
+// any platform's form, so redaction does not depend on the OS it runs on.
+func looksLikePath(arg string) bool {
+	return filepath.IsAbs(arg) || strings.HasPrefix(arg, "/") || strings.HasPrefix(arg, `\`) ||
+		strings.HasPrefix(arg, "~") || windowsDrive.MatchString(arg)
 }
