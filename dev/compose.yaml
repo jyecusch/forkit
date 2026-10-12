@@ -1,0 +1,12 @@
+# A local Jaeger for viewing traces during development:
+#
+#   docker compose -f dev/compose.yaml up -d
+#   FORKIT_OTLP_ENDPOINT=http://localhost:4318/v1/traces wails dev
+#
+# Then open http://localhost:16686.
+services:
+  jaeger:
+    image: jaegertracing/jaeger:latest
+    ports:
+      - "16686:16686"
+      - "4318:4318"
