@@ -24,6 +24,10 @@ func New(t testing.TB) *Repo {
 	}
 	r := &Repo{t: t, Dir: dir}
 	r.Git("init", "--initial-branch=main")
+	// Forkit reads the system's git config but these helpers do not, so line
+	// endings are pinned where both see it, or Windows' autocrlf would
+	// make files Forkit checks out look modified here.
+	r.Git("config", "core.autocrlf", "false")
 	return r
 }
 
