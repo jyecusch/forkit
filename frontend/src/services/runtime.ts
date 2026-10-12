@@ -11,3 +11,6 @@ export const AppLayer = Layer.mergeAll(Commands.layer, GraphData.layer, Preferen
 
 /** The one runtime React runs effects on. */
 export const appRuntime = ManagedRuntime.make(AppLayer, { memoMap })
+
+/** The services effects run on the app runtime may use. */
+export type AppServices = ManagedRuntime.ManagedRuntime.Services<typeof appRuntime>

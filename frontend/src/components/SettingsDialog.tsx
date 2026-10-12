@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Slider } from "@/components/ui/slider"
 import { Switch } from "@/components/ui/switch"
 import type { Preferences as PreferencesData } from "@/model/model.gen"
-import { Preferences } from "@/services/Preferences"
+import { Preferences, type PreferencePath, type PreferenceValue } from "@/services/Preferences"
 
 interface SettingsDialogProps {
   readonly open: boolean
@@ -17,7 +17,8 @@ interface SettingsDialogProps {
 /** Edits preferences. Every change is saved immediately. */
 export const SettingsDialog = ({ open, onOpenChange, preferences: p }: SettingsDialogProps) => {
   const run = useRun()
-  const set = (path: string, value: unknown) => void run(Preferences.use((prefs) => prefs.set(path, value)))
+  const set = <P extends PreferencePath>(path: P, value: PreferenceValue<P>) =>
+    void run(Preferences.use((prefs) => prefs.set(path, value)))
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-[520px]">
@@ -35,7 +36,7 @@ export const SettingsDialog = ({ open, onOpenChange, preferences: p }: SettingsD
             />
           </Row>
           <Row label="Font size">
-            <NumberInput value={p.appearance.fontSize} min={10} max={20} onCommit={(v) => set("appearance.fontSize", v)} />
+            <NumberInput key={p.appearance.fontSize} value={p.appearance.fontSize} min={10} max={20} onCommit={(v) => set("appearance.fontSize", v)} />
           </Row>
           <Row label="Dates">
             <Choice
@@ -57,20 +58,13 @@ export const SettingsDialog = ({ open, onOpenChange, preferences: p }: SettingsD
             <Switch checked={p.graph.showTags} onCheckedChange={(v) => set("graph.showTags", v)} />
           </Row>
           <Row label="Dim other history to">
-            <Slider
-              className="w-40"
-              min={0.1}
-              max={0.8}
-              step={0.05}
-              value={[p.graph.dimmedOpacity]}
-              onValueCommit={([v]) => set("graph.dimmedOpacity", v)}
-            />
+            <OpacitySlider value={p.graph.dimmedOpacity} onCommit={(v) => set("graph.dimmedOpacity", v)} />
           </Row>
         </Group>
 
         <Group title="Git">
           <Row label="Git binary" hint="Empty uses git from PATH. Applies after restart.">
-            <TextInput value={p.git.binaryPath} placeholder="git" onCommit={(v) => set("git.binaryPath", v)} />
+            <TextInput key={p.git.binaryPath} value={p.git.binaryPath} placeholder="git" onCommit={(v) => set("git.binaryPath", v)} />
           </Row>
           <Row label="Maintain commit-graph" hint="Speeds up history on large repositories.">
             <Switch checked={p.git.maintainCommitGraph} onCheckedChange={(v) => set("git.maintainCommitGraph", v)} />
@@ -97,7 +91,7 @@ export const SettingsDialog = ({ open, onOpenChange, preferences: p }: SettingsD
           </Row>
           {p.telemetry.mode === "otlp" && (
             <Row label="OTLP endpoint">
-              <TextInput value={p.telemetry.otlpEndpoint} placeholder="http://localhost:4318" onCommit={(v) => set("telemetry.otlpEndpoint", v)} />
+              <TextInput key={p.telemetry.otlpEndpoint} value={p.telemetry.otlpEndpoint} placeholder="http://localhost:4318" onCommit={(v) => set("telemetry.otlpEndpoint", v)} />
             </Row>
           )}
         </Group>
@@ -138,10 +132,18 @@ const Choice = <V extends string>({ value, options, onChange }: { value: V; opti
   </Select>
 )
 
-/** A text field that saves when it loses focus or Enter is pressed. */
+/**
+ * A text field that saves when it loses focus or Enter is pressed. Callers
+ * key it on value, so a change made elsewhere replaces the draft.
+ */
 const TextInput = ({ value, placeholder, onCommit }: { value: string; placeholder: string; onCommit: (value: string) => void }) => {
   const [draft, setDraft] = useState(value)
-  const commit = () => draft !== value && onCommit(draft)
+  const [committed, setCommitted] = useState(value)
+  const commit = () => {
+    if (draft === committed) return
+    setCommitted(draft)
+    onCommit(draft)
+  }
   return (
     <Input
       className="w-56"
@@ -154,6 +156,26 @@ const TextInput = ({ value, placeholder, onCommit }: { value: string; placeholde
   )
 }
 
+/** A slider that follows the pointer while dragging and saves on release. */
+const OpacitySlider = ({ value, onCommit }: { value: number; onCommit: (value: number) => void }) => {
+  const [draft, setDraft] = useState<number>()
+  return (
+    <Slider
+      className="w-40"
+      min={0.1}
+      max={0.8}
+      step={0.05}
+      value={[draft ?? value]}
+      onValueChange={([v]) => setDraft(v)}
+      onValueCommit={([v]) => {
+        setDraft(undefined)
+        if (v !== undefined && v !== value) onCommit(v)
+      }}
+    />
+  )
+}
+
+/** Callers key it on value, so a change made elsewhere replaces what is shown. */
 const NumberInput = ({ value, min, max, onCommit }: { value: number; min: number; max: number; onCommit: (value: number) => void }) => (
   <Input
     type="number"

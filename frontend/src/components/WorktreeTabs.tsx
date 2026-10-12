@@ -68,7 +68,7 @@ export const WorktreeTabs = ({ worktrees, refsById, active, onSelect, onCreate, 
 export const headLabel = (worktree: Worktree, refsById: ReadonlyMap<string, Ref>) => {
   switch (worktree.head.kind) {
     case "branch":
-      return refsById.get(worktree.head.refId ?? "")?.shortName ?? worktree.head.refId?.split("refs/heads/")[1] ?? "branch"
+      return refsById.get(worktree.head.refId ?? "")?.shortName ?? "branch"
     case "unborn":
       return "no commits yet"
     case "detached":

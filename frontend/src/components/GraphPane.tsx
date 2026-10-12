@@ -1,6 +1,6 @@
 import { useVirtualizer } from "@tanstack/react-virtual"
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type KeyboardEvent } from "react"
-import { useRun } from "@/app/hooks"
+import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type KeyboardEvent } from "react"
+import { useForkedEffect } from "@/app/hooks"
 import { useService } from "@/app/services"
 import { drawGraph, readPalette, type GraphPalette } from "@/graph/draw"
 import { geometry, gutter, laneWidth, rowHeight } from "@/graph/geometry"
@@ -41,7 +41,6 @@ interface GraphPaneProps {
 export const GraphPane = (props: GraphPaneProps) => {
   const { repo, view, emphasized, preferences, scrollRequest } = props
   const graphData = useService(GraphData)
-  const run = useRun()
   const scrollRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [offsetX, setOffsetX] = useState(0)
@@ -63,9 +62,7 @@ export const GraphPane = (props: GraphPaneProps) => {
   const first = items[0]?.index ?? 0
   const last = items[items.length - 1]?.index ?? 0
 
-  useEffect(() => {
-    void run(graphData.ensure(repo, view, emphasized, first, last))
-  }, [run, graphData, repo, view, emphasized, first, last])
+  useForkedEffect(() => graphData.ensure({ repo, view, emphasized, first, last }), [graphData, repo, view, emphasized, first, last])
 
   useEffect(() => {
     if (scrollRequest && scrollRequest.row >= 0) {
@@ -81,18 +78,28 @@ export const GraphPane = (props: GraphPaneProps) => {
   const fullWidth = gutter * 2 + Math.max(view.laneCount - 1, 0) * laneWidth
   const graphWidth = Math.min(Math.max(fullWidth, minGraphWidth), maxGraphWidth)
   const maxOffset = Math.max(fullWidth - graphWidth, 0)
+  const clampedOffsetX = Math.min(offsetX, maxOffset)
 
-  const scrollTop = virtualizer.scrollOffset ?? 0
+  // Resizing a canvas reallocates and clears it, so it happens only when the
+  // size changes, not on every scroll frame.
   useLayoutEffect(() => {
     const canvas = canvasRef.current
     const context = canvas?.getContext("2d")
-    if (!canvas || !context || !palette) {
+    if (!canvas || !context) {
       return
     }
     const dpr = window.devicePixelRatio || 1
     canvas.width = Math.round(graphWidth * dpr)
     canvas.height = Math.round(viewportHeight * dpr)
     context.setTransform(dpr, 0, 0, dpr, 0, 0)
+  }, [graphWidth, viewportHeight])
+
+  const scrollTop = virtualizer.scrollOffset ?? 0
+  useLayoutEffect(() => {
+    const context = canvasRef.current?.getContext("2d")
+    if (!context || !palette) {
+      return
+    }
     context.clearRect(0, 0, graphWidth, viewportHeight)
     drawGraph(
       context,
@@ -100,7 +107,7 @@ export const GraphPane = (props: GraphPaneProps) => {
         first: Math.floor(scrollTop / rowHeight),
         last: Math.min(Math.ceil((scrollTop + viewportHeight) / rowHeight), view.totalRows - 1),
         scrollTop,
-        offsetX,
+        offsetX: clampedOffsetX,
         rowAt: (index) => graphData.peek(repo, index),
         headOids: props.headOids,
         anyEmphasis: emphasized !== undefined,
@@ -113,7 +120,7 @@ export const GraphPane = (props: GraphPaneProps) => {
     repo,
     scrollTop,
     viewportHeight,
-    offsetX,
+    clampedOffsetX,
     graphWidth,
     palette,
     dataVersion,
@@ -130,13 +137,17 @@ export const GraphPane = (props: GraphPaneProps) => {
     }
   }
 
-  const selectedIndex = props.selected?.row.index
+  const selectedOid = props.selected?.row.oid
+  // Rows move when history changes, so the selection is a commit, and its
+  // current row is looked up among the rows on screen.
+  const selectedIndex = () =>
+    items.find((item) => graphData.peek(repo, item.index)?.row.oid === selectedOid)?.index ?? props.selected?.row.index ?? -1
   const onKeyDown = (event: KeyboardEvent) => {
     if (event.key !== "ArrowDown" && event.key !== "ArrowUp") {
       return
     }
     event.preventDefault()
-    const next = (selectedIndex ?? -1) + (event.key === "ArrowDown" ? 1 : -1)
+    const next = selectedIndex() + (event.key === "ArrowDown" ? 1 : -1)
     const loaded = next >= 0 ? graphData.peek(repo, next) : undefined
     if (loaded) {
       props.onSelect(loaded)
@@ -182,7 +193,7 @@ export const GraphPane = (props: GraphPaneProps) => {
               top={item.start}
               loaded={graphData.peek(repo, item.index)}
               columns={columns}
-              selected={item.index === selectedIndex}
+              selected={selectedOid !== undefined && graphData.peek(repo, item.index)?.row.oid === selectedOid}
               anyEmphasis={emphasized !== undefined}
               refsById={props.refsById}
               headRef={props.headRef}
@@ -225,7 +236,18 @@ interface CommitRowProps {
   readonly onSelect: (row: LoadedRow) => void
 }
 
-const CommitRow = ({ index, top, loaded, columns, selected, anyEmphasis, refsById, headRef, dateFormat, onSelect }: CommitRowProps) => {
+const CommitRow = memo(function CommitRow({
+  index,
+  top,
+  loaded,
+  columns,
+  selected,
+  anyEmphasis,
+  refsById,
+  headRef,
+  dateFormat,
+  onSelect,
+}: CommitRowProps) {
   const style = { top, height: rowHeight, gridTemplateColumns: columns }
   if (!loaded) {
     return (
@@ -271,4 +293,4 @@ const CommitRow = ({ index, top, loaded, columns, selected, anyEmphasis, refsByI
       </span>
     </div>
   )
-}
+})

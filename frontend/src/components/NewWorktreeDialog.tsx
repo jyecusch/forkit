@@ -31,16 +31,16 @@ export const NewWorktreeDialog = ({ repo, base, onClose }: NewWorktreeDialogProp
   const path = parent ? `${parent}/${folder}` : ""
 
   const create = async () => {
-    if (!base || !effectiveBranch) return
+    if (!base || !effectiveBranch || busy) return
     setBusy(true)
     const created = await run(Commands.use((commands) => commands.createWorktree(repo.id, base.id, branch.trim(), path)))
     setBusy(false)
-    if (created) onClose()
+    if (Option.isSome(created)) onClose()
   }
 
   const choose = async () => {
-    const chosen = await run(Commands.use((commands) => commands.chooseWorktreeParent()))
-    if (chosen && Option.isSome(chosen)) setParent(chosen.value)
+    const chosen = Option.flatten(await run(Commands.use((commands) => commands.chooseWorktreeParent())))
+    if (Option.isSome(chosen)) setParent(chosen.value)
   }
 
   return (

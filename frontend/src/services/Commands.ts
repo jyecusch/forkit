@@ -1,4 +1,4 @@
-import { Context, Effect, Layer, type Option } from "effect"
+import { Context, Effect, Layer, Option } from "effect"
 import type { RpcFailure } from "@/model/errors"
 import type { CheckoutMode, CheckoutResult, RefId, Repo, RepoId, Worktree, WorktreeId } from "@/model/model.gen"
 import { Rpc } from "./Rpc"
@@ -12,12 +12,16 @@ export class Commands extends Context.Service<
     readonly closeRepository: (repo: RepoId) => Effect.Effect<void, RpcFailure>
     readonly selectRepository: (repo: RepoId) => Effect.Effect<void, RpcFailure>
     readonly reorderRepositories: (repos: ReadonlyArray<RepoId>) => Effect.Effect<void, RpcFailure>
-    readonly selectWorktree: (repo: RepoId, worktree: WorktreeId) => Effect.Effect<void, RpcFailure>
+    /**
+     * Makes a worktree active and emphasizes its branch, returning the row
+     * of the branch tip to scroll to.
+     */
+    readonly selectWorktree: (repo: RepoId, worktree: Worktree) => Effect.Effect<Option.Option<number>, RpcFailure>
     /**
      * Makes ref the emphasized history and returns the graph row of its
-     * tip, or -1 when that commit is not shown.
+     * tip, or None when that commit is not shown.
      */
-    readonly emphasize: (repo: RepoId, ref: RefId) => Effect.Effect<number, RpcFailure>
+    readonly emphasize: (repo: RepoId, ref: RefId) => Effect.Effect<Option.Option<number>, RpcFailure>
     /** Checks out ref in a worktree and then emphasizes the branch it lands on. */
     readonly checkout: (
       repo: RepoId,
@@ -35,6 +39,12 @@ export class Commands extends Context.Service<
     Commands,
     Effect.gen(function* () {
       const rpc = yield* Rpc
+      const emphasize = Effect.fn("command.emphasize")(function* (repo: RepoId, ref: RefId) {
+        const [row] = yield* Effect.all([rpc.rowOfRef(repo, ref), rpc.setEmphasizedRef(repo, ref)], {
+          concurrency: "unbounded",
+        })
+        return row >= 0 ? Option.some(row) : Option.none()
+      })
       return Commands.of({
         openRepository: Effect.fn("command.openRepository")(function* () {
           return yield* rpc.chooseAndOpenRepo()
@@ -48,15 +58,11 @@ export class Commands extends Context.Service<
         reorderRepositories: Effect.fn("command.reorderRepositories")(function* (repos: ReadonlyArray<RepoId>) {
           yield* rpc.reorderRepos(repos)
         }),
-        selectWorktree: Effect.fn("command.selectWorktree")(function* (repo: RepoId, worktree: WorktreeId) {
-          yield* rpc.setActiveWorktree(repo, worktree)
+        selectWorktree: Effect.fn("command.selectWorktree")(function* (repo: RepoId, worktree: Worktree) {
+          yield* rpc.setActiveWorktree(repo, worktree.id)
+          return worktree.head.refId ? yield* emphasize(repo, worktree.head.refId) : Option.none()
         }),
-        emphasize: Effect.fn("command.emphasize")(function* (repo: RepoId, ref: RefId) {
-          const [row] = yield* Effect.all([rpc.rowOfRef(repo, ref), rpc.setEmphasizedRef(repo, ref)], {
-            concurrency: "unbounded",
-          })
-          return row
-        }),
+        emphasize,
         checkout: Effect.fn("command.checkout")(function* (repo: RepoId, worktree: WorktreeId, ref: RefId, mode: CheckoutMode) {
           const result = yield* rpc.checkout(worktree, ref, mode)
           yield* rpc.setEmphasizedRef(repo, result.branch ?? ref)

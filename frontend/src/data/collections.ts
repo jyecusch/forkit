@@ -1,5 +1,5 @@
 import { createCollection, type Collection, type UpdateMutationFn } from "@tanstack/db"
-import { Effect, Fiber, type Schema } from "effect"
+import { Effect, Fiber, Schedule, Schema } from "effect"
 import {
   FileStatus,
   GraphView,
@@ -19,6 +19,9 @@ import { SyncClient } from "@/services/SyncClient"
 
 /** How long a collection nothing reads keeps syncing before it is dropped. */
 const gcTime = 30_000
+
+/** Backs off from a quarter of a second up to ten seconds between attempts. */
+const retryPolicy = Schedule.min([Schedule.exponential("250 millis"), Schedule.spaced("10 seconds")])
 
 interface SyncedCollectionOptions<A extends object> {
   readonly getKey: (entity: A) => string
@@ -67,7 +70,10 @@ const syncedCollection = <S extends Schema.Codec<object, unknown>>(
                   commit()
                 },
               }),
-            ).pipe(Effect.tapCause((cause) => Effect.logError(`sync of ${channel}:${scope} stopped`, cause))),
+            ).pipe(
+              Effect.tapError((error) => Effect.logWarning(`sync of ${channel}:${scope} failed, retrying`, error)),
+              Effect.retry(retryPolicy),
+            ),
           )
           return () => {
             coreRuntime.runFork(Fiber.interrupt(fiber))
@@ -99,10 +105,7 @@ export const operationsCollection: (repo: RepoId) => Collection<Operation, strin
 export const fileStatusesCollection: (worktree: WorktreeId) => Collection<FileStatus, string> = syncedCollection("fileStatuses", FileStatus, { getKey: byId })
 
 /** Metadata attached to an optimistic preference change. */
-export interface PreferenceChange {
-  readonly path: string
-  readonly value: unknown
-}
+const PreferenceChange = Schema.Struct({ path: Schema.String, value: Schema.Unknown })
 
 /**
  * Preferences change optimistically; the backend validates and saves each
@@ -112,7 +115,7 @@ export const preferencesCollection = syncedCollection("preferences", Preferences
   getKey: byId,
   onUpdate: async ({ transaction }) => {
     for (const mutation of transaction.mutations) {
-      const change = mutation.metadata as unknown as PreferenceChange
+      const change = Schema.decodeUnknownSync(PreferenceChange)(mutation.metadata)
       await coreRuntime.runPromise(Rpc.use((rpc) => rpc.setPreference(change.path, change.value)))
     }
   },

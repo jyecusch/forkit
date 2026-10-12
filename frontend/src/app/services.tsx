@@ -1,9 +1,6 @@
 import { Context } from "effect"
 import { createContext, useContext, type ReactNode } from "react"
-import { appRuntime } from "@/services/runtime"
-import type { ManagedRuntime } from "effect"
-
-type AppServices = ManagedRuntime.ManagedRuntime.Services<typeof appRuntime>
+import type { AppServices } from "@/services/runtime"
 
 const ServicesContext = createContext<Context.Context<AppServices> | undefined>(undefined)
 

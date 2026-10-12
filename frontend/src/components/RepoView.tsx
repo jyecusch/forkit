@@ -1,4 +1,5 @@
 import { useLiveQuery } from "@tanstack/react-db"
+import { Option } from "effect"
 import { useCallback, useMemo, useState } from "react"
 import { useRun } from "@/app/hooks"
 import {
@@ -61,21 +62,18 @@ export const RepoView = ({ repo, openRepo, preferences, onOpenSettings }: RepoVi
   const [newWorktreeBase, setNewWorktreeBase] = useState<Ref>()
   const [scrollRequest, setScrollRequest] = useState<ScrollRequest>()
 
+  const scrollTo = useCallback((row: Option.Option<Option.Option<number>>) => {
+    const index = Option.flatten(row)
+    if (Option.isSome(index)) setScrollRequest({ row: index.value, nonce: Date.now() })
+  }, [])
+
   const emphasize = useCallback(
-    (ref: Ref) =>
-      void run(Commands.use((commands) => commands.emphasize(id, ref.id))).then((row) => {
-        if (row !== undefined && row >= 0) setScrollRequest({ row, nonce: Date.now() })
-      }),
-    [run, id],
+    (ref: Ref) => void run(Commands.use((commands) => commands.emphasize(id, ref.id))).then(scrollTo),
+    [run, id, scrollTo],
   )
 
-  const selectWorktree = (worktree: Worktree) => {
-    void run(Commands.use((commands) => commands.selectWorktree(id, worktree.id)))
-    if (worktree.head.kind === "branch" && worktree.head.refId) {
-      const ref = refsById.get(worktree.head.refId)
-      if (ref) emphasize(ref)
-    }
-  }
+  const selectWorktree = (worktree: Worktree) =>
+    void run(Commands.use((commands) => commands.selectWorktree(id, worktree))).then(scrollTo)
 
   const checkout = useCheckout({
     repo: id,

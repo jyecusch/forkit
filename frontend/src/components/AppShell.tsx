@@ -1,7 +1,9 @@
 import { useLiveQuery } from "@tanstack/react-db"
 import { Outlet, useNavigate } from "@tanstack/react-router"
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useLayoutEffect, useMemo, useState } from "react"
 import { usePreferences, useRun, useSession } from "@/app/hooks"
+import { useService } from "@/app/services"
+import { GraphData } from "@/services/GraphData"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { reposCollection } from "@/data/collections"
 import type { Repo, RepoId } from "@/model/model.gen"
@@ -31,11 +33,16 @@ export const AppShell = () => {
     void navigate(activeRepo ? { to: "/repos/$repoId", params: { repoId: activeRepo } } : { to: "/" })
   }, [navigate, activeRepo])
 
-  useEffect(() => {
+  // A layout effect, so the theme is applied before any child's passive
+  // effects read colours from it, such as the graph canvas palette.
+  useLayoutEffect(() => {
     if (!preferences) return
     document.documentElement.dataset.theme = preferences.appearance.theme
     document.documentElement.style.setProperty("--app-font-size", `${preferences.appearance.fontSize}px`)
   }, [preferences])
+
+  const graphData = useService(GraphData)
+  useEffect(() => graphData.retain(orderedRepos.map((repo) => repo.id)), [graphData, orderedRepos])
 
   const select = (repo: RepoId) => void run(Commands.use((commands) => commands.selectRepository(repo)))
   return (
@@ -57,7 +64,7 @@ export const AppShell = () => {
 }
 
 /** Shows one repository, once its entities have arrived. */
-export const RepoRoute = ({ repoId }: { repoId: string }) => {
+export const RepoRoute = ({ repoId }: { repoId: RepoId }) => {
   const session = useSession()
   const preferences = usePreferences()
   const [settingsOpen, setSettingsOpen] = useState(false)

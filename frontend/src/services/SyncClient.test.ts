@@ -83,4 +83,22 @@ describe("SyncClient", () => {
       yield* Fiber.interrupt(fiber)
     }).pipe(Effect.provide(backend.layer))
   })
+
+  it.effect("takes a fresh snapshot when a delta cannot be applied", () => {
+    const backend = fakeBackend()
+    const { state, target } = recorder()
+    backend.setSnapshot({ seq: 1, entities: [{ id: "a", n: 1 }] })
+    return Effect.gen(function* () {
+      const client = yield* SyncClient
+      const fiber = yield* Effect.forkChild(client.follow("items", "s", Item, target))
+      yield* Effect.yieldNow
+
+      backend.setSnapshot({ seq: 2, entities: [{ id: "b", n: 2 }] })
+      backend.emit({ seq: 2, prevSeq: 1, traceparent: "", ops: [{ type: "insert", key: "x", value: { id: "x", n: "not a number" } }] })
+      yield* Effect.yieldNow
+      expect([...state.values()]).toEqual([{ id: "b", n: 2 }])
+
+      yield* Fiber.interrupt(fiber)
+    }).pipe(Effect.provide(backend.layer))
+  })
 })

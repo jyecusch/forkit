@@ -6,7 +6,12 @@ import type { CheckoutMode, DirtyCheckout, Ref, RepoId, Worktree } from "@/model
 import { Commands } from "@/services/Commands"
 import type { PromptSpec } from "./Prompt"
 
-const modeFor: Record<DirtyCheckout, CheckoutMode> = { ask: "safe", stash: "stash", carry: "carry" }
+/**
+ * The first attempt for each preference. "ask" tries a safe checkout, which
+ * fails with DirtyWorktreeError when there are changes; the user is asked
+ * then.
+ */
+const firstAttemptFor: Record<DirtyCheckout, CheckoutMode> = { ask: "safe", stash: "stash", carry: "carry" }
 
 interface CheckoutContext {
   readonly repo: RepoId
@@ -30,7 +35,7 @@ export const useCheckout = ({ repo, refs, worktrees, dirtyCheckout, prompt, sele
       Commands.use((commands) => commands.checkout(repo, worktree.id, ref.id, mode)).pipe(
         Effect.tap((result) =>
           Effect.sync(() => {
-            const target = result.branch ? result.branch.slice(result.branch.indexOf("refs/heads/") + "refs/heads/".length) : ref.shortName
+            const target = refs.find((r) => r.id === result.branch)?.shortName ?? ref.shortName
             notify({
               tone: "info",
               message: result.reapplyConflicted
@@ -68,7 +73,7 @@ export const useCheckout = ({ repo, refs, worktrees, dirtyCheckout, prompt, sele
   return (ref: Ref, worktree: Worktree | undefined) => {
     if (!worktree) return
     const here = baseName(worktree.path)
-    const mode = modeFor[dirtyCheckout]
+    const mode = firstAttemptFor[dirtyCheckout]
     switch (ref.kind) {
       case "localBranch":
         return attempt(ref, worktree, mode)

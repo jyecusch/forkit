@@ -22,10 +22,14 @@ const noDrag = { "--wails-draggable": "no-drag" } as CSSProperties
 /** One tab per open repository, reorderable by dragging. */
 export const RepoTabs = ({ repos, active, onSelect, onClose, onOpen, onReorder }: RepoTabsProps) => {
   const [dragging, setDragging] = useState<RepoId>()
+  // Dropping on a tab puts the dragged one where that tab was, so dragging
+  // right lands after it and dragging left lands before it.
   const drop = (target: RepoId) => {
     if (!dragging || dragging === target) return
-    const order = repos.map((repo) => repo.id).filter((id) => id !== dragging)
-    order.splice(order.indexOf(target), 0, dragging)
+    const ids = repos.map((repo) => repo.id)
+    const movingRight = ids.indexOf(dragging) < ids.indexOf(target)
+    const order = ids.filter((id) => id !== dragging)
+    order.splice(order.indexOf(target) + (movingRight ? 1 : 0), 0, dragging)
     onReorder(order)
   }
   return (

@@ -39,8 +39,8 @@ describe("GraphData", () => {
     const requests: Array<number> = []
     return Effect.gen(function* () {
       const data = yield* GraphData
-      yield* data.ensure(repo, view(1), undefined, 600, 650)
-      yield* data.ensure(repo, view(1), undefined, 600, 650)
+      yield* data.ensure({ repo, view: view(1), emphasized: undefined, first: 600, last: 650 })
+      yield* data.ensure({ repo, view: view(1), emphasized: undefined, first: 600, last: 650 })
       expect(requests.sort((a, b) => a - b)).toEqual([0, 500, 1000])
       expect(data.peek(repo, 620)?.row.index).toBe(620)
     }).pipe(Effect.provide(GraphData.layer.pipe(Layer.provide(fakeRpc(requests, { current: "a" })))))
@@ -51,11 +51,11 @@ describe("GraphData", () => {
     const label = { current: "old" }
     return Effect.gen(function* () {
       const data = yield* GraphData
-      yield* data.ensure(repo, view(1), undefined, 0, 600)
+      yield* data.ensure({ repo, view: view(1), emphasized: undefined, first: 0, last: 600 })
       requests.length = 0
       label.current = "new"
 
-      yield* data.ensure(repo, view(2, 700), undefined, 0, 600)
+      yield* data.ensure({ repo, view: view(2, 700), emphasized: undefined, first: 0, last: 600 })
       expect(requests.sort((a, b) => a - b)).toEqual([500, 1000])
       expect(data.peek(repo, 10)?.commit.oid).toBe("old10")
       expect(data.peek(repo, 510)?.commit.oid).toBe("new510")
@@ -66,9 +66,9 @@ describe("GraphData", () => {
     const requests: Array<number> = []
     return Effect.gen(function* () {
       const data = yield* GraphData
-      yield* data.ensure(repo, view(1), undefined, 0, 10)
+      yield* data.ensure({ repo, view: view(1), emphasized: undefined, first: 0, last: 10 })
       requests.length = 0
-      yield* data.ensure(repo, view(1), "r:refs/heads/x" as RefId, 0, 10)
+      yield* data.ensure({ repo, view: view(1), emphasized: "r:refs/heads/x" as RefId, first: 0, last: 10 })
       expect(requests.sort((a, b) => a - b)).toEqual([0, 500])
     }).pipe(Effect.provide(GraphData.layer.pipe(Layer.provide(fakeRpc(requests, { current: "a" })))))
   })

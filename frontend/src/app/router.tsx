@@ -1,6 +1,7 @@
 import { createMemoryHistory, createRootRoute, createRoute, createRouter, useParams } from "@tanstack/react-router"
 import { AppShell, RepoRoute } from "@/components/AppShell"
 import { Welcome } from "@/components/Welcome"
+import { RepoId } from "@/model/model.gen"
 
 const rootRoute = createRootRoute({ component: AppShell })
 
@@ -9,7 +10,7 @@ const indexRoute = createRoute({ getParentRoute: () => rootRoute, path: "/", com
 const repoRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/repos/$repoId",
-  component: () => <RepoRoute repoId={useParams({ from: "/repos/$repoId" }).repoId} />,
+  component: () => <RepoRoute repoId={RepoId.make(useParams({ from: "/repos/$repoId" }).repoId)} />,
 })
 
 /** The window's views. The session decides which is shown; see AppShell. */

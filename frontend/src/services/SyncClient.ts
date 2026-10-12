@@ -1,4 +1,4 @@
-import { Context, Effect, Layer, Queue, Schema, Tracer } from "effect"
+import { Context, Effect, Layer, Option, Queue, Schema, Tracer } from "effect"
 import type { RpcFailure } from "@/model/errors"
 import { SyncDelta, type SyncOpType } from "@/model/model.gen"
 import { BackendEvents } from "./BackendEvents"
@@ -23,7 +23,8 @@ export class SyncClient extends Context.Service<
   {
     /**
      * Keeps target in step with a channel scope until interrupted. A gap in
-     * the delta sequence triggers a fresh snapshot.
+     * the delta sequence, or a delta that cannot be applied, triggers a fresh
+     * snapshot. It fails only when a snapshot cannot be taken.
      */
     readonly follow: <S extends Schema.Codec<object, unknown>>(
       channel: string,
@@ -47,7 +48,7 @@ export class SyncClient extends Context.Service<
       ): Effect.Effect<never, RpcFailure> =>
         Effect.gen(function* () {
           const decodeEntity = Schema.decodeUnknownSync(schema)
-          const decodeDelta = Schema.decodeUnknownSync(SyncDelta)
+          const decodeDelta = Schema.decodeUnknownOption(SyncDelta)
           const deltas = yield* Queue.unbounded<unknown>()
           // Listen before taking the snapshot so no delta falls in between.
           yield* Effect.acquireRelease(
@@ -63,7 +64,12 @@ export class SyncClient extends Context.Service<
 
           let lastSeq = yield* snapshot
           while (true) {
-            const delta = decodeDelta(yield* Queue.take(deltas))
+            const decoded = decodeDelta(yield* Queue.take(deltas))
+            if (Option.isNone(decoded)) {
+              lastSeq = yield* snapshot
+              continue
+            }
+            const delta = decoded.value
             if (delta.seq <= lastSeq) {
               continue
             }
@@ -71,7 +77,7 @@ export class SyncClient extends Context.Service<
               lastSeq = yield* snapshot
               continue
             }
-            yield* Effect.sync(() =>
+            const applied = yield* Effect.try(() =>
               target.apply(
                 delta.ops.map((op): DecodedOp<S["Type"]> =>
                   op.type === "delete" ? { type: "delete", key: op.key } : { type: op.type, key: op.key, value: decodeEntity(op.value) },
@@ -82,8 +88,9 @@ export class SyncClient extends Context.Service<
                 attributes: { "sync.channel": channel, "sync.scope": scope, "sync.ops": delta.ops.length },
                 links: linkTo(delta.traceparent),
               }),
+              Effect.option,
             )
-            lastSeq = delta.seq
+            lastSeq = Option.isSome(applied) ? delta.seq : yield* snapshot
           }
         }).pipe(Effect.scoped)
 

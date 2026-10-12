@@ -1,6 +1,7 @@
 import { useLiveQuery } from "@tanstack/react-db"
-import { useEffect, useState } from "react"
-import { useRun } from "@/app/hooks"
+import { Effect } from "effect"
+import { useState } from "react"
+import { useForkedEffect } from "@/app/hooks"
 import { fileStatusesCollection } from "@/data/collections"
 import { formatDate, initials, shortOid } from "@/lib/format"
 import { cn } from "@/lib/utils"
@@ -19,8 +20,11 @@ type Tab = "commit" | "changes"
 
 /** The selected commit's details, or the active worktree's uncommitted changes. */
 export const DetailsPanel = ({ repo, selected, worktree, preferences }: DetailsPanelProps) => {
-  const [tab, setTab] = useState<Tab>("commit")
-  useEffect(() => setTab("commit"), [selected?.row.oid])
+  // Selecting another commit shows its details, whichever tab was open.
+  const oid = selected?.row.oid
+  const [chosen, setChosen] = useState<{ readonly tab: Tab; readonly oid: string | undefined }>({ tab: "commit", oid })
+  const tab = chosen.oid === oid ? chosen.tab : "commit"
+  const setTab = (next: Tab) => setChosen({ tab: next, oid })
   return (
     <aside aria-label="Details" className="flex w-[340px] min-w-[280px] flex-none flex-col border-l">
       <div role="tablist" className="flex gap-1 border-b px-3 pt-2">
@@ -58,22 +62,18 @@ const TabButton = ({ active, onClick, children }: { active: boolean; onClick: ()
 const Empty = ({ children }: { children: string }) => <p className="p-4 text-subtle-foreground">{children}</p>
 
 const CommitTab = ({ repo, selected, preferences }: { repo: RepoId; selected: LoadedRow | undefined; preferences: Preferences }) => {
-  const run = useRun()
   const [detail, setDetail] = useState<CommitDetail>()
   const oid = selected?.row.oid
-  useEffect(() => {
-    setDetail(undefined)
-    if (!oid) {
-      return
-    }
-    let current = true
-    void run(Rpc.use((rpc) => rpc.commitDetail(repo, oid))).then((result) => {
-      if (current) setDetail(result)
-    })
-    return () => {
-      current = false
-    }
-  }, [run, repo, oid])
+  useForkedEffect(
+    () =>
+      Effect.gen(function* () {
+        setDetail(undefined)
+        if (!oid) return
+        const loaded = yield* Rpc.use((rpc) => rpc.commitDetail(repo, oid))
+        setDetail(loaded)
+      }),
+    [repo, oid],
+  )
 
   if (!selected) {
     return <Empty>Select a commit to see its details</Empty>

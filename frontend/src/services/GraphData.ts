@@ -30,7 +30,8 @@ class RepoCache {
   readonly blocks = new Map<number, Block>()
   /** Invalidated blocks, still drawn until their replacements arrive. */
   readonly stale = new Map<number, Block>()
-  readonly pending = new Set<number>()
+  /** Blocks being fetched, with the view each fetch is for. */
+  readonly pending = new Map<number, ViewKey>()
   /** Increases whenever rows arrive. */
   revision = 0
   readonly listeners = new Set<() => void>()
@@ -53,6 +54,10 @@ class RepoCache {
         this.blocks.set(index, { ...block, version: view.version })
       }
     }
+    for (const index of this.stale.keys()) {
+      if (index * blockSize >= view.totalRows) this.stale.delete(index)
+    }
+    trimOldest(this.stale)
     this.pending.clear()
     this.key = { version: view.version, emphasized }
   }
@@ -61,13 +66,27 @@ class RepoCache {
     this.stale.delete(index)
     this.blocks.delete(index)
     this.blocks.set(index, block)
-    while (this.blocks.size > maxBlocks) {
-      const oldest = this.blocks.keys().next().value!
-      this.blocks.delete(oldest)
-    }
+    trimOldest(this.blocks)
     this.revision++
     for (const listener of this.listeners) listener()
   }
+}
+
+/** Drops the least recently stored blocks beyond maxBlocks. */
+const trimOldest = (blocks: Map<number, Block>) => {
+  while (blocks.size > maxBlocks) {
+    blocks.delete(blocks.keys().next().value!)
+  }
+}
+
+/** The rows a view needs, as GraphData.ensure takes them. */
+export interface RowRequest {
+  readonly repo: RepoId
+  readonly view: GraphView
+  readonly emphasized: RefId | undefined
+  /** Visible rows, inclusive; blocks either side are fetched too. */
+  readonly first: number
+  readonly last: number
 }
 
 /** Windowed, cached access to a repository's graph rows. */
@@ -78,19 +97,15 @@ export class GraphData extends Context.Service<
      * Fetches whatever blocks around rows [first, last] are missing for the
      * given view and emphasis.
      */
-    readonly ensure: (
-      repo: RepoId,
-      view: GraphView,
-      emphasized: RefId | undefined,
-      first: number,
-      last: number,
-    ) => Effect.Effect<void, RpcFailure>
+    readonly ensure: (request: RowRequest) => Effect.Effect<void, RpcFailure>
     /** Returns a loaded row, or undefined while it is still being fetched. */
     readonly peek: (repo: RepoId, index: number) => LoadedRow | undefined
     /** Calls listener whenever new rows arrive for repo. */
     readonly subscribe: (repo: RepoId, listener: () => void) => () => void
     /** A number that changes whenever new rows arrive for repo. */
     readonly revision: (repo: RepoId) => number
+    /** Drops cached rows of repositories not in open. */
+    readonly retain: (open: ReadonlyArray<RepoId>) => void
   }
 >()("forkit/GraphData") {
   static readonly layer = Layer.effect(
@@ -108,28 +123,25 @@ export class GraphData extends Context.Service<
       }
 
       const fetchBlock = (repo: RepoId, cache: RepoCache, index: number) => {
-        const { version, emphasized } = cache.key
-        cache.pending.add(index)
-        return rpc.graphWindow(repo, index * blockSize, blockSize, emphasized).pipe(
+        const key = cache.key
+        cache.pending.set(index, key)
+        const settle = () => {
+          if (cache.pending.get(index) === key) cache.pending.delete(index)
+        }
+        return rpc.graphWindow(repo, index * blockSize, blockSize, key.emphasized).pipe(
           Effect.map((window) => {
-            cache.pending.delete(index)
-            if (cache.key.version !== version || cache.key.emphasized !== emphasized) {
+            settle()
+            if (cache.key !== key) {
               return
             }
             const rows = window.rows.map((row, i) => ({ row, commit: window.commits[i]! }))
-            cache.store(index, { version, rows })
+            cache.store(index, { version: key.version, rows })
           }),
-          Effect.onError(() => Effect.sync(() => cache.pending.delete(index))),
+          Effect.onExit(() => Effect.sync(settle)),
         )
       }
 
-      const ensure = Effect.fn("GraphData.ensure")(function* (
-        repo: RepoId,
-        view: GraphView,
-        emphasized: RefId | undefined,
-        first: number,
-        last: number,
-      ) {
+      const ensure = Effect.fn("GraphData.ensure")(function* ({ repo, view, emphasized, first, last }: RowRequest) {
         const cache = cacheFor(repo)
         cache.advance(view, emphasized)
         const lastRow = Math.min(last + blockSize, view.totalRows - 1)
@@ -158,7 +170,13 @@ export class GraphData extends Context.Service<
 
       const revision = (repo: RepoId) => caches.get(repo)?.revision ?? 0
 
-      return GraphData.of({ ensure, peek, subscribe, revision })
+      const retain = (open: ReadonlyArray<RepoId>) => {
+        for (const repo of caches.keys()) {
+          if (!open.includes(repo)) caches.delete(repo)
+        }
+      }
+
+      return GraphData.of({ ensure, peek, subscribe, revision, retain })
     }),
   )
 }
