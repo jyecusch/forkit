@@ -19,6 +19,13 @@ interface RepoTabsProps {
 const dragRegion = { "--wails-draggable": "drag" } as CSSProperties
 const noDrag = { "--wails-draggable": "no-drag" } as CSSProperties
 
+/**
+ * On macOS the window controls sit inside this bar, centred about 16 px
+ * from the top, so the bar is sized to centre the tabs on the same line
+ * and starts after them.
+ */
+const isMac = navigator.userAgent.includes("Mac")
+
 /** One tab per open repository, reorderable by dragging. */
 export const RepoTabs = ({ repos, active, onSelect, onClose, onOpen, onReorder }: RepoTabsProps) => {
   const [dragging, setDragging] = useState<RepoId>()
@@ -33,7 +40,12 @@ export const RepoTabs = ({ repos, active, onSelect, onClose, onOpen, onReorder }
     onReorder(order)
   }
   return (
-    <div role="tablist" aria-label="Repositories" className="flex items-end gap-0.5 border-b bg-sidebar pt-2 pr-3 pl-20" style={dragRegion}>
+    <div
+      role="tablist"
+      aria-label="Repositories"
+      className={cn("flex h-[33px] flex-none items-center gap-1 border-b bg-sidebar pr-3", isMac ? "pl-[78px]" : "pl-2")}
+      style={dragRegion}
+    >
       {repos.map((repo) => {
         const on = repo.id === active
         return (
@@ -51,8 +63,10 @@ export const RepoTabs = ({ repos, active, onSelect, onClose, onOpen, onReorder }
             onKeyDown={(event) => event.key === "Enter" && onSelect(repo.id)}
             style={noDrag}
             className={cn(
-              "group flex cursor-default items-center gap-2 rounded-t-lg py-2 pr-2 pl-3.5",
-              on ? "-mb-px border border-b-background bg-background font-medium" : "text-secondary-foreground hover:text-foreground",
+              "group flex h-[25px] cursor-default items-center gap-2 rounded-md pr-1 pl-2.5",
+              on
+                ? "bg-background font-medium text-foreground shadow-[inset_0_0_0_1px_var(--border)]"
+                : "text-secondary-foreground hover:bg-accent/50 hover:text-foreground",
             )}
           >
             <RepoIndicator repo={repo} />
@@ -70,7 +84,12 @@ export const RepoTabs = ({ repos, active, onSelect, onClose, onOpen, onReorder }
           </div>
         )
       })}
-      <button aria-label="Open repository" onClick={onOpen} style={noDrag} className="px-3 py-2 text-secondary-foreground hover:text-foreground">
+      <button
+        aria-label="Open repository"
+        onClick={onOpen}
+        style={noDrag}
+        className="flex size-[25px] items-center justify-center rounded-md text-secondary-foreground hover:bg-accent/50 hover:text-foreground"
+      >
         <Plus className="size-3.5" />
       </button>
     </div>
