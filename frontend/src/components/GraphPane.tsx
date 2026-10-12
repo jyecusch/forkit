@@ -23,7 +23,8 @@ const overscan = 30
 const maxBadges = 2
 
 export interface ScrollRequest {
-  readonly row: number
+  /** A commit's row, or the uncommitted changes above them all. */
+  readonly row: number | "changes"
   /** Distinguishes repeated requests for the same row. */
   readonly nonce: number
 }
@@ -126,7 +127,13 @@ export const GraphPane = (props: GraphPaneProps) => {
 
   // A row jumped to is centred, selected and brought into view sideways.
   useEffect(() => {
-    if (!scrollRequest || scrollRequest.row < 0) return
+    if (!scrollRequest) return
+    if (scrollRequest.row === "changes") {
+      virtualizer.scrollToOffset(0)
+      setJump((last) => ({ nonce: last.nonce + 1, landing: 0 }))
+      return
+    }
+    if (scrollRequest.row < 0) return
     const top = Math.max(wipHeight + scrollRequest.row * rowHeight - (virtualizer.scrollRect?.height ?? 0) / 2 + rowHeight / 2, 0)
     virtualizer.scrollToOffset(top)
     setPendingSelect(scrollRequest.row)

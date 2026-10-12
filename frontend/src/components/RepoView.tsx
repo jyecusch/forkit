@@ -69,7 +69,11 @@ export const RepoView = ({ repo, openRepo, preferences, active }: RepoViewProps)
   }, [])
   const changes = activeWorktree ? changeCount(activeWorktree) : 0
   // Once committed or discarded, there are no changes to select; the history takes over.
-  if (changesSelected && changes === 0) setChangesSelected(false)
+  const hadChanges = useRef(changes)
+  useEffect(() => {
+    if (hadChanges.current > 0 && changes === 0) setChangesSelected(false)
+    hadChanges.current = changes
+  }, [changes])
 
   // The checked-out commit's row, which the uncommitted changes row joins.
   const [headRow, setHeadRow] = useState<number>()
@@ -118,13 +122,26 @@ export const RepoView = ({ repo, openRepo, preferences, active }: RepoViewProps)
     }
   }, [])
 
+  // The checked-out branch's newest work is its uncommitted changes, so
+  // going to it goes to them when there are any.
+  const goToChanges = useCallback(() => {
+    setScrollRequest({ row: "changes", nonce: Date.now() })
+    setChangesSelected(true)
+    setOpenDiff(undefined)
+  }, [])
+
   const emphasize = useCallback(
-    (ref: Ref) => void run(Commands.use((commands) => commands.emphasize(id, ref.id))).then(scrollTo),
-    [run, id, scrollTo],
+    (ref: Ref) =>
+      void run(Commands.use((commands) => commands.emphasize(id, ref.id))).then((row) =>
+        ref.id === headRef && changes > 0 ? goToChanges() : scrollTo(row),
+      ),
+    [run, id, scrollTo, goToChanges, headRef, changes],
   )
 
   const selectWorktree = (worktree: Worktree) =>
-    void run(Commands.use((commands) => commands.selectWorktree(id, worktree))).then(scrollTo)
+    void run(Commands.use((commands) => commands.selectWorktree(id, worktree))).then((row) =>
+      changeCount(worktree) > 0 ? goToChanges() : scrollTo(row),
+    )
 
   // Open on the checked-out commit, wherever it is in the history.
   const viewLoaded = view !== undefined
