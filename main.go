@@ -3,8 +3,10 @@ package main
 import (
 	"embed"
 	"log"
+	"runtime"
 
 	"github.com/wailsapp/wails/v2"
+	"github.com/wailsapp/wails/v2/pkg/menu"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
 	"github.com/wailsapp/wails/v2/pkg/options/mac"
@@ -27,7 +29,8 @@ func main() {
 		MinWidth:         900,
 		MinHeight:        560,
 		AssetServer:      &assetserver.Options{Assets: assets},
-		BackgroundColour: &options.RGBA{R: 26, G: 27, B: 38, A: 255},
+		BackgroundColour: &options.RGBA{R: 14, G: 14, B: 20, A: 255},
+		Menu:             appMenu(),
 		OnStartup:        forkit.Startup,
 		OnShutdown:       forkit.Shutdown,
 		Bind:             forkit.Server.Services(),
@@ -38,4 +41,14 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+}
+
+// appMenu gives macOS its standard application and Edit menus, without
+// which copy, paste and select-all do not reach text fields. Other platforms
+// have no menu bar.
+func appMenu() *menu.Menu {
+	if runtime.GOOS != "darwin" {
+		return nil
+	}
+	return menu.NewMenuFromItems(menu.AppMenu(), menu.EditMenu())
 }
