@@ -3,6 +3,7 @@ import { Effect } from "effect"
 import { Asterisk } from "lucide-react"
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type KeyboardEvent } from "react"
 import { useForkedEffect, useResolvedTheme } from "@/app/hooks"
+import { useLayoutSize, type LayoutSizeControl } from "@/app/layoutSizes"
 import { useService } from "@/app/services"
 import { columnGap, layoutColumns, listInset } from "@/graph/columns"
 import { drawGraph, readPalette, uncommittedLine, type GraphPalette } from "@/graph/draw"
@@ -17,6 +18,7 @@ import type { GraphView, Preferences, Ref, RefId, RepoId, Worktree } from "@/mod
 import { GraphData, type LoadedRow } from "@/services/GraphData"
 import { focusIsLost } from "./Chrome"
 import { laneColor, RefBadge } from "./RefBadge"
+import { ResizeHandle } from "./ResizeHandle"
 
 /** Rows rendered beyond the viewport on each side, for rows and graph alike. */
 const overscan = 30
@@ -168,7 +170,18 @@ export const GraphPane = (props: GraphPaneProps) => {
   const viewportWidest = widestLane(viewportFirst - 3, viewportFirst + viewportRows + 3, (index) => graphData.peek(repo, index))
 
   const lanes = useRatchet(viewportWidest < 0 ? 0 : Math.max(viewportWidest + 2, 2), { scrolling, resting, reset: jump.nonce })
-  const columns = layoutColumns(paneWidth, lanes)
+  const refsWidth = useLayoutSize("refsColumn")
+  const graphWidth = useLayoutSize("graphColumn")
+  const authorWidth = useLayoutSize("authorColumn")
+  const dateWidth = useLayoutSize("dateColumn")
+  const commitWidth = useLayoutSize("commitColumn")
+  const columns = layoutColumns(paneWidth, lanes, {
+    refs: refsWidth.size,
+    graph: graphWidth.size,
+    author: authorWidth.size,
+    date: dateWidth.size,
+    commit: commitWidth.size,
+  })
   const maxOffset = Math.max(laneX(viewportWidest) + gutter - columns.graph, 0)
 
 
@@ -347,12 +360,26 @@ export const GraphPane = (props: GraphPaneProps) => {
         className="grid h-8 flex-none items-center gap-3 overflow-y-hidden border-b text-xs font-medium whitespace-nowrap text-subtle-foreground [scrollbar-gutter:stable]"
         style={{ gridTemplateColumns: columns.template, paddingInline: listInset }}
       >
-        <span className="text-right">Branch / Tag</span>
-        <span />
+        <ColumnHeader name="branch and tag" edge="right" control={refsWidth} width={columns.refs} limits={[80, 400]} className="text-right">
+          Branch / Tag
+        </ColumnHeader>
+        <ColumnHeader name="graph" edge="right" control={graphWidth} width={columns.graph} limits={[graphMin, 800]} />
         <span>Description</span>
-        {columns.showAuthor && <span>Author</span>}
-        {columns.showDate && <span>Date</span>}
-        {columns.showCommit && <span>SHA</span>}
+        {columns.showAuthor && (
+          <ColumnHeader name="author" edge="left" control={authorWidth} width={columns.author} limits={[56, 320]}>
+            Author
+          </ColumnHeader>
+        )}
+        {columns.showDate && (
+          <ColumnHeader name="date" edge="left" control={dateWidth} width={columns.date} limits={[56, 240]}>
+            Date
+          </ColumnHeader>
+        )}
+        {columns.showCommit && (
+          <ColumnHeader name="SHA" edge="left" control={commitWidth} width={columns.commit} limits={[48, 160]}>
+            SHA
+          </ColumnHeader>
+        )}
       </div>
       <div
         ref={scrollRef}
@@ -427,6 +454,46 @@ export const GraphPane = (props: GraphPaneProps) => {
     </section>
   )
 }
+
+/** The graph is never narrower than one lane with its gutters. */
+const graphMin = gutter * 2 + laneWidth
+
+/**
+ * A column's header with a handle to resize it, on the edge away from the
+ * description, which takes whatever width is left.
+ */
+const ColumnHeader = ({
+  name,
+  edge,
+  control,
+  width,
+  limits,
+  className,
+  children,
+}: {
+  /** The column, for the handle's label. */
+  name: string
+  edge: "left" | "right"
+  control: LayoutSizeControl
+  width: number
+  limits: readonly [number, number]
+  className?: string
+  children?: React.ReactNode
+}) => (
+  <span className={cn("relative h-full min-w-0 leading-8", className)}>
+    <span className="block truncate">{children}</span>
+    <ResizeHandle
+      label={`Resize the ${name} column`}
+      orientation="vertical"
+      grows={edge === "right" ? 1 : -1}
+      measure={() => width}
+      limits={() => limits}
+      control={control}
+      // Centred in the gap between this column and the next.
+      className={cn("absolute inset-y-0", edge === "right" ? "-right-[10px]" : "-left-[10px]")}
+    />
+  </span>
+)
 
 /** The uncommitted changes, as the first row of the history. */
 const ChangesRow = ({ columns, count, selected, onSelect }: { columns: string; count: number; selected: boolean; onSelect: () => void }) => (

@@ -49,6 +49,7 @@ These answer the plan's open questions and record where the implementation diffe
 - **Worktrees are sub-tabs**, as in the design mockup.
 - **System git is required**, version 2.36 or newer. Forkit does not bundle git.
 - **One window.** Tearing tabs into their own windows is not in v0.1.
+- **Panel and column sizes live in the session**, beside the open tabs, rather than in preferences: they record how the window was last arranged, not a choice to share or reset. A size the user never set is chosen from the window's width.
 - **The session stores `{id, commonDir}` per open repository**, not just IDs, because an ID is a hash and the repository must be found again on restart.
 - **`GraphView` omits `emphasizedRefId` and `includedRefs`.** Emphasis is a parameter of each window request, so switching it never invalidates the layout. Which refs are drawn comes from the graph preferences.
 - **The sync package is `synchub`**, to avoid shadowing Go's `sync`.
@@ -66,5 +67,3 @@ These answer the plan's open questions and record where the implementation diffe
 ## Not yet built
 
 From the roadmap: staging hunks and lines, discarding changes, and commit signing; prompting for credentials inside Forkit; merge, rebase, conflict resolution, stash management, search, blame and reflog undo; signing, notarization, installers and auto-update; the diagnostics panel, command palette and an accessibility pass.
-
-Also planned: resizable panels throughout (the sidebar, the details panel, the graph column, the unstaged and staged sections and the diff's panes), with their sizes remembered.

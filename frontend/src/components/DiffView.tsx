@@ -3,6 +3,7 @@ import { Effect } from "effect"
 import { ChevronDown, ChevronLeft, ChevronUp, Columns2, Rows2, Space } from "lucide-react"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useForkedEffect, usePreferences, useRun } from "@/app/hooks"
+import { useLayoutSize } from "@/app/layoutSizes"
 import { highlight } from "@/highlight/client"
 import { syntaxStyles, tokenStride } from "@/highlight/styles"
 import { shortOid } from "@/lib/format"
@@ -11,6 +12,7 @@ import { wordDiff, type Range } from "@/lib/wordDiff"
 import type { DiffHunk, DiffLayout, DiffLine, DiffRequest, FileDiff, RepoId } from "@/model/model.gen"
 import { Preferences } from "@/services/Preferences"
 import { Rpc } from "@/services/Rpc"
+import { ResizeHandle } from "./ResizeHandle"
 
 /** A file whose changes are shown, and where they come from. */
 export interface DiffTarget {
@@ -97,6 +99,9 @@ export const DiffView = ({ repo, target, revision, active, onClose }: DiffViewPr
   const diff = sameDiff(loaded?.target, target) ? loaded?.diff : undefined
 
   const scrollRef = useRef<HTMLDivElement>(null)
+  const paneRef = useRef<HTMLDivElement>(null)
+  // The old side's share of a side-by-side diff.
+  const splitShare = useLayoutSize("diffSplit")
 
   const laidOut = useMemo(() => flatten(diff), [diff])
   const { texts } = laidOut
@@ -330,47 +335,65 @@ export const DiffView = ({ repo, target, revision, active, onClose }: DiffViewPr
       ) : (
         <div className="flex min-h-0 flex-1">
           <div
-            ref={scrollRef}
-            onScroll={onUserScroll}
-            tabIndex={0}
-            aria-busy={!diff}
-            className={cn(
-              "relative min-w-0 flex-1 overflow-auto font-mono text-xs outline-none select-text [tab-size:4]",
-              // The overview ruler is the vertical scrollbar; long lines keep a slim horizontal one.
-              "[&::-webkit-scrollbar]:h-2 [&::-webkit-scrollbar]:w-0 [&::-webkit-scrollbar-corner]:bg-transparent",
-              "[&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-foreground/15",
-            )}
+            ref={paneRef}
+            className="relative flex min-w-0 flex-1"
+            style={{ "--diff-split": `${(splitShare.size ?? 0.5) * 100}%` } as React.CSSProperties}
           >
-            <div className="relative" style={{ height: virtualizer.getTotalSize(), minWidth: split ? "100%" : `max(100%, ${width})` }}>
-              {virtualizer.getVirtualItems().map((item) => {
-                const row = rows[item.index]!
-                return (
-                  <div
-                    key={item.key}
-                    // Split lines wrap, so their rows are measured; unified rows are one line each.
-                    ref={split ? virtualizer.measureElement : undefined}
-                    data-index={item.index}
-                    className="absolute inset-x-0"
-                    style={{ top: item.start, height: split && row.type === "split" ? undefined : item.size }}
-                  >
-                    {row.type === "hunk" ? (
-                      <HunkHeader hunk={row.hunk} />
-                    ) : row.type === "line" ? (
-                      <Line line={row.cell.line} gutter={gutter} tokens={tokensOf(row.cell)} changed={wordChanges(row.cell)} />
-                    ) : row.type === "split" ? (
-                      <div className="grid min-h-5 grid-cols-2 divide-x divide-border/60">
-                        <SplitCell cell={row.left} gutter={gutter} tokens={tokensOf(row.left)} changed={wordChanges(row.left)} />
-                        <SplitCell cell={row.right} gutter={gutter} tokens={tokensOf(row.right)} changed={wordChanges(row.right)} />
-                      </div>
-                    ) : (
-                      <p className="flex h-full items-center px-3 font-sans text-subtle-foreground">
-                        The rest of this file's changes are too long to show.
-                      </p>
-                    )}
-                  </div>
-                )
-              })}
+            <div
+              ref={scrollRef}
+              onScroll={onUserScroll}
+              tabIndex={0}
+              aria-busy={!diff}
+              className={cn(
+                "relative min-w-0 flex-1 overflow-auto font-mono text-xs outline-none select-text [tab-size:4]",
+                // The overview ruler is the vertical scrollbar; long lines keep a slim horizontal one.
+                "[&::-webkit-scrollbar]:h-2 [&::-webkit-scrollbar]:w-0 [&::-webkit-scrollbar-corner]:bg-transparent",
+                "[&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-foreground/15",
+              )}
+            >
+              <div className="relative" style={{ height: virtualizer.getTotalSize(), minWidth: split ? "100%" : `max(100%, ${width})` }}>
+                {virtualizer.getVirtualItems().map((item) => {
+                  const row = rows[item.index]!
+                  return (
+                    <div
+                      key={item.key}
+                      // Split lines wrap, so their rows are measured; unified rows are one line each.
+                      ref={split ? virtualizer.measureElement : undefined}
+                      data-index={item.index}
+                      className="absolute inset-x-0"
+                      style={{ top: item.start, height: split && row.type === "split" ? undefined : item.size }}
+                    >
+                      {row.type === "hunk" ? (
+                        <HunkHeader hunk={row.hunk} />
+                      ) : row.type === "line" ? (
+                        <Line line={row.cell.line} gutter={gutter} tokens={tokensOf(row.cell)} changed={wordChanges(row.cell)} />
+                      ) : row.type === "split" ? (
+                        <div className="grid min-h-5 grid-cols-[minmax(0,var(--diff-split))_minmax(0,1fr)] divide-x divide-border/60">
+                          <SplitCell cell={row.left} gutter={gutter} tokens={tokensOf(row.left)} changed={wordChanges(row.left)} />
+                          <SplitCell cell={row.right} gutter={gutter} tokens={tokensOf(row.right)} changed={wordChanges(row.right)} />
+                        </div>
+                      ) : (
+                        <p className="flex h-full items-center px-3 font-sans text-subtle-foreground">
+                          The rest of this file's changes are too long to show.
+                        </p>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
             </div>
+            {split && (
+              <ResizeHandle
+                label="Resize the old and new sides"
+                orientation="vertical"
+                grows={1}
+                measure={() => (splitShare.size ?? 0.5) * (paneRef.current?.offsetWidth ?? 0)}
+                limits={() => [0.2 * (paneRef.current?.offsetWidth ?? 0), 0.8 * (paneRef.current?.offsetWidth ?? 0)]}
+                toSize={(px) => px / (paneRef.current?.offsetWidth || 1)}
+                control={splitShare}
+                className="absolute inset-y-0 left-[var(--diff-split)] -translate-x-1/2"
+              />
+            )}
           </div>
           {diff && rows.length > 0 && (
             <OverviewRuler
