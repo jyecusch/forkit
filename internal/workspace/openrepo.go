@@ -149,7 +149,7 @@ func (r *openRepo) startWatching() error {
 	if r.closed {
 		return nil
 	}
-	watcher, err := watch.Start(r.watchLayout(), r.onFilesChanged, r.ws.logger)
+	watcher, err := watch.Start(r.watchLayout(), repo.Ignores{Git: r.ws.git}, r.onFilesChanged, r.ws.logger)
 	r.watcher = watcher
 	return err
 }

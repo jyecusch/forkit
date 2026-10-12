@@ -12,29 +12,28 @@ import (
 	"github.com/fsnotify/fsnotify"
 )
 
-// skippedDirs are never watched: they change constantly and never matter.
-var skippedDirs = map[string]bool{"objects": true, "logs": true, "lfs": true}
-
 // dirSource watches every directory under its roots individually, as
-// inotify and ReadDirectoryChangesW require. Roots whose directories would
-// exceed the system's watch budget are left unwatched.
+// inotify and ReadDirectoryChangesW require, except those skipDir rejects.
+// Roots whose directories would exceed the system's watch budget are left
+// unwatched.
 type dirSource struct {
 	watcher *fsnotify.Watcher
+	skipDir func(dir string, created bool) bool
 	events  chan []string
 	done    chan struct{}
 	// unwatched is fixed at construction.
 	unwatched []string
 }
 
-func newSource(roots []string) (source, error) {
+func newSource(roots []string, skipDir func(dir string, created bool) bool) (source, error) {
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
 		return nil, err
 	}
-	s := &dirSource{watcher: watcher, events: make(chan []string), done: make(chan struct{})}
+	s := &dirSource{watcher: watcher, skipDir: skipDir, events: make(chan []string), done: make(chan struct{})}
 	budget := watchBudget()
 	for _, root := range roots {
-		dirs := collectDirs(root)
+		dirs := s.collectDirs(root)
 		if len(dirs) > budget {
 			s.unwatched = append(s.unwatched, root)
 			continue
@@ -62,13 +61,13 @@ func watchBudget() int {
 	return limit / 2
 }
 
-func collectDirs(root string) []string {
+func (s *dirSource) collectDirs(root string) []string {
 	var dirs []string
 	_ = filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 		if err != nil || !d.IsDir() {
 			return nil
 		}
-		if path != root && (d.Name() == ".git" || skippedDirs[d.Name()]) {
+		if path != root && (d.Name() == ".git" || s.skipDir(path, false)) {
 			return filepath.SkipDir
 		}
 		dirs = append(dirs, path)
@@ -88,8 +87,8 @@ func (s *dirSource) forward() {
 				return
 			}
 			if event.Has(fsnotify.Create) {
-				if info, err := os.Stat(event.Name); err == nil && info.IsDir() {
-					for _, dir := range collectDirs(event.Name) {
+				if info, err := os.Stat(event.Name); err == nil && info.IsDir() && !s.skipDir(event.Name, true) {
+					for _, dir := range s.collectDirs(event.Name) {
 						_ = s.watcher.Add(dir)
 					}
 				}
