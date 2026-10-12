@@ -52,6 +52,11 @@ type openRepo struct {
 	graphOptions  graph.Options
 	graphTrace    trace.SpanContext
 	operations    map[string]model.Operation
+	cancels       map[string]context.CancelFunc
+	fetches       map[string]fetchRecord
+	fetchHeadAt   model.UnixMillis
+
+	fetchMu sync.Mutex
 }
 
 func newOpenRepo(w *Workspace, loc repo.Location, options graph.Options) *openRepo {
@@ -68,6 +73,9 @@ func newOpenRepo(w *Workspace, loc repo.Location, options graph.Options) *openRe
 		openedAt:      nowMillis(),
 		graphOptions:  options,
 		operations:    map[string]model.Operation{},
+		cancels:       map[string]context.CancelFunc{},
+		fetches:       map[string]fetchRecord{},
+		fetchHeadAt:   lastFetchedAt(loc),
 	}
 	go r.graphLoop()
 	return r
@@ -130,6 +138,9 @@ func (r *openRepo) load(trigger trace.SpanContext) {
 	}
 	r.mu.Unlock()
 	r.ws.publishRepos(ctx)
+	if err == nil {
+		go r.fetchLoop()
+	}
 }
 
 func (r *openRepo) startWatching() error {
@@ -179,8 +190,9 @@ func (r *openRepo) refresh(ctx context.Context, change watch.Change) error {
 		}
 		r.mu.Lock()
 		r.remotes = remotes
+		published := r.withFetchState(remotes)
 		r.mu.Unlock()
-		if err := channels.Remotes.Publish(ctx, scope, remotes); err != nil {
+		if err := channels.Remotes.Publish(ctx, scope, published); err != nil {
 			return err
 		}
 	}

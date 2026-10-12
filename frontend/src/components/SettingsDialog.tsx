@@ -16,6 +16,8 @@ interface SettingsDialogProps {
 }
 
 const fontSizes = [11, 12, 13, 14, 15, 16]
+/** Minutes; 0 turns background fetching off. */
+const fetchIntervals = [0, 5, 10, 30, 60]
 
 /** Edits preferences. Every change is saved immediately. */
 export const SettingsDialog = ({ open, onOpenChange, preferences: p }: SettingsDialogProps) => {
@@ -87,6 +89,23 @@ export const SettingsDialog = ({ open, onOpenChange, preferences: p }: SettingsD
             </Row>
             <Row label="Maintain commit-graph" hint="Speeds up history on large repositories." end>
               <Switch checked={p.git.maintainCommitGraph} onCheckedChange={(v) => set("git.maintainCommitGraph", v)} />
+            </Row>
+            <Row label="Fetch in the background">
+              <Choice
+                value={String(p.git.fetchInterval)}
+                options={Object.fromEntries(fetchIntervals.map((minutes) => [String(minutes), minutes === 0 ? "Never" : `Every ${minutes} min`]))}
+                onChange={(v) => set("git.fetchInterval", Number(v))}
+              />
+            </Row>
+            <Row label="Prune when fetching" hint="Removes remote branches that were deleted on the remote." end>
+              <Switch checked={p.git.pruneOnFetch} onCheckedChange={(v) => set("git.pruneOnFetch", v)} />
+            </Row>
+            <Row label="When pulling a branch with its own commits">
+              <Choice
+                value={p.git.pullMode}
+                options={{ ffOnly: "Stop", merge: "Merge", rebase: "Rebase" }}
+                onChange={(v) => set("git.pullMode", v)}
+              />
             </Row>
           </Group>
 

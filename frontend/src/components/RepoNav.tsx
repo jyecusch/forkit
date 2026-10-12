@@ -186,8 +186,8 @@ export const RepoNav = (props: RepoNavProps) => {
             depth={0}
             onClick={() => setOpen(row.id, row.collapsed)}
             aria-expanded={!row.collapsed}
-            title={row.remote.fetchUrl}
-            icon={<Server aria-hidden className="size-3.5 text-remote" />}
+            title={row.remote.fetchState === "error" ? `${row.remote.fetchUrl}\nThe last fetch failed` : row.remote.fetchUrl}
+            icon={<Server aria-hidden className={cn("size-3.5", row.remote.fetchState === "error" ? "text-destructive" : "text-remote")} />}
           >
             <span className="truncate">{row.remote.name}</span>
             <span className="min-w-0 flex-1 truncate text-xs text-subtle-foreground">{showHosts && host !== "local" ? host : ""}</span>

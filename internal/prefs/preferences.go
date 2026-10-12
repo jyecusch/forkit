@@ -47,7 +47,7 @@ func Defaults() model.Preferences {
 			ShowTags:           true,
 		},
 		Diff:      model.DiffPreferences{Layout: model.DiffLayoutUnified},
-		Git:       model.GitPreferences{MaintainCommitGraph: true},
+		Git:       model.GitPreferences{MaintainCommitGraph: true, FetchInterval: 10, PruneOnFetch: true, PullMode: model.PullModeFFOnly},
 		Behaviour: model.BehaviourPreferences{DirtyCheckout: model.DirtyCheckoutAsk},
 		Telemetry: model.TelemetryPreferences{Mode: model.TelemetryModeLocal},
 	}

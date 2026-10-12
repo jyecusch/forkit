@@ -23,6 +23,7 @@ import { ChromeLayer } from "./Chrome"
 import { SidebarFooter } from "./SidebarFooter"
 import { NewWorktreeDialog } from "./NewWorktreeDialog"
 import { Prompt, type PromptSpec } from "./Prompt"
+import { RemoteActions } from "./RemoteActions"
 import { useCheckout } from "./useCheckout"
 import { ViewHeader } from "./ViewHeader"
 
@@ -200,7 +201,11 @@ export const RepoView = ({ repo, openRepo, preferences, active }: RepoViewProps)
         onRemoveWorktree={removeWorktree}
       />
       <SidebarFooter>
-        {running.length > 0 && <span className="animate-pulse truncate text-primary">{operationLabels[running[0]!.kind]}…</span>}
+        {running[0] && (
+          <span className="animate-pulse truncate text-primary">
+            {operationLabels[running[0].kind]}…{running[0].progress && ` ${running[0].progress.phase.toLowerCase()}`}
+          </span>
+        )}
       </SidebarFooter>
     </>
   )
@@ -217,6 +222,18 @@ export const RepoView = ({ repo, openRepo, preferences, active }: RepoViewProps)
         onShowChanges={() => setChangesSelected(true)}
         detailsShown={showDetails}
         onToggleDetails={toggleDetails}
+        actions={
+          <RemoteActions
+            repo={id}
+            worktree={activeWorktree}
+            branch={headBranch}
+            upstream={headBranch?.upstreamRefId ? refsById.get(headBranch.upstreamRefId) : undefined}
+            remotes={remotes}
+            operations={operations}
+            prompt={setPrompt}
+            onShowChanges={goToChanges}
+          />
+        }
       />
       <div className="flex min-h-0 flex-1">
         <main className="relative flex min-h-0 min-w-0 flex-1 flex-col">
@@ -278,4 +295,7 @@ const operationLabels: Record<OperationKind, string> = {
   checkout: "Checking out",
   createWorktree: "Creating worktree",
   removeWorktree: "Removing worktree",
+  fetch: "Fetching",
+  pull: "Pulling",
+  push: "Pushing",
 }

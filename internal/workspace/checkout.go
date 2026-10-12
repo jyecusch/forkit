@@ -36,7 +36,7 @@ func (w *Workspace) Checkout(ctx context.Context, worktreeID model.WorktreeID, r
 	}
 
 	var result model.CheckoutResult
-	err = r.runOperation(ctx, model.OperationKindCheckout, wt.ID, func(ctx context.Context) error {
+	err = r.runOperation(ctx, model.OperationKindCheckout, wt.ID, func(ctx context.Context, _ func(gitexec.Progress)) error {
 		result, err = r.checkout(ctx, wt, ref, args, mode)
 		return err
 	})

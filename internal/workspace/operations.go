@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"maps"
 	"slices"
 	"strings"
@@ -12,15 +13,23 @@ import (
 	"go.opentelemetry.io/otel/trace"
 
 	"github.com/jyecusch/forkit/internal/apperr"
+	"github.com/jyecusch/forkit/internal/gitexec"
 	"github.com/jyecusch/forkit/internal/model"
 )
 
 // finishedOperationTTL is how long a finished operation stays visible.
 const finishedOperationTTL = 5 * time.Second
 
+// progressInterval is the least time between published progress updates.
+const progressInterval = 100 * time.Millisecond
+
 // runOperation publishes an Operation for the duration of fn, so every view
-// can show that the repository is busy and how it ended.
-func (r *openRepo) runOperation(ctx context.Context, kind model.OperationKind, worktree model.WorktreeID, fn func(context.Context) error) error {
+// can show that the repository is busy, how far it has got and how it ended.
+// fn reports progress through its second argument, and its context ends
+// when the operation is cancelled.
+func (r *openRepo) runOperation(ctx context.Context, kind model.OperationKind, worktree model.WorktreeID, fn func(context.Context, func(gitexec.Progress)) error) error {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	op := model.Operation{
 		ID:         newOperationID(),
 		RepoID:     r.loc.ID,
@@ -29,18 +38,49 @@ func (r *openRepo) runOperation(ctx context.Context, kind model.OperationKind, w
 		State:      model.OperationStateRunning,
 		TraceID:    trace.SpanContextFromContext(ctx).TraceID().String(),
 	}
+	r.mu.Lock()
+	r.cancels[op.ID] = cancel
+	r.mu.Unlock()
 	r.setOperation(ctx, op)
 
-	err := fn(ctx)
-	op.State = model.OperationStateDone
-	if err != nil {
+	var lastReport time.Time
+	err := fn(ctx, func(progress gitexec.Progress) {
+		if progress.Current < progress.Total && time.Since(lastReport) < progressInterval {
+			return
+		}
+		lastReport = time.Now()
+		op.Progress = &model.OperationProgress{Phase: progress.Phase, Current: progress.Current, Total: progress.Total}
+		r.setOperation(ctx, op)
+	})
+
+	r.mu.Lock()
+	delete(r.cancels, op.ID)
+	r.mu.Unlock()
+	op.State, op.Progress = model.OperationStateDone, nil
+	switch {
+	case err != nil && errors.Is(ctx.Err(), context.Canceled):
+		op.State, err = model.OperationStateCancelled, context.Canceled
+	case err != nil:
 		op.State = model.OperationStateFailed
 		rpcErr := apperr.ToRPC(err)
 		op.Error = &rpcErr
 	}
+	ctx = context.WithoutCancel(ctx)
 	r.setOperation(ctx, op)
-	time.AfterFunc(finishedOperationTTL, func() { r.removeOperation(context.WithoutCancel(ctx), op.ID) })
+	time.AfterFunc(finishedOperationTTL, func() { r.removeOperation(ctx, op.ID) })
 	return err
+}
+
+// cancelOperation ends a running operation, killing its git process. It
+// reports whether the operation was still running.
+func (r *openRepo) cancelOperation(id string) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	cancel, ok := r.cancels[id]
+	if ok {
+		cancel()
+	}
+	return ok
 }
 
 func (r *openRepo) setOperation(ctx context.Context, op model.Operation) {
@@ -75,4 +115,15 @@ func newOperationID() string {
 	b := make([]byte, 8)
 	_, _ = rand.Read(b)
 	return hex.EncodeToString(b)
+}
+
+// CancelOperation stops a running operation, killing its git process. An
+// operation that has already finished is left alone.
+func (w *Workspace) CancelOperation(repoID model.RepoID, id string) error {
+	r, err := w.repo(repoID)
+	if err != nil {
+		return err
+	}
+	r.cancelOperation(id)
+	return nil
 }

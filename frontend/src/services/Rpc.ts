@@ -55,6 +55,12 @@ export class Rpc extends Context.Service<
     /** Commits the staged changes, or amends the last commit, and returns the new commit. */
     readonly commit: (worktree: WorktreeId, message: string, amend: boolean) => Effect.Effect<Oid, RpcFailure>
     readonly headMessage: (worktree: WorktreeId) => Effect.Effect<string, RpcFailure>
+    /** Fetches from remote, or from every remote when it is empty. */
+    readonly fetch: (repo: RepoId, remote: string) => Effect.Effect<void, RpcFailure>
+    readonly pull: (worktree: WorktreeId) => Effect.Effect<void, RpcFailure>
+    /** Pushes to the branch's upstream, or publishes it to remote when it has none. */
+    readonly push: (worktree: WorktreeId, remote: string, force: boolean) => Effect.Effect<void, RpcFailure>
+    readonly cancelOperation: (repo: RepoId, operation: string) => Effect.Effect<void, RpcFailure>
     /** Resolves to None when the user cancels the folder picker. */
     readonly chooseWorktreeParent: () => Effect.Effect<Option.Option<string>, RpcFailure>
   }
@@ -113,6 +119,15 @@ export class Rpc extends Context.Service<
       invoke("Worktrees.HeadMessage", Schema.String, (meta) => Worktrees.HeadMessage(meta, worktree), { "worktree.id": worktree }),
     removeWorktree: (worktree, force) =>
       invoke("Worktrees.Remove", Schema.Void, (meta) => Worktrees.Remove(meta, worktree, force), { "worktree.id": worktree }),
+    fetch: (repo, remote) => invoke("Repos.Fetch", Schema.Void, (meta) => Repos.Fetch(meta, repo, remote), { "repo.id": repo }),
+    pull: (worktree) => invoke("Worktrees.Pull", Schema.Void, (meta) => Worktrees.Pull(meta, worktree), { "worktree.id": worktree }),
+    push: (worktree, remote, force) =>
+      invoke("Worktrees.Push", Schema.Void, (meta) => Worktrees.Push(meta, worktree, remote, force), {
+        "worktree.id": worktree,
+        "push.force": force,
+      }),
+    cancelOperation: (repo, operation) =>
+      invoke("Repos.CancelOperation", Schema.Void, (meta) => Repos.CancelOperation(meta, repo, operation), { "repo.id": repo }),
     chooseWorktreeParent: () =>
       invoke("Worktrees.ChooseParentDirectory", Schema.String, (meta) => Worktrees.ChooseParentDirectory(meta)).pipe(
         Effect.map((path) => (path === "" ? Option.none() : Option.some(path))),

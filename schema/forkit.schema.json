@@ -117,7 +117,7 @@
       }
     },
 
-    "OperationKind": { "enum": ["checkout", "createWorktree", "removeWorktree"] },
+    "OperationKind": { "enum": ["checkout", "createWorktree", "removeWorktree", "fetch", "pull", "push"] },
     "OperationState": { "enum": ["queued", "running", "done", "failed", "cancelled"] },
     "OperationProgress": {
       "type": "object",
@@ -198,11 +198,18 @@
     "GitPreferences": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["binaryPath", "maintainCommitGraph"],
+      "required": ["binaryPath", "maintainCommitGraph", "fetchInterval", "pruneOnFetch", "pullMode"],
       "properties": {
         "binaryPath": { "type": "string", "description": "Empty means find git on PATH." },
-        "maintainCommitGraph": { "type": "boolean", "description": "Write git's commit-graph file when it is missing, which speeds up history walks." }
+        "maintainCommitGraph": { "type": "boolean", "description": "Write git's commit-graph file when it is missing, which speeds up history walks." },
+        "fetchInterval": { "type": "integer", "minimum": 0, "maximum": 120, "description": "Minutes between fetches in the background; 0 turns them off." },
+        "pruneOnFetch": { "type": "boolean", "description": "Remove remote-tracking branches whose branch is gone from the remote." },
+        "pullMode": { "$ref": "#/$defs/PullMode" }
       }
+    },
+    "PullMode": {
+      "enum": ["ffOnly", "merge", "rebase"],
+      "description": "How a pull brings in the upstream's commits when the branch has its own: refuse, merge them, or rebase onto them."
     },
     "BehaviourPreferences": {
       "type": "object",
@@ -412,6 +419,9 @@
         "OperationInProgress",
         "IndexLocked",
         "AuthFailed",
+        "PushRejected",
+        "Diverged",
+        "NoUpstream",
         "GitNotFound",
         "GitTooOld",
         "GitFailed",
