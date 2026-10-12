@@ -78,8 +78,10 @@ export const ChromeLayer = ({ active, sidebar, children }: ChromeLayerProps) => 
   const sidebarRef = useRef<HTMLDivElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
   const lastFocused = useRef<HTMLElement | null>(null)
-  const remember = (event: React.FocusEvent) => {
-    lastFocused.current = event.target as HTMLElement
+  // Focus inside menus and dialogs reaches here through React's tree, though
+  // they are elsewhere in the page; only the layer's own elements count.
+  const remember = (event: React.FocusEvent<HTMLElement>) => {
+    if (event.currentTarget.contains(event.target)) lastFocused.current = event.target
   }
   const restore = () => {
     const target = lastFocused.current?.isConnected ? lastFocused.current : panelRef.current?.querySelector<HTMLElement>("[role=grid]")

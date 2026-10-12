@@ -17,9 +17,6 @@ import { GraphData, type LoadedRow } from "@/services/GraphData"
 import { focusIsLost } from "./Chrome"
 import { RefBadge } from "./RefBadge"
 
-/** The text columns slide, rather than jump, when the graph changes width. */
-const columnsTransition = matchMedia("(prefers-reduced-motion: reduce)").matches ? undefined : "grid-template-columns 150ms ease-out"
-
 /** Rows rendered beyond the viewport on each side, for rows and graph alike. */
 const overscan = 30
 /** Badges shown before the rest are summarised as "+N". */
@@ -94,8 +91,12 @@ export const GraphPane = (props: GraphPaneProps) => {
   )
 
   // The list takes focus when it first appears, if nothing else has it.
+  // Later activations are left to the layer, which restores what had focus.
+  const focusedOnce = useRef(false)
   useEffect(() => {
-    if (active && focusIsLost()) scrollRef.current?.focus({ preventScroll: true })
+    if (!active || focusedOnce.current) return
+    focusedOnce.current = true
+    if (focusIsLost()) scrollRef.current?.focus({ preventScroll: true })
   }, [active])
 
   // Jumps (to a ref, to either end, back to this tab) re-size the graph for
@@ -127,8 +128,12 @@ export const GraphPane = (props: GraphPaneProps) => {
   // The graph is sized for the lanes on screen, plus one spare. It never
   // changes under a moving list: it widens once the reader pauses with rows
   // clipped, narrows after a longer rest, and starts afresh after a jump.
-  const scrolling = useScrolling(scrollRef, pauseAfter)
-  const resting = !useScrolling(scrollRef, restAfter)
+  // The virtualizer knows about a scroll before the scroll listener does.
+  const scrolling = useScrolling(scrollRef, pauseAfter) || virtualizer.isScrolling
+  // Narrowing moves text, so it waits until the pointer has left the list
+  // and no menu is open.
+  const [pointerOver, setPointerOver] = useState(false)
+  const resting = !useScrolling(scrollRef, restAfter) && !pointerOver && !scrolling
   const viewportFirst = jump.landing ?? Math.floor((virtualizer.scrollOffset ?? 0) / rowHeight)
   const viewportWidest = widestLane(viewportFirst - 3, viewportFirst + viewportRows + 3, (index) => graphData.peek(repo, index))
   const lanes = useRatchet(viewportWidest < 0 ? 0 : Math.max(viewportWidest + 2, 2), { scrolling, resting, reset: jump.nonce })
@@ -281,10 +286,16 @@ export const GraphPane = (props: GraphPaneProps) => {
   }
 
   return (
-    <section ref={sectionRef} className="flex min-h-0 min-w-0 flex-1 flex-col" aria-label="History">
+    <section
+      ref={sectionRef}
+      className="flex min-h-0 min-w-0 flex-1 flex-col"
+      aria-label="History"
+      onPointerEnter={() => setPointerOver(true)}
+      onPointerLeave={() => setPointerOver(false)}
+    >
       <div
         className="grid h-8 flex-none items-center gap-3 overflow-y-hidden border-b text-xs font-medium whitespace-nowrap text-subtle-foreground [scrollbar-gutter:stable]"
-        style={{ gridTemplateColumns: columns.template, paddingInline: listInset, transition: columnsTransition }}
+        style={{ gridTemplateColumns: columns.template, paddingInline: listInset }}
       >
         <span />
         <span>Description</span>
@@ -431,7 +442,7 @@ const CommitRow = memo(function CommitRow({
   now,
   onSelect,
 }: CommitRowProps) {
-  const style = { top, height: rowHeight, gridTemplateColumns: columns, paddingInline: listInset, transition: columnsTransition }
+  const style = { top, height: rowHeight, gridTemplateColumns: columns, paddingInline: listInset }
   if (!loaded) {
     return (
       <div role="row" aria-rowindex={index + 1} aria-busy className="absolute inset-x-0 grid items-center gap-3" style={style}>

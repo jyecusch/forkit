@@ -24,6 +24,7 @@ const Toast = ({ notice }: { notice: Notice }) => {
   }, [notice, hovered])
   return (
     <div
+      data-toast
       role={notice.tone === "error" ? "alert" : "status"}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
