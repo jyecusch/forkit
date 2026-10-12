@@ -100,6 +100,18 @@ m 0/0 | 0>0 0>1f
 topic2 1/1 | 0>0 1>0m
 x 0/0 |`,
 		},
+		"unrelated histories start clear of each other": {
+			spec: `
+				new2: new1
+				new1:
+				old2: old1
+				old1:`,
+			want: `
+new2 0/0 | 0>0
+new1 0/0 |
+old2 1/1 | 1>1
+old1 1/1 |`,
+		},
 		"octopus with duplicate parent": {
 			spec: `
 				o: a b c b
