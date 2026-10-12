@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="156" height="156" viewBox="30 29 156 156">
+  <title>Forkit</title>
+  <!--
+    The tiled icon separates the dots from the lines with tile-coloured
+    outlines. Without a tile those would show as dark rings, so the same gaps
+    are cut out of the lines instead, leaving them transparent.
+  -->
+  <defs>
+    <mask id="gaps" maskUnits="userSpaceOnUse" x="0" y="0" width="200" height="200">
+      <rect width="200" height="200" fill="#fff"/>
+      <circle cx="142" cy="50" r="16.5" fill="#000"/>
+      <circle cx="122" cy="102" r="16.5" fill="#000"/>
+      <circle cx="74" cy="164" r="16.5" fill="#000"/>
+    </mask>
+  </defs>
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="16" mask="url(#gaps)">
+    <path d="M74 164 L74 70 C74 56 82 50 96 50 L140 50" stroke="#7aa2f7"/>
+    <path d="M74 126 C74 106 84 102 100 102 L120 102" stroke="#bb9af7"/>
+  </g>
+  <circle cx="142" cy="50" r="11.5" fill="#7aa2f7"/>
+  <circle cx="122" cy="102" r="11.5" fill="#bb9af7"/>
+  <circle cx="74" cy="164" r="13" fill="none" stroke="#7aa2f7" stroke-width="7"/>
+</svg>

@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+  <title>Forkit</title>
+  <!-- Strokes sit on whole pixels at 16 and 32 px. -->
+  <g fill="none" stroke="#000" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M8 28 L8 11 C8 8 10 6 13 6 L24 6"/>
+    <path d="M8 21 C8 17 10 16 14 16 L20 16"/>
+  </g>
+</svg>

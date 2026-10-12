@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# Regenerates the wordmark and every icon file from the SVGs in
+# assets/brand. Only Docker is needed; the tools live in tools/icons.
+#
+#   scripts/build-icons
+set -euo pipefail
+
+root="$(cd "$(dirname "$0")/.." && pwd)"
+docker build --quiet --tag forkit-icons "$root/tools/icons" >/dev/null
+docker run --rm --user "$(id -u):$(id -g)" --volume "$root:/work" forkit-icons
+echo "Icons written to assets/brand/generated, build/appicon.png and build/windows/icon.ico"

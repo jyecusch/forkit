@@ -9,6 +9,7 @@ Thanks for helping. Issues and pull requests are welcome.
 | `schema/` | The shared data model (JSON Schema) |
 | `tools/schemagen` | Generates `internal/model` and `frontend/src/model/model.gen.ts` from the schema |
 | `tools/synthrepo` | Generates large repositories for performance testing |
+| `tools/icons` | The Docker image `scripts/build-icons` runs to make icon files |
 | `internal/gitexec` | Runs git: tracing, cancellation, serialized writes |
 | `internal/repo` | Parses git output into entities |
 | `internal/graph` | History loading, lane layout and row windows |
@@ -60,6 +61,16 @@ FORKIT_PERF_REPO=~/forkit-perf/busy/repo go test ./internal/perf -v -count=1
 - `deep-history` stresses history walking and layout.
 
 Each profile produces a bare `origin.git` and a `repo` clone, so fetches work against it. The test logs a span breakdown of any slow step. Any local repository works as `FORKIT_PERF_REPO` too.
+
+## Icons
+
+The logo lives in `assets/brand` as SVG: the app icon, a glyph without the tile for small Windows sizes, and a monochrome tray icon. After changing any of them, run:
+
+```sh
+scripts/build-icons
+```
+
+It needs only Docker. It regenerates the wordmark (with its text outlined), the PNG, `.icns` and `.ico` files in `assets/brand/generated`, and the copies Wails builds from: `build/appicon.png` and `build/windows/icon.ico`.
 
 ## Tracing
 
