@@ -48,6 +48,8 @@ interface GraphPaneProps {
   /** The active worktree's checked-out commit: ringed, and selected until the user picks one. */
   readonly activeHead: string | undefined
   readonly onSelect: (row: LoadedRow) => void
+  /** Checks out a branch or tag whose label was double-clicked. */
+  readonly onOpenRef: (ref: Ref) => void
   /** Uncommitted changes in the active worktree; with any, a row for them heads the history. */
   readonly changes: number
   /** The checked-out commit's row, which the uncommitted changes row joins. */
@@ -199,6 +201,12 @@ export const GraphPane = (props: GraphPaneProps) => {
     },
     [selectRow],
   )
+  // Rows are memoized, so they get a stable function that calls the latest one.
+  const latestOpenRef = useRef(props.onOpenRef)
+  useLayoutEffect(() => {
+    latestOpenRef.current = props.onOpenRef
+  })
+  const onOpenRef = useCallback((ref: Ref) => latestOpenRef.current(ref), [])
   useEffect(() => {
     if (!pendingRow) return
     onSelect(pendingRow)
@@ -400,6 +408,7 @@ export const GraphPane = (props: GraphPaneProps) => {
               dateFormat={preferences.appearance.dateFormat}
               now={now}
               onSelect={onSelect}
+              onOpenRef={onOpenRef}
               onMenuOpenChange={onMenuOpenChange}
             />
           ))}
@@ -605,6 +614,7 @@ interface CommitRowProps {
   readonly dateFormat: Preferences["appearance"]["dateFormat"]
   readonly now: number
   readonly onSelect: (row: LoadedRow) => void
+  readonly onOpenRef: (ref: Ref) => void
   readonly onMenuOpenChange: (open: boolean) => void
 }
 
@@ -623,6 +633,7 @@ const CommitRow = memo(function CommitRow({
   dateFormat,
   now,
   onSelect,
+  onOpenRef,
   onMenuOpenChange,
 }: CommitRowProps) {
   const style = { top, height: rowHeight, gridTemplateColumns: columns, paddingInline: listInset }
@@ -679,6 +690,7 @@ const CommitRow = memo(function CommitRow({
                     dim={dim}
                     selected={selected}
                     primary={i === 0}
+                    onDoubleClick={badge.ref.kind === "stash" ? undefined : () => onOpenRef(badge.ref)}
                   />
                 ))}
                 {badges.length > maxBadges && (
