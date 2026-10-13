@@ -107,7 +107,8 @@ export const RepoTabs = () => {
               "focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring",
               on
                 ? "z-10 -mb-px h-[33px] bg-background text-foreground"
-                : "isolate border-transparent text-secondary-foreground hover:text-foreground",
+                : // No top border, so the label centres on whole pixels as the active tab's does.
+                  "isolate border-t-0 border-transparent text-secondary-foreground hover:text-foreground",
               dragging === repo.id && "opacity-50",
             )}
           >

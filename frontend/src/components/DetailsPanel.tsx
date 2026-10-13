@@ -98,7 +98,7 @@ const CommitTab = ({
   return (
     <div className="flex flex-col">
       <div className="flex flex-col gap-2.5 border-b p-4">
-        <div className="text-[15px] leading-snug font-semibold">{subject}</div>
+        <div className="text-[15px] leading-5 font-semibold">{subject}</div>
         {body && <pre className="font-sans text-xs whitespace-pre-wrap text-secondary-foreground">{body}</pre>}
         <div className="flex items-center gap-2.5">
           <Avatar name={commit.authorName} email={commit.authorEmail} size={28} />
@@ -267,7 +267,7 @@ const ChangesTab = ({ worktree, openDiff, onOpenDiff }: { worktree: WorktreeId }
 
   return (
     <div className="flex h-full flex-col">
-      <h2 className="flex-none px-4 pt-4 text-[15px] leading-snug font-semibold">Uncommitted changes</h2>
+      <h2 className="flex-none px-4 pt-4 text-[15px] leading-5 font-semibold">Uncommitted changes</h2>
       {files.length === 0 ? (
         <div className="min-h-0 flex-1">
           <Empty>No uncommitted changes</Empty>

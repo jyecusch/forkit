@@ -1,9 +1,8 @@
 @import "tailwindcss";
 @import "tw-animate-css";
-@import "@fontsource/ibm-plex-sans/400.css";
-@import "@fontsource/ibm-plex-sans/400-italic.css";
-@import "@fontsource/ibm-plex-sans/500.css";
-@import "@fontsource/ibm-plex-sans/600.css";
+/* Variable, so text can be made a little heavier on 1x screens. */
+@import "@fontsource-variable/ibm-plex-sans/wght.css";
+@import "@fontsource-variable/ibm-plex-sans/wght-italic.css";
 @import "@fontsource/jetbrains-mono/400.css";
 @import "@fontsource/jetbrains-mono/500.css";
 
@@ -1041,6 +1040,14 @@
   --remote: #217e77;
 }
 
+/* Line heights in pixels rather than ratios, which text of other sizes
+   inherits and turns into fractions, such as 11 px text under text-xs. */
+@theme {
+  --text-xs--line-height: 16px;
+  --text-sm--line-height: 20px;
+  --text-base--line-height: 24px;
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-sidebar: var(--sidebar);
@@ -1070,7 +1077,7 @@
   --color-remote: var(--remote);
   /* The branch checked out in the active worktree, in the theme's green. */
   --color-head: var(--success);
-  --font-sans: "IBM Plex Sans", system-ui, sans-serif;
+  --font-sans: "IBM Plex Sans Variable", system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, monospace;
 }
 
@@ -1095,8 +1102,27 @@
     @apply h-full;
   }
   body {
-    @apply bg-background text-foreground font-sans antialiased select-none overflow-hidden;
+    @apply bg-background text-foreground font-sans font-normal antialiased select-none overflow-hidden;
     font-size: var(--app-font-size, 13px);
+    /* A whole, even number of pixels, so text rows and whatever is centred
+       on them land on whole pixels; at 13px, 1.5 would give 19.5. */
+    line-height: round(1.5em, 2px);
+  }
+}
+
+/* On screens without high density, let macOS thicken text as it does for
+   native apps, and make every weight a little heavier: antialiased text at
+   the usual weights is thin and soft there. 450 is Plex's own Text weight,
+   drawn for small sizes. */
+@media (max-resolution: 1.5dppx), (-webkit-max-device-pixel-ratio: 1.5) {
+  :root {
+    --font-weight-normal: 450;
+    --font-weight-medium: 550;
+    --font-weight-semibold: 650;
+  }
+  body {
+    -webkit-font-smoothing: auto;
+    -moz-osx-font-smoothing: auto;
   }
 }
 

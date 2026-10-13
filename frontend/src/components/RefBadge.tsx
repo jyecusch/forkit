@@ -63,7 +63,7 @@ export const RefBadge = ({ badge, worktree, thread, dim, selected, primary, styl
       {...spanProps}
       title={title}
       className={cn(
-        "flex h-[18px] max-w-44 items-center gap-1 rounded px-1.5 text-[11px] leading-none font-medium whitespace-nowrap",
+        "flex h-[18px] max-w-44 items-center gap-1 rounded px-1.5 text-[11px] leading-3 font-medium whitespace-nowrap",
         primary ? "min-w-0 flex-[0_1_auto]" : "min-w-12 flex-[0_100_auto]",
         tone,
       )}

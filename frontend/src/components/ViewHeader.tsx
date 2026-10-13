@@ -38,8 +38,10 @@ export const ViewHeader = ({ worktree, refsById, headEmphasized, emphasizedOther
   const emphasizedId = headEmphasized ? head?.id : emphasizedOther?.id
   const thread = emphasizedId === undefined ? undefined : view?.branchThreads[emphasizedId]
   const line = thread === undefined ? "var(--primary)" : laneColor(thread)
+  // The rule along the bottom is a shadow, not a border, so the full 40 px
+  // centre the controls on whole pixels.
   return (
-    <div className="flex h-10 flex-none items-center gap-3 border-b px-3 text-[13px]">
+    <div className="flex h-10 flex-none items-center gap-3 px-3 text-[13px] shadow-[inset_0_-1px_0_var(--border)]">
       {worktree && (
         <div className="flex min-w-0 items-center gap-1.5" style={{ "--line": line } as React.CSSProperties}>
           <WorktreeIcon worktree={worktree} className="size-4 flex-none text-subtle-foreground" />
