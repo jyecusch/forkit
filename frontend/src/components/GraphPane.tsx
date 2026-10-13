@@ -4,7 +4,7 @@ import { Asterisk } from "lucide-react"
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type KeyboardEvent } from "react"
 import { useForkedEffect, useResolvedTheme } from "@/app/hooks"
 import { useService } from "@/app/services"
-import { layoutColumns, listInset } from "@/graph/columns"
+import { columnGap, layoutColumns, listInset } from "@/graph/columns"
 import { drawGraph, readPalette, uncommittedLine, type GraphPalette } from "@/graph/draw"
 import { geometry, gutter, laneWidth, laneX, rowHeight, widestLane } from "@/graph/geometry"
 import { notify } from "@/app/notifications"
@@ -16,12 +16,12 @@ import { cn } from "@/lib/utils"
 import type { GraphView, Preferences, Ref, RefId, RepoId, Worktree } from "@/model/model.gen"
 import { GraphData, type LoadedRow } from "@/services/GraphData"
 import { focusIsLost } from "./Chrome"
-import { RefBadge } from "./RefBadge"
+import { laneColor, RefBadge } from "./RefBadge"
 
 /** Rows rendered beyond the viewport on each side, for rows and graph alike. */
 const overscan = 30
-/** Badges shown before the rest are summarised as "+N". */
-const maxBadges = 2
+/** Badges shown in the narrow label column before the rest are summarised as "+N". */
+const maxBadges = 1
 
 export interface ScrollRequest {
   /** A commit's row, or the uncommitted changes above them all. */
@@ -347,6 +347,7 @@ export const GraphPane = (props: GraphPaneProps) => {
         className="grid h-8 flex-none items-center gap-3 overflow-y-hidden border-b text-xs font-medium whitespace-nowrap text-subtle-foreground [scrollbar-gutter:stable]"
         style={{ gridTemplateColumns: columns.template, paddingInline: listInset }}
       >
+        <span className="text-right">Branch / Tag</span>
         <span />
         <span>Description</span>
         {columns.showAuthor && <span>Author</span>}
@@ -364,7 +365,16 @@ export const GraphPane = (props: GraphPaneProps) => {
         onScroll={() => jump.landing !== undefined && setJump(({ nonce }) => ({ nonce }))}
         className="group/grid relative flex-1 overflow-y-auto outline-none [scrollbar-gutter:stable]"
       >
-        <div className="relative overflow-hidden" style={{ height: virtualizer.getTotalSize() }}>
+        <div
+          className="relative overflow-hidden"
+          style={
+            {
+              height: virtualizer.getTotalSize(),
+              "--graph-offset": `${clampedOffsetX}px`,
+              "--graph-width": `${columns.graph}px`,
+            } as React.CSSProperties
+          }
+        >
           {items.map((item) => (
             <CommitRow
               key={item.key}
@@ -372,6 +382,7 @@ export const GraphPane = (props: GraphPaneProps) => {
               top={item.start}
               loaded={graphData.peek(repo, item.index)}
               columns={columns.template}
+              labelsEnd={columns.graphLeft - columnGap}
               showAuthor={columns.showAuthor}
               showDate={columns.showDate}
               showCommit={columns.showCommit}
@@ -399,10 +410,11 @@ export const GraphPane = (props: GraphPaneProps) => {
             ref={canvasRef}
             aria-hidden
             className="pointer-events-none absolute"
-            style={{ top: canvasTop, left: listInset, width: columns.graph, height: canvasHeight }}
+            style={{ top: canvasTop, left: columns.graphLeft, width: columns.graph, height: canvasHeight }}
           />
           {wip && (
             <ChangesNode
+              left={columns.graphLeft}
               x={laneX(0) - clampedOffsetX}
               width={columns.graph}
               // The line continues down the first lane, which the layout keeps
@@ -431,6 +443,7 @@ const ChangesRow = ({ columns, count, selected, onSelect }: { columns: string; c
     style={{ height: rowHeight, gridTemplateColumns: columns, paddingInline: listInset }}
   >
     <span role="gridcell" />
+    <span role="gridcell" />
     <span role="gridcell" className="flex min-w-0 items-center gap-2">
       {/* The theme's yellow marks work in progress, rather than weight, with the usual "modified" asterisk. */}
       <Asterisk aria-hidden className="size-3 flex-none text-highlight" strokeWidth={2.5} />
@@ -447,7 +460,7 @@ const ChangesRow = ({ columns, count, selected, onSelect }: { columns: string; c
  * the first lane, which the layout keeps for them down to the commit they
  * build on; the canvas draws that dashed line, and this joins it.
  */
-const ChangesNode = ({ x, width, joinsFirstRow }: { x: number; width: number; joinsFirstRow: boolean }) => {
+const ChangesNode = ({ left, x, width, joinsFirstRow }: { left: number; x: number; width: number; joinsFirstRow: boolean }) => {
   if (x < 0 || x > width) return null
   const nodeY = rowHeight / 2
   const radius = 4
@@ -461,7 +474,7 @@ const ChangesNode = ({ x, width, joinsFirstRow }: { x: number; width: number; jo
     <svg
       aria-hidden
       className="pointer-events-none absolute top-0"
-      style={{ left: listInset, width, height: end }}
+      style={{ left, width, height: end }}
       fill="none"
       stroke="var(--highlight)"
       strokeOpacity={uncommittedLine.strength}
@@ -547,6 +560,8 @@ interface CommitRowProps {
   readonly worktreesById: ReadonlyMap<string, Worktree>
   readonly headRef: RefId | undefined
   readonly emphasized: RefId | undefined
+  /** Where the branch and tag column ends, from the row's left edge. */
+  readonly labelsEnd: number
   readonly dateFormat: Preferences["appearance"]["dateFormat"]
   readonly now: number
   readonly onSelect: (row: LoadedRow) => void
@@ -558,6 +573,7 @@ const CommitRow = memo(function CommitRow({
   top,
   loaded,
   columns,
+  labelsEnd,
   showAuthor,
   showDate,
   showCommit,
@@ -576,6 +592,7 @@ const CommitRow = memo(function CommitRow({
   if (!loaded) {
     return (
       <div role="row" aria-rowindex={index + 1} aria-busy className="absolute inset-x-0 grid items-center gap-3" style={style}>
+        <span />
         <span className="size-2 rounded-full bg-foreground/[0.08]" style={{ marginLeft: gutter - 4 }} />
         <span className="h-2 w-1/2 rounded bg-foreground/[0.06]" />
         {showAuthor && <span className="h-2 w-3/5 rounded bg-foreground/[0.06]" />}
@@ -603,10 +620,22 @@ const CommitRow = memo(function CommitRow({
           )}
           style={style}
         >
-          <span role="gridcell" />
-          <span role="gridcell" className="flex min-w-0 items-center gap-1.5 overflow-hidden">
+          {badges.length > 0 && (
+            // A line from the labels to the commit's dot, under the graph,
+            // which draws its lanes and the dot over it.
+            <span
+              aria-hidden
+              className="pointer-events-none absolute top-1/2 h-px"
+              style={{
+                left: labelsEnd,
+                width: `clamp(${columnGap}px, calc(${columnGap + laneX(row.lane)}px - var(--graph-offset)), calc(${columnGap}px + var(--graph-width)))`,
+                background: `color-mix(in srgb, ${laneColor(row.threadId)} 70%, transparent)`,
+              }}
+            />
+          )}
+          <span role="gridcell" className="flex min-w-0 items-center justify-end gap-1 overflow-hidden">
             {badges.length > 0 && (
-              <span className="flex max-w-[60%] min-w-0 flex-none items-center gap-1 overflow-hidden">
+              <>
                 {badges.slice(0, maxBadges).map((badge, i) => (
                   <RefBadge
                     key={badge.ref.id}
@@ -629,8 +658,11 @@ const CommitRow = memo(function CommitRow({
                     +{badges.length - maxBadges}
                   </span>
                 )}
-              </span>
+              </>
             )}
+          </span>
+          <span role="gridcell" />
+          <span role="gridcell" className="flex min-w-0 items-center gap-1.5 overflow-hidden">
             <span
               className={cn("min-w-0 flex-1 truncate", !dim ? "text-foreground" : selected ? "text-secondary-foreground" : "text-subtle-foreground")}
               title={commit.subject}
