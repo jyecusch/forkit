@@ -185,10 +185,10 @@ const stashPixels: ReadonlyArray<readonly [number, number, number, number]> = [
 
 /** Draws a stash's mark centred on dot, aligned to the device's pixel grid. */
 const drawStash = (context: CanvasRenderingContext2D, dot: Dot, color: string, background: string) => {
-  const scale = context.getTransform().a || 1
-  const snap = (value: number) => Math.round(value * scale) / scale
-  const left = snap(dot.x - stashSize / 2)
-  const top = snap(dot.y - stashSize / 2)
+  const { a: scale, e: shiftX, f: shiftY } = context.getTransform()
+  const snap = (value: number, shift: number) => (Math.round(value * scale + shift) - shift) / scale
+  const left = snap(dot.x - stashSize / 2, shiftX)
+  const top = snap(dot.y - stashSize / 2, shiftY)
   context.fillStyle = background
   context.fillRect(left, top, stashSize, stashSize)
   context.fillStyle = color

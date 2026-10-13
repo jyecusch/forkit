@@ -250,16 +250,24 @@ export const GraphPane = (props: GraphPaneProps) => {
     const context = canvas?.getContext("2d")
     if (!canvas || !context) return
     const dpr = window.devicePixelRatio || 1
-    canvas.width = Math.round(columns.graph * dpr)
-    canvas.height = Math.round(canvasHeight * dpr)
-    context.setTransform(dpr, 0, 0, dpr, 0, 0)
+    // A device pixel to spare on each axis, for the shift that aligns the
+    // canvas, and shown at exactly its pixel size so it is never stretched.
+    canvas.width = Math.ceil(columns.graph * dpr) + 1
+    canvas.height = Math.ceil(canvasHeight * dpr) + 1
+    canvas.style.width = `${canvas.width / dpr}px`
+    canvas.style.height = `${canvas.height / dpr}px`
   }, [columns.graph, canvasHeight])
 
   const canvasTop = wipHeight + first * rowHeight
   useLayoutEffect(() => {
-    const context = canvasRef.current?.getContext("2d")
-    if (!context || !palette || !active) return
-    context.clearRect(0, 0, columns.graph, canvasHeight)
+    const canvas = canvasRef.current
+    const context = canvas?.getContext("2d")
+    if (!canvas || !context || !palette || !active) return
+    const dpr = window.devicePixelRatio || 1
+    const { dx, dy } = alignToDevicePixels(canvas, dpr)
+    context.setTransform(1, 0, 0, 1, 0, 0)
+    context.clearRect(0, 0, canvas.width, canvas.height)
+    context.setTransform(dpr, 0, 0, dpr, dx * dpr, dy * dpr)
     drawGraph(
       context,
       geometry({
@@ -437,7 +445,7 @@ export const GraphPane = (props: GraphPaneProps) => {
             ref={canvasRef}
             aria-hidden
             className="pointer-events-none absolute"
-            style={{ top: canvasTop, left: columns.graphLeft, width: columns.graph, height: canvasHeight }}
+            style={{ top: canvasTop, left: columns.graphLeft }}
           />
           {wip && (
             <ChangesNode
@@ -776,3 +784,18 @@ const CommitRow = memo(function CommitRow({
                     </ContextMenu>
   )
 })
+
+/**
+ * Moves the canvas back to the device pixel its corner falls in, and returns
+ * how far, in CSS pixels, for drawing to move forward by. A canvas whose
+ * pixels do not line up with the screen's is resampled, which blurs every
+ * line and mark on it, most visibly at 1x.
+ */
+const alignToDevicePixels = (canvas: HTMLCanvasElement, dpr: number) => {
+  canvas.style.transform = ""
+  const { left, top } = canvas.getBoundingClientRect()
+  const dx = (left * dpr - Math.floor(left * dpr)) / dpr
+  const dy = (top * dpr - Math.floor(top * dpr)) / dpr
+  canvas.style.transform = `translate(${-dx}px, ${-dy}px)`
+  return { dx, dy }
+}
