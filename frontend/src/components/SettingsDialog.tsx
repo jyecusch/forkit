@@ -62,6 +62,12 @@ export const SettingsDialog = ({ open, onOpenChange, preferences: p }: SettingsD
             </Row>
           </Group>
 
+          <Group title="Privacy">
+            <Row label="Show Gravatar pictures" hint="Sends a hash of each author's email to Gravatar. Answers are kept on this machine." end>
+              <Switch checked={p.appearance.gravatars} onCheckedChange={(v) => set("appearance.gravatars", v)} />
+            </Row>
+          </Group>
+
           <Group title="Graph">
             <Row label="Order">
               <Choice value={p.graph.order} options={{ date: "Date", topo: "Topological" }} onChange={(v) => set("graph.order", v)} />

@@ -40,6 +40,7 @@ func Defaults() model.Preferences {
 			DarkTheme:  model.DarkThemeTokyoNight,
 			FontSize:   13,
 			DateFormat: model.DateFormatRelative,
+			Gravatars:  true,
 		},
 		Graph: model.GraphPreferences{
 			Order:              model.GraphOrderDate,

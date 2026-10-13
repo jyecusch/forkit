@@ -350,3 +350,17 @@ func (x *Worktrees) ChooseParentDirectory(meta model.CallMeta) (string, error) {
 		return x.s.deps.ChooseDirectory("Choose where to create the worktree")
 	})
 }
+
+// Avatars finds pictures of commit authors.
+type Avatars struct{ s *Server }
+
+// Gravatar returns email's Gravatar picture as a data URL, or "" when it has
+// none or the preferences turn Gravatar off.
+func (x *Avatars) Gravatar(meta model.CallMeta, email string) (string, error) {
+	return call(x.s, meta, "Avatars.Gravatar", func(ctx context.Context) (string, error) {
+		if !x.s.deps.Prefs.Get().Appearance.Gravatars {
+			return "", nil
+		}
+		return x.s.deps.Gravatar.Picture(ctx, email), nil
+	})
+}

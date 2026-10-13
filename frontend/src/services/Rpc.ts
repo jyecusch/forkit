@@ -17,6 +17,7 @@ import {
   type WorktreeId,
 } from "@/model/model.gen"
 import { model } from "@/wailsjs/go/models"
+import * as Avatars from "@/wailsjs/go/rpc/Avatars"
 import * as Preferences from "@/wailsjs/go/rpc/Preferences"
 import * as Repos from "@/wailsjs/go/rpc/Repos"
 import * as Session from "@/wailsjs/go/rpc/Session"
@@ -65,6 +66,8 @@ export class Rpc extends Context.Service<
     /** Pushes to the branch's upstream, or publishes it to remote when it has none. */
     readonly push: (worktree: WorktreeId, remote: string, force: boolean) => Effect.Effect<void, RpcFailure>
     readonly cancelOperation: (repo: RepoId, operation: string) => Effect.Effect<void, RpcFailure>
+    /** An author's Gravatar picture as a data URL, or "" when there is none or Gravatar is turned off. */
+    readonly gravatar: (email: string) => Effect.Effect<string, RpcFailure>
     /** Resolves to None when the user cancels the folder picker. */
     readonly chooseWorktreeParent: () => Effect.Effect<Option.Option<string>, RpcFailure>
   }
@@ -134,6 +137,7 @@ export class Rpc extends Context.Service<
         "worktree.id": worktree,
         "push.force": force,
       }),
+    gravatar: (email) => invoke("Avatars.Gravatar", Schema.String, (meta) => Avatars.Gravatar(meta, email)),
     cancelOperation: (repo, operation) =>
       invoke("Repos.CancelOperation", Schema.Void, (meta) => Repos.CancelOperation(meta, repo, operation), { "repo.id": repo }),
     chooseWorktreeParent: () =>

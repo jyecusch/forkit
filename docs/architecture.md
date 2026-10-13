@@ -62,6 +62,7 @@ These answer the plan's open questions and record where the implementation diffe
 - **A pull is a fetch, then a merge or rebase that Forkit chooses** from the pull preference (fast-forward only by default), with uncommitted changes stashed for its duration. Pulling never depends on how git's own pull is configured.
 - **Pushes force only with a lease**, so a force push is refused if the remote branch moved since it was last fetched.
 - **Remotes are fetched in the background** at the interval in the preferences, starting from when FETCH_HEAD was last written. After each failure the interval doubles, to at most eight times as long, and failures show on the remote instead of interrupting.
+- **Gravatar pictures are fetched by the backend**, never by the webview, so an author without one is not a failed image load. Answers are kept in the cache directory, pictures for a week and the absence of one for a day, and a picture is reused when Gravatar cannot be reached. Gravatar is the only third party Forkit contacts besides your remotes, and a preference turns it off.
 - **Frontend spans reach the backend** through Effect's OTLP tracer with a custom HttpClient that calls a Wails binding. Backend and frontend spans share one exporter: a rotating local file by default, or OTLP when configured.
 
 ## Not yet built
