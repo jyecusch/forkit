@@ -217,3 +217,77 @@ func TestWindowRejectsNegativeRangesAndClampsTheEnd(t *testing.T) {
 	// The view must still be usable afterwards.
 	f.refresh()
 }
+
+// stashRows returns the rows the view marks as stashes.
+func stashRows(window model.GraphWindow) []model.GraphRow {
+	var rows []model.GraphRow
+	for _, row := range window.Rows {
+		if row.Stash != nil && *row.Stash {
+			rows = append(rows, row)
+		}
+	}
+	return rows
+}
+
+func TestStashesShowAsRowsJoinedToTheCommitTheyWereMadeOn(t *testing.T) {
+	f := newViewFixture(t)
+	f.repo.WriteFile("tracked.txt", "one")
+	f.repo.Git("add", "tracked.txt")
+	f.repo.Commit("add tracked")
+	f.refresh()
+	mainThread := f.published().BranchThreads[string(repo.RefIDFor(f.loc.ID, "refs/heads/main"))]
+
+	// Staged, unstaged and untracked changes give the stash all three parents.
+	f.repo.WriteFile("tracked.txt", "two")
+	f.repo.Git("add", "tracked.txt")
+	f.repo.WriteFile("tracked.txt", "three")
+	f.repo.WriteFile("untracked.txt", "new")
+	f.repo.Git("stash", "push", "-q", "--include-untracked", "-m", "first")
+	f.options.IncludeStashes = true
+	f.refresh()
+
+	window := f.window("")
+	commits := len(strings.Fields(f.repo.Git("log", "--format=%H", "--branches")))
+	if len(window.Rows) != commits+1 {
+		t.Fatalf("got %d rows, want the %d commits and the stash alone", len(window.Rows), commits)
+	}
+	stashes := stashRows(window)
+	if len(stashes) != 1 || string(stashes[0].OID) != f.repo.Git("rev-parse", "stash@{0}") {
+		t.Fatalf("stash rows = %+v", stashes)
+	}
+	stash := stashes[0]
+	if stash.ThreadID == mainThread || !slices.Contains(stash.RefIDs, repo.RefIDFor(f.loc.ID, "stash@{0}")) {
+		t.Errorf("stash row has thread %d (main's is %d) and refs %v", stash.ThreadID, mainThread, stash.RefIDs)
+	}
+	below := window.Rows[stash.Index].Edges
+	if !slices.ContainsFunc(below, func(e model.GraphEdge) bool { return e.Stash != nil && e.FromLane == stash.Lane }) {
+		t.Errorf("no stash line leaves the stash row: %+v", below)
+	}
+	if got := f.published().BranchThreads[string(repo.RefIDFor(f.loc.ID, "refs/heads/main"))]; got != mainThread {
+		t.Errorf("main's thread changed from %d to %d when a stash appeared", mainThread, got)
+	}
+
+	t.Run("a new stash is added", func(t *testing.T) {
+		f.repo.WriteFile("tracked.txt", "four")
+		f.repo.Git("stash", "push", "-q", "-m", "second")
+		f.refresh()
+		if got := len(stashRows(f.window(""))); got != 2 {
+			t.Errorf("got %d stash rows, want 2", got)
+		}
+	})
+
+	t.Run("a dropped stash is removed", func(t *testing.T) {
+		f.repo.Git("stash", "drop", "-q")
+		f.refresh()
+		window := f.window("")
+		if got := stashRows(window); len(got) != 1 || string(got[0].OID) != f.repo.Git("rev-parse", "stash@{0}") {
+			t.Errorf("stash rows = %+v", got)
+		}
+	})
+
+	t.Run("stashes can be hidden", func(t *testing.T) {
+		f.options.IncludeStashes = false
+		f.refresh()
+		f.assertMatchesGitLog()
+	})
+}

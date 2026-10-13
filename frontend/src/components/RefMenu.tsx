@@ -1,4 +1,4 @@
-import { ArrowRightLeft, Copy, Focus, FolderPlus, Trash2 } from "lucide-react"
+import { ArchiveRestore, ArrowRightLeft, Copy, Focus, FolderPlus, Trash2 } from "lucide-react"
 import {
   ContextMenuContent,
   ContextMenuItem,
@@ -15,11 +15,15 @@ import type { Ref, Worktree } from "@/model/model.gen"
 
 /** What a ref's menu can do; each action is given the ref, or refs, to act on. */
 export interface RefActions {
-  /** Checks a ref out, or switches to the worktree that has it. */
+  /** Checks a ref out, or switches to the worktree that has it; applies a stash. */
   readonly open: (ref: Ref) => void
   readonly newWorktree: (base: Ref) => void
   readonly emphasize: (ref: Ref) => void
   readonly deleteBranches: (refs: ReadonlyArray<Ref>) => void
+  /** Applies a stash and drops it, unless its changes conflict. */
+  readonly popStash: (stash: Ref) => void
+  /** Asks, then deletes a stash. */
+  readonly dropStash: (stash: Ref) => void
 }
 
 interface RefMenuProps {
@@ -47,14 +51,21 @@ export const RefMenu = ({ target, refs, current, elsewhere, openShortcut, action
     <ContextMenuSeparator />
     <ContextMenuItem disabled={current} onSelect={() => actions.open(target)}>
       <ArrowRightLeft />
-      {elsewhere
-        ? `Switch to ${baseName(elsewhere.path)}`
-        : target.kind === "remoteBranch"
-          ? "Check out as local branch…"
-          : "Check out"}
+      {target.kind === "stash"
+        ? "Apply"
+        : elsewhere
+          ? `Switch to ${baseName(elsewhere.path)}`
+          : target.kind === "remoteBranch"
+            ? "Check out as local branch…"
+            : "Check out"}
       {openShortcut && <ContextMenuShortcut>{openShortcut}</ContextMenuShortcut>}
     </ContextMenuItem>
-    {target.kind !== "stash" && (
+    {target.kind === "stash" ? (
+      <ContextMenuItem onSelect={() => actions.popStash(target)}>
+        <ArchiveRestore />
+        Pop
+      </ContextMenuItem>
+    ) : (
       <ContextMenuItem onSelect={() => actions.newWorktree(target)}>
         <FolderPlus />
         New worktree from here…
@@ -69,7 +80,17 @@ export const RefMenu = ({ target, refs, current, elsewhere, openShortcut, action
       <Copy />
       Copy name
     </ContextMenuItem>
-    <DeleteItems target={target} refs={refs} onDelete={actions.deleteBranches} />
+    {target.kind === "stash" ? (
+      <>
+        <ContextMenuSeparator />
+        <ContextMenuItem variant="destructive" onSelect={() => actions.dropStash(target)}>
+          <Trash2 />
+          Drop…
+        </ContextMenuItem>
+      </>
+    ) : (
+      <DeleteItems target={target} refs={refs} onDelete={actions.deleteBranches} />
+    )}
   </ContextMenuContent>
 )
 

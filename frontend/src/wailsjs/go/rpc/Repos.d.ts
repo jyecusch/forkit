@@ -14,6 +14,8 @@ export function DeleteBranches(arg1:model.CallMeta,arg2:model.RepoID,arg3:Array<
 
 export function Diff(arg1:model.CallMeta,arg2:model.RepoID,arg3:model.DiffRequest):Promise<model.FileDiff>;
 
+export function DropStash(arg1:model.CallMeta,arg2:model.RepoID,arg3:model.RefID):Promise<void>;
+
 export function Fetch(arg1:model.CallMeta,arg2:model.RepoID,arg3:string):Promise<void>;
 
 export function GraphWindow(arg1:model.CallMeta,arg2:model.RepoID,arg3:number,arg4:number,arg5:model.RefID):Promise<model.GraphWindow>;

@@ -178,7 +178,7 @@ interface ActionButtonProps {
   readonly children?: ReactNode
 }
 
-const ActionButton = ({ label, title, icon, operation, disabled = false, onClick, children }: ActionButtonProps) => {
+export const ActionButton = ({ label, title, icon, operation, disabled = false, onClick, children }: ActionButtonProps) => {
   const progress = operation?.progress
   return (
     <button

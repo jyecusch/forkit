@@ -1,6 +1,7 @@
 import { Context, Effect, Layer, Option, Schema, type Tracer } from "effect"
 import { fromRejection, type RpcFailure } from "@/model/errors"
 import {
+  ApplyStashResult,
   CheckoutResult,
   CommitDetail,
   FileDiff,
@@ -67,6 +68,11 @@ export class Rpc extends Context.Service<
     readonly push: (worktree: WorktreeId, remote: string, force: boolean) => Effect.Effect<void, RpcFailure>
     /** Deletes local branches, merged or not, and remote branches from their remotes. */
     readonly deleteBranches: (repo: RepoId, refs: ReadonlyArray<RefId>) => Effect.Effect<void, RpcFailure>
+    /** Stashes a worktree's uncommitted changes, untracked files included; an empty message lets git name it. */
+    readonly stash: (worktree: WorktreeId, message: string) => Effect.Effect<void, RpcFailure>
+    /** Applies a stash to a worktree, and with pop drops it unless its changes conflicted. */
+    readonly applyStash: (worktree: WorktreeId, stash: RefId, pop: boolean) => Effect.Effect<ApplyStashResult, RpcFailure>
+    readonly dropStash: (repo: RepoId, stash: RefId) => Effect.Effect<void, RpcFailure>
     readonly cancelOperation: (repo: RepoId, operation: string) => Effect.Effect<void, RpcFailure>
     /** An author's Gravatar picture as a data URL, or "" when there is none or Gravatar is turned off. */
     readonly gravatar: (email: string) => Effect.Effect<string, RpcFailure>
@@ -139,6 +145,15 @@ export class Rpc extends Context.Service<
         "worktree.id": worktree,
         "push.force": force,
       }),
+    stash: (worktree, message) =>
+      invoke("Worktrees.Stash", Schema.Void, (meta) => Worktrees.Stash(meta, worktree, message), { "worktree.id": worktree }),
+    applyStash: (worktree, stash, pop) =>
+      invoke("Worktrees.ApplyStash", ApplyStashResult, (meta) => Worktrees.ApplyStash(meta, worktree, stash, pop), {
+        "worktree.id": worktree,
+        "stash.pop": pop,
+      }),
+    dropStash: (repo, stash) =>
+      invoke("Repos.DropStash", Schema.Void, (meta) => Repos.DropStash(meta, repo, stash), { "repo.id": repo }),
     gravatar: (email) => invoke("Avatars.Gravatar", Schema.String, (meta) => Avatars.Gravatar(meta, email)),
     deleteBranches: (repo, refs) =>
       invoke("Repos.DeleteBranches", Schema.Void, (meta) => Repos.DeleteBranches(meta, repo, [...refs]), {

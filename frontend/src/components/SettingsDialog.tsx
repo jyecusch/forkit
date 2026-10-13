@@ -78,6 +78,9 @@ export const SettingsDialog = ({ open, onOpenChange, preferences: p }: SettingsD
             <Row label="Show tags" end>
               <Switch checked={p.graph.showTags} onCheckedChange={(v) => set("graph.showTags", v)} />
             </Row>
+            <Row label="Show stashes" end>
+              <Switch checked={p.graph.showStashes} onCheckedChange={(v) => set("graph.showStashes", v)} />
+            </Row>
           </Group>
 
           <Group title="Diffs">

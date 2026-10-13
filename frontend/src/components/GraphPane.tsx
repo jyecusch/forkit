@@ -6,11 +6,11 @@ import { useForkedEffect, useResolvedTheme } from "@/app/hooks"
 import { useLayoutSize, type LayoutSizeControl } from "@/app/layoutSizes"
 import { useService } from "@/app/services"
 import { avatarColumn, columnGap, layoutColumns, listInset } from "@/graph/columns"
-import { drawGraph, readPalette, uncommittedLine, type GraphPalette } from "@/graph/draw"
+import { dashedLine, drawGraph, readPalette, type GraphPalette } from "@/graph/draw"
 import { geometry, gutter, laneWidth, laneX, rowHeight, widestLane } from "@/graph/geometry"
 import { notify } from "@/app/notifications"
 import { useNow } from "@/app/useNow"
-import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu"
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu"
 import { RefMenu, type RefActions } from "./RefMenu"
 import { badgesFor } from "@/lib/badges"
 import { formatDate, formatFullDate, shortOid } from "@/lib/format"
@@ -213,6 +213,8 @@ export const GraphPane = (props: GraphPaneProps) => {
       newWorktree: (base) => latestRefActions.current.newWorktree(base),
       emphasize: (ref) => latestRefActions.current.emphasize(ref),
       deleteBranches: (refs) => latestRefActions.current.deleteBranches(refs),
+      popStash: (stash) => latestRefActions.current.popStash(stash),
+      dropStash: (stash) => latestRefActions.current.dropStash(stash),
     }),
     [],
   )
@@ -531,7 +533,7 @@ const ChangesNode = ({ left, x, width, joinsFirstRow }: { left: number; x: numbe
   const end = rowHeight + rowHeight / 2 - (joinsFirstRow ? 7 : 0)
   // Started a whole number of dash patterns above the end, so its dashes run
   // on into the canvas's below.
-  const period = uncommittedLine.dash[0] + uncommittedLine.dash[1]
+  const period = dashedLine.dash[0] + dashedLine.dash[1]
   const start = end - Math.floor((end - nodeY - radius) / period) * period
   return (
     <svg
@@ -540,10 +542,10 @@ const ChangesNode = ({ left, x, width, joinsFirstRow }: { left: number; x: numbe
       style={{ left, width, height: end }}
       fill="none"
       stroke="var(--highlight)"
-      strokeOpacity={uncommittedLine.strength}
-      strokeWidth={uncommittedLine.width}
+      strokeOpacity={dashedLine.strength}
+      strokeWidth={dashedLine.width}
     >
-      <line x1={x} x2={x} y1={start} y2={end} strokeDasharray={uncommittedLine.dash.join(" ")} />
+      <line x1={x} x2={x} y1={start} y2={end} strokeDasharray={dashedLine.dash.join(" ")} />
       <circle cx={x} cy={nodeY} r={radius - 0.5} fill="var(--background)" />
     </svg>
   )
@@ -663,6 +665,7 @@ const CommitRow = memo(function CommitRow({
   const { row, commit } = loaded
   const dim = anyEmphasis && !row.onEmphasized
   const badges = badgesFor(row.refIds, refsById, { head: headRef, emphasized })
+  const stash = row.stash ? badges.find((badge) => badge.ref.kind === "stash")?.ref : undefined
   return (
     <ContextMenu onOpenChange={onMenuOpenChange}>
       <ContextMenuTrigger asChild>
@@ -756,6 +759,16 @@ const CommitRow = memo(function CommitRow({
         </div>
       </ContextMenuTrigger>
       <ContextMenuContent className="w-48">
+        {stash && (
+          <>
+            <ContextMenuItem onSelect={() => refActions.open(stash)}>Apply stash</ContextMenuItem>
+            <ContextMenuItem onSelect={() => refActions.popStash(stash)}>Pop stash</ContextMenuItem>
+            <ContextMenuItem variant="destructive" onSelect={() => refActions.dropStash(stash)}>
+              Drop stash…
+            </ContextMenuItem>
+            <ContextMenuSeparator />
+          </>
+        )}
         <ContextMenuItem onSelect={() => copySha(row.oid)}>Copy SHA</ContextMenuItem>
         <ContextMenuItem onSelect={() => void navigator.clipboard.writeText(commit.subject)}>Copy subject</ContextMenuItem>
       </ContextMenuContent>

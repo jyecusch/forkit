@@ -6,7 +6,8 @@ import type { Worktree } from "@/model/model.gen"
 import { AheadBehind } from "./AheadBehind"
 import { WorktreeIcon } from "./WorktreeIcon"
 
-export const laneColor = (thread: number) => `var(--lane-${thread % 8})`
+/** A thread's colour; threads below zero, such as stashes', belong to no branch and are neutral. */
+export const laneColor = (thread: number) => (thread < 0 ? "var(--subtle-foreground)" : `var(--lane-${thread % 8})`)
 
 /** The emphasized ref's tint, in the colour set as `--line`. */
 export const emphasizedTint =

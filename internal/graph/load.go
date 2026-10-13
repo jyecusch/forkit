@@ -22,11 +22,19 @@ const streamBatchSize = 2000
 type logEntry struct {
 	oid     []byte
 	parents [][]byte
+	// stash marks a stash, whose only parent is then the commit it was made on.
+	stash bool
 }
 
 // streamLog lists the commits reachable from include but not from exclude in
 // display order, handing them to onBatch in groups as git produces them.
-func streamLog(ctx context.Context, repo *gitexec.Repo, order model.GraphOrder, include, exclude []model.OID, onBatch func([]logEntry) error) error {
+// Stashes, which must be among include to be listed, are trimmed by
+// stashTrimmer.
+func streamLog(ctx context.Context, repo *gitexec.Repo, order model.GraphOrder, include, exclude, stashes []model.OID, onBatch func([]logEntry) error) error {
+	trimmer, err := newStashTrimmer(stashes)
+	if err != nil {
+		return err
+	}
 	var revs strings.Builder
 	for _, oid := range include {
 		fmt.Fprintf(&revs, "%s\n", oid)
@@ -39,8 +47,52 @@ func streamLog(ctx context.Context, repo *gitexec.Repo, order model.GraphOrder, 
 		orderFlag = "--date-order"
 	}
 	return repo.Stream(ctx, strings.NewReader(revs.String()), func(r io.Reader) error {
-		return parseLog(r, onBatch)
+		return parseLog(r, func(batch []logEntry) error {
+			return onBatch(trimmer.trim(batch))
+		})
 	}, "log", orderFlag, "--format=%H %P", "--stdin")
+}
+
+// stashTrimmer leaves out of a log the commits git makes to hold a stash's
+// staged and untracked files, its second and third parents, so a stash
+// shows as one row joined only to the commit it was made on. Git lists a
+// stash before its parents, so they are known by the time they are reached.
+type stashTrimmer struct {
+	stashes map[string]bool
+	hidden  map[string]bool
+}
+
+func newStashTrimmer(stashes []model.OID) (*stashTrimmer, error) {
+	t := &stashTrimmer{stashes: map[string]bool{}, hidden: map[string]bool{}}
+	for _, oid := range stashes {
+		raw, err := hex.DecodeString(string(oid))
+		if err != nil {
+			return nil, fmt.Errorf("bad stash oid %q: %w", oid, err)
+		}
+		t.stashes[string(raw)] = true
+	}
+	return t, nil
+}
+
+func (t *stashTrimmer) trim(batch []logEntry) []logEntry {
+	if len(t.stashes) == 0 {
+		return batch
+	}
+	kept := batch[:0]
+	for _, entry := range batch {
+		if t.hidden[string(entry.oid)] {
+			delete(t.hidden, string(entry.oid))
+			continue
+		}
+		if t.stashes[string(entry.oid)] && len(entry.parents) > 0 {
+			for _, parent := range entry.parents[1:] {
+				t.hidden[string(parent)] = true
+			}
+			entry.parents, entry.stash = entry.parents[:1], true
+		}
+		kept = append(kept, entry)
+	}
+	return kept
 }
 
 func parseLog(r io.Reader, onBatch func([]logEntry) error) error {
@@ -90,6 +142,9 @@ func appendEntries(h *History, entries []logEntry) error {
 		if err := h.Append(entry.oid, entry.parents); err != nil {
 			return err
 		}
+		if entry.stash {
+			h.markStash(h.Len() - 1)
+		}
 	}
 	return nil
 }
@@ -103,7 +158,7 @@ var errListed = errors.New("listed enough")
 // fetched branch's older commits among them, they cannot. An empty next
 // means nothing follows lead. The walk stops early in date order, but not in
 // topological order.
-func leadsWith(ctx context.Context, repo *gitexec.Repo, order model.GraphOrder, tips []model.OID, lead *History, next model.OID) (bool, error) {
+func leadsWith(ctx context.Context, repo *gitexec.Repo, order model.GraphOrder, tips, stashes []model.OID, lead *History, next model.OID) (bool, error) {
 	want := make([]model.OID, 0, lead.Len()+1)
 	for row := range lead.Len() {
 		want = append(want, lead.OID(row))
@@ -113,7 +168,7 @@ func leadsWith(ctx context.Context, repo *gitexec.Repo, order model.GraphOrder, 
 	}
 	seen := 0
 	agrees := true
-	err := streamLog(ctx, repo, order, tips, nil, func(batch []logEntry) error {
+	err := streamLog(ctx, repo, order, tips, nil, stashes, func(batch []logEntry) error {
 		for _, entry := range batch {
 			if seen == len(want) {
 				return errListed

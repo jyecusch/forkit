@@ -31,7 +31,7 @@ func (g *Graph) Extend() {
 		if row%checkpointInterval == 0 {
 			g.checkpoints = append(g.checkpoints, g.tail.clone())
 		}
-		g.placements = append(g.placements, g.tail.place(g.history.rowID[row], g.history.Parents(row), nil))
+		g.placements = append(g.placements, g.tail.place(g.history.rowID[row], g.history.Parents(row), g.history.IsStash(row), nil))
 		g.laneCount = max(g.laneCount, len(g.tail.lanes), int(g.placements[row].lane)+1)
 	}
 }
@@ -57,7 +57,7 @@ func (g *Graph) edgesBelow(start, end int) [][]edge {
 		if above := row - 1; above >= start && above < end {
 			buf = &result[above-start]
 		}
-		replay.place(g.history.rowID[row], g.history.Parents(row), buf)
+		replay.place(g.history.rowID[row], g.history.Parents(row), g.history.IsStash(row), buf)
 	}
 	if end == g.Len() {
 		replay.appendTrailingEdges(&result[end-1-start])

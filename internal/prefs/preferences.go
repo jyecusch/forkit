@@ -46,6 +46,7 @@ func Defaults() model.Preferences {
 			Order:              model.GraphOrderDate,
 			ShowRemoteBranches: true,
 			ShowTags:           true,
+			ShowStashes:        true,
 		},
 		Diff:      model.DiffPreferences{Layout: model.DiffLayoutUnified},
 		Git:       model.GitPreferences{MaintainCommitGraph: true, FetchInterval: 10, PruneOnFetch: true, PullMode: model.PullModeFFOnly},

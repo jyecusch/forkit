@@ -1,6 +1,6 @@
 import { Context, Effect, Layer, Option } from "effect"
 import type { RpcFailure } from "@/model/errors"
-import type { CheckoutMode, CheckoutResult, RefId, Repo, RepoId, Worktree, WorktreeId } from "@/model/model.gen"
+import type { ApplyStashResult, CheckoutMode, CheckoutResult, RefId, Repo, RepoId, Worktree, WorktreeId } from "@/model/model.gen"
 import { Rpc } from "./Rpc"
 
 /** Actions the user takes. Each runs in its own span. */
@@ -43,6 +43,11 @@ export class Commands extends Context.Service<
     readonly push: (worktree: WorktreeId, remote: string, force: boolean) => Effect.Effect<void, RpcFailure>
     /** Deletes local branches, merged or not, and remote branches from their remotes. */
     readonly deleteBranches: (repo: RepoId, refs: ReadonlyArray<RefId>) => Effect.Effect<void, RpcFailure>
+    /** Stashes a worktree's uncommitted changes, untracked files included. */
+    readonly stash: (worktree: WorktreeId, message: string) => Effect.Effect<void, RpcFailure>
+    /** Applies a stash to a worktree, and with pop drops it unless its changes conflicted. */
+    readonly applyStash: (worktree: WorktreeId, stash: RefId, pop: boolean) => Effect.Effect<ApplyStashResult, RpcFailure>
+    readonly dropStash: (repo: RepoId, stash: RefId) => Effect.Effect<void, RpcFailure>
     readonly cancelOperation: (repo: RepoId, operation: string) => Effect.Effect<void, RpcFailure>
   }
 >()("forkit/Commands") {
@@ -108,6 +113,15 @@ export class Commands extends Context.Service<
         }),
         deleteBranches: Effect.fn("command.deleteBranches")(function* (repo: RepoId, refs: ReadonlyArray<RefId>) {
           yield* rpc.deleteBranches(repo, refs)
+        }),
+        stash: Effect.fn("command.stash")(function* (worktree: WorktreeId, message: string) {
+          yield* rpc.stash(worktree, message)
+        }),
+        applyStash: Effect.fn("command.applyStash")(function* (worktree: WorktreeId, stash: RefId, pop: boolean) {
+          return yield* rpc.applyStash(worktree, stash, pop)
+        }),
+        dropStash: Effect.fn("command.dropStash")(function* (repo: RepoId, stash: RefId) {
+          yield* rpc.dropStash(repo, stash)
         }),
         cancelOperation: Effect.fn("command.cancelOperation")(function* (repo: RepoId, operation: string) {
           yield* rpc.cancelOperation(repo, operation)

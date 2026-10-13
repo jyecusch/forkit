@@ -26,7 +26,9 @@ import { NewWorktreeDialog } from "./NewWorktreeDialog"
 import { Prompt, type PromptSpec } from "./Prompt"
 import type { RefActions } from "./RefMenu"
 import { RemoteActions } from "./RemoteActions"
+import { StashButtons } from "./StashButtons"
 import { useCheckout } from "./useCheckout"
+import { useStashes } from "./useStashes"
 import { ViewHeader } from "./ViewHeader"
 
 interface RepoViewProps {
@@ -156,6 +158,8 @@ export const RepoView = ({ repo, openRepo, preferences, active }: RepoViewProps)
     void run(Commands.use((commands) => commands.locate(id, headRef))).then(scrollTo)
   }, [viewLoaded, headRef, id, run, scrollTo])
 
+  const stashes = useStashes({ repo: id, worktree: activeWorktree, prompt: setPrompt })
+
   const checkout = useCheckout({
     repo: id,
     refs,
@@ -218,7 +222,14 @@ export const RepoView = ({ repo, openRepo, preferences, active }: RepoViewProps)
     })
   }
 
-  const refActions: RefActions = { open: openRef, newWorktree: setNewWorktreeBase, emphasize, deleteBranches }
+  const refActions: RefActions = {
+    open: (ref) => (ref.kind === "stash" ? stashes.apply(ref) : openRef(ref)),
+    newWorktree: setNewWorktreeBase,
+    emphasize,
+    deleteBranches,
+    popStash: stashes.pop,
+    dropStash: stashes.drop,
+  }
 
   const headBranch = headRef ? refsById.get(headRef) : undefined
   const emphasizedOther = emphasized && emphasized !== headRef ? refsById.get(emphasized) : undefined
@@ -263,16 +274,25 @@ export const RepoView = ({ repo, openRepo, preferences, active }: RepoViewProps)
         detailsShown={showDetails}
         onToggleDetails={toggleDetails}
         actions={
-          <RemoteActions
-            repo={id}
-            worktree={activeWorktree}
-            branch={headBranch}
-            upstream={headBranch?.upstreamRefId ? refsById.get(headBranch.upstreamRefId) : undefined}
-            remotes={remotes}
-            operations={operations}
-            prompt={setPrompt}
-            onShowChanges={goToChanges}
-          />
+          <>
+            <StashButtons
+              worktree={activeWorktree}
+              changes={changes}
+              newest={refs.find((ref) => ref.kind === "stash" && ref.shortName === "stash@{0}")}
+              operations={operations}
+              stashes={stashes}
+            />
+            <RemoteActions
+              repo={id}
+              worktree={activeWorktree}
+              branch={headBranch}
+              upstream={headBranch?.upstreamRefId ? refsById.get(headBranch.upstreamRefId) : undefined}
+              remotes={remotes}
+              operations={operations}
+              prompt={setPrompt}
+              onShowChanges={goToChanges}
+            />
+          </>
         }
       />
       <div className="flex min-h-0 flex-1">
@@ -341,4 +361,7 @@ const operationLabels: Record<OperationKind, string> = {
   fetch: "Fetching",
   pull: "Pulling",
   push: "Pushing",
+  stash: "Stashing",
+  applyStash: "Applying stash",
+  dropStash: "Dropping stash",
 }

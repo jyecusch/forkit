@@ -6,24 +6,27 @@ export interface GraphPalette {
   readonly background: string
   /** The uncommitted changes' line, which has no branch colour of its own. */
   readonly uncommitted: string
+  /** Stashes and their lines, quieter than any branch. */
+  readonly stash: string
 }
 
 export const readPalette = (element: Element): GraphPalette => {
   const style = getComputedStyle(element)
   const lanes = Array.from({ length: 8 }, (_, i) => style.getPropertyValue(`--lane-${i}`).trim())
   const background = style.getPropertyValue("--background").trim()
-  const uncommitted = mixHex(style.getPropertyValue("--highlight").trim(), background, uncommittedLine.strength)
-  return { lanes, background, uncommitted }
+  const uncommitted = mixHex(style.getPropertyValue("--highlight").trim(), background, dashedLine.strength)
+  const stash = style.getPropertyValue("--subtle-foreground").trim()
+  return { lanes, background, uncommitted, stash }
 }
 
 const lineWidth = 2
 
 /**
- * The uncommitted changes' line is lighter than history's: thinner, faded,
- * and dashed. Its pattern divides the row height, so every row's piece
- * continues the dashes of the one above.
+ * The lines from uncommitted changes and stashes are lighter than history's:
+ * thinner, faded, and dashed. The pattern divides the row height, so every
+ * row's piece continues the dashes of the one above.
  */
-export const uncommittedLine = { width: 1.25, dash: [2, 2] as const, strength: 0.85 }
+export const dashedLine = { width: 1.25, dash: [2, 2] as const, strength: 0.85 }
 const dotRadius = 4
 /** Radius of the bend where a line changes lane. */
 const elbowRadius = 8
@@ -51,14 +54,16 @@ const fadeWidth = 16
 export const drawGraph = (context: CanvasRenderingContext2D, geometry: Geometry, palette: GraphPalette, options: DrawOptions) => {
   const { width, height } = options
   const colorOf = (thread: number) => palette.lanes[thread % palette.lanes.length]!
+  const dotColor = (dot: Dot) => (dot.shape === "stash" ? palette.stash : colorOf(dot.thread))
 
   context.lineWidth = lineWidth
   context.lineCap = "butt"
   context.lineJoin = "round"
   for (const segment of geometry.segments) {
-    context.strokeStyle = segment.uncommitted ? palette.uncommitted : colorOf(segment.thread)
-    context.lineWidth = segment.uncommitted ? uncommittedLine.width : lineWidth
-    context.setLineDash(segment.uncommitted ? [...uncommittedLine.dash] : [])
+    const dashed = segment.line !== "history"
+    context.strokeStyle = dashed ? palette[segment.line] : colorOf(segment.thread)
+    context.lineWidth = dashed ? dashedLine.width : lineWidth
+    context.setLineDash(dashed ? [...dashedLine.dash] : [])
     context.beginPath()
     traceSegment(context, segment)
     context.stroke()
@@ -69,7 +74,7 @@ export const drawGraph = (context: CanvasRenderingContext2D, geometry: Geometry,
   const clipped: Array<Dot> = []
   for (const dot of geometry.dots) {
     if (dot.x < 0 || dot.x > width) clipped.push(dot)
-    else drawDot(context, dot, colorOf(dot.thread), palette.background)
+    else drawDot(context, dot, dotColor(dot), palette.background)
   }
 
   context.save()
@@ -89,7 +94,7 @@ export const drawGraph = (context: CanvasRenderingContext2D, geometry: Geometry,
 
   for (const dot of clipped) {
     const edge = dot.x < 0 ? 0 : width
-    context.fillStyle = palette.lanes[dot.thread % palette.lanes.length]!
+    context.fillStyle = dotColor(dot)
     context.beginPath()
     context.arc(edge, dot.y, dotRadius, 0, Math.PI * 2)
     context.fill()
@@ -130,6 +135,18 @@ const drawDot = (context: CanvasRenderingContext2D, dot: Dot, color: string, bac
   }
 
   switch (dot.shape) {
+    case "stash": {
+      // Square, so it does not read as a commit.
+      const half = dotRadius - 0.5
+      context.fillStyle = background
+      context.fillRect(dot.x - half - 1, dot.y - half - 1, half * 2 + 2, half * 2 + 2)
+      context.strokeStyle = color
+      context.lineWidth = 1.5
+      context.beginPath()
+      context.roundRect(dot.x - half, dot.y - half, half * 2, half * 2, 1.5)
+      context.stroke()
+      break
+    }
     case "commit":
       context.fillStyle = color
       circle(dotRadius)

@@ -23,6 +23,9 @@ type Options struct {
 	Order          model.GraphOrder
 	IncludeRemotes bool
 	IncludeTags    bool
+	// IncludeStashes shows each stash as a row of its own, joined to the
+	// commit it was made on.
+	IncludeStashes bool
 	// Uncommitted is the commit the active worktree's uncommitted changes
 	// build on, which gets a lane of their own from the top; empty for none.
 	Uncommitted model.OID
@@ -120,7 +123,8 @@ func (v *View) Refresh(ctx context.Context, refs []model.Ref, heads []model.OID,
 
 func (v *View) prepend(ctx context.Context, current *Graph, currentTips, tips []model.OID, options Options, refs []model.Ref) error {
 	newer := newHistory()
-	err := streamLog(ctx, v.repo, options.Order, tips, currentTips, func(batch []logEntry) error {
+	stashes := shownStashes(refs, options)
+	err := streamLog(ctx, v.repo, options.Order, tips, currentTips, stashes, func(batch []logEntry) error {
 		return appendEntries(newer, batch)
 	})
 	if err != nil {
@@ -133,7 +137,7 @@ func (v *View) prepend(ctx context.Context, current *Graph, currentTips, tips []
 		if current.Len() > 0 {
 			top = current.history.OID(0)
 		}
-		fits, err := leadsWith(ctx, v.repo, options.Order, tips, newer, top)
+		fits, err := leadsWith(ctx, v.repo, options.Order, tips, stashes, newer, top)
 		if err != nil {
 			return err
 		}
@@ -160,7 +164,7 @@ func (v *View) reload(ctx context.Context, tips []model.OID, options Options, re
 	}
 	shown := false
 	var lastPublish time.Time
-	err := streamLog(ctx, v.repo, options.Order, tips, nil, func(batch []logEntry) error {
+	err := streamLog(ctx, v.repo, options.Order, tips, nil, shownStashes(refs, options), func(batch []logEntry) error {
 		v.mu.Lock()
 		previousRows := g.Len()
 		err := appendEntries(history, batch)
@@ -208,6 +212,7 @@ func (v *View) publish(ctx context.Context) {
 		ID:              v.repoID,
 		Version:         v.version,
 		TotalRows:       v.graph.Len(),
+		StashRows:       v.graph.history.StashCount(),
 		LaneCount:       v.graph.LaneCount(),
 		Complete:        v.complete,
 		FirstChangedRow: v.firstChangedRow,
@@ -269,6 +274,9 @@ func (v *View) row(g *Graph, row int, oid model.OID, edges []edge, emphasis []ui
 		OnEmphasized: hasBit(emphasis, int32(row)),
 		Edges:        make([]model.GraphEdge, len(edges)),
 	}
+	if g.history.IsStash(row) {
+		graphRow.Stash = new(true)
+	}
 	for i, e := range edges {
 		graphRow.Edges[i] = model.GraphEdge{
 			FromLane: int(e.fromLane),
@@ -278,6 +286,9 @@ func (v *View) row(g *Graph, row int, oid model.OID, edges []edge, emphasis []ui
 		}
 		if e.uncommitted {
 			graphRow.Edges[i].Uncommitted = &e.uncommitted
+		}
+		if e.stash {
+			graphRow.Edges[i].Stash = &e.stash
 		}
 	}
 	return graphRow
@@ -336,6 +347,7 @@ func collectTips(refs []model.Ref, heads []model.OID, options Options) []model.O
 			tips = append(tips, commitOf(ref))
 		}
 	}
+	tips = append(tips, shownStashes(refs, options)...)
 	for _, head := range heads {
 		if head != "" {
 			tips = append(tips, head)
@@ -343,6 +355,20 @@ func collectTips(refs []model.Ref, heads []model.OID, options Options) []model.O
 	}
 	slices.Sort(tips)
 	return slices.Compact(tips)
+}
+
+// shownStashes lists the stashes the graph shows, which are among its tips.
+func shownStashes(refs []model.Ref, options Options) []model.OID {
+	if !options.IncludeStashes {
+		return nil
+	}
+	var stashes []model.OID
+	for _, ref := range refs {
+		if ref.Kind == model.RefKindStash {
+			stashes = append(stashes, ref.TargetOID)
+		}
+	}
+	return stashes
 }
 
 func indexRefs(refs []model.Ref) (map[model.RefID]model.OID, map[model.OID][]model.RefID) {

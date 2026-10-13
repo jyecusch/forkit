@@ -183,3 +183,40 @@ func TestReadStatusAndCommitDetail(t *testing.T) {
 		t.Errorf("summary = %+v, want %+v", summary, want)
 	}
 }
+
+func TestStashDetailIncludesUntrackedFilesAndHidesItsOwnCommits(t *testing.T) {
+	ctx := context.Background()
+	git, fixture, loc := setup(t)
+	fixture.WriteFile("tracked.txt", "one\n")
+	fixture.Git("add", ".")
+	fixture.Git("commit", "-qm", "add tracked")
+	base := fixture.Git("rev-parse", "HEAD")
+	fixture.WriteFile("tracked.txt", "two\n")
+	fixture.WriteFile("untracked.txt", "new\n")
+	fixture.Git("stash", "push", "-q", "--include-untracked")
+	stash := model.OID(fixture.Git("rev-parse", "stash@{0}"))
+
+	detail, err := repo.ReadStashDetail(ctx, git, loc, stash)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(detail.Parents) != 1 || string(detail.Parents[0]) != base {
+		t.Errorf("parents = %v, want only %s", detail.Parents, base)
+	}
+	files := map[string]model.FileChange{}
+	for _, file := range detail.Files {
+		files[file.Path] = file
+	}
+	if tracked := files["tracked.txt"]; tracked.Status != model.FileChangeStatusModified || tracked.DiffOID != "" {
+		t.Errorf("tracked.txt = %+v", tracked)
+	}
+	untracked := files["untracked.txt"]
+	if untracked.Status != model.FileChangeStatusAdded || untracked.DiffOID == "" || len(files) != 2 {
+		t.Fatalf("files = %+v", detail.Files)
+	}
+
+	diff, err := repo.ReadDiff(ctx, git, loc, loc.WorkDir, model.DiffRequest{Kind: model.DiffKindCommit, OID: untracked.DiffOID, Path: "untracked.txt"})
+	if err != nil || len(diff.Hunks) != 1 || diff.Hunks[0].Lines[0].Text != "new" {
+		t.Errorf("untracked file's diff = %+v, %v", diff, err)
+	}
+}

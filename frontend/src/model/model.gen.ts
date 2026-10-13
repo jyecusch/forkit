@@ -124,7 +124,7 @@ export const FileStatus = Schema.Struct({
 })
 export type FileStatus = typeof FileStatus.Type
 
-export const OperationKind = Schema.Literals(["checkout", "createWorktree", "removeWorktree", "deleteBranches", "fetch", "pull", "push"])
+export const OperationKind = Schema.Literals(["checkout", "createWorktree", "removeWorktree", "deleteBranches", "fetch", "pull", "push", "stash", "applyStash", "dropStash"])
 export type OperationKind = typeof OperationKind.Type
 
 export const OperationState = Schema.Literals(["queued", "running", "done", "failed", "cancelled"])
@@ -169,6 +169,11 @@ export const CheckoutResult = Schema.Struct({
 })
 export type CheckoutResult = typeof CheckoutResult.Type
 
+export const ApplyStashResult = Schema.Struct({
+  conflicted: Schema.Boolean,
+})
+export type ApplyStashResult = typeof ApplyStashResult.Type
+
 /** Which of the light and dark themes is used; system follows the operating system. */
 export const Appearance = Schema.Literals(["system", "light", "dark"])
 export type Appearance = typeof Appearance.Type
@@ -205,6 +210,7 @@ export const GraphPreferences = Schema.Struct({
   order: GraphOrder,
   showRemoteBranches: Schema.Boolean,
   showTags: Schema.Boolean,
+  showStashes: Schema.Boolean,
 })
 export type GraphPreferences = typeof GraphPreferences.Type
 
@@ -295,6 +301,7 @@ export const GraphEdge = Schema.Struct({
   threadId: Schema.Int,
   kind: EdgeKind,
   uncommitted: Schema.optionalKey(Schema.Boolean),
+  stash: Schema.optionalKey(Schema.Boolean),
 })
 export type GraphEdge = typeof GraphEdge.Type
 
@@ -306,6 +313,7 @@ export const GraphRow = Schema.Struct({
   edges: Schema.Array(GraphEdge).pipe(Schema.withDecodingDefaultKey(Effect.succeed([]))),
   refIds: Schema.Array(RefId).pipe(Schema.withDecodingDefaultKey(Effect.succeed([]))),
   onEmphasized: Schema.Boolean,
+  stash: Schema.optionalKey(Schema.Boolean),
 })
 export type GraphRow = typeof GraphRow.Type
 
@@ -313,6 +321,7 @@ export const GraphView = Schema.Struct({
   id: RepoId,
   version: Schema.Int,
   totalRows: Schema.Int,
+  stashRows: Schema.Int,
   laneCount: Schema.Int,
   complete: Schema.Boolean,
   firstChangedRow: Schema.Int,
@@ -338,6 +347,7 @@ export const FileChange = Schema.Struct({
   additions: Schema.Int,
   deletions: Schema.Int,
   binary: Schema.Boolean,
+  diffOid: Schema.optionalKey(Oid),
 })
 export type FileChange = typeof FileChange.Type
 
