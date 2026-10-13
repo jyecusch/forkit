@@ -11,6 +11,7 @@ import {
   Worktree,
   type CheckoutMode,
   type DiffRequest,
+  type LayoutSize,
   type RefId,
   type RepoId,
   type WorktreeId,
@@ -46,6 +47,9 @@ export class Rpc extends Context.Service<
     readonly reorderRepos: (ids: ReadonlyArray<RepoId>) => Effect.Effect<void, RpcFailure>
     readonly setActiveWorktree: (repo: RepoId, worktree: WorktreeId) => Effect.Effect<void, RpcFailure>
     readonly setEmphasizedRef: (repo: RepoId, ref: RefId) => Effect.Effect<void, RpcFailure>
+    /** Remembers a panel or column's size; resetting lets it be chosen automatically again. */
+    readonly setLayoutSize: (name: LayoutSize, size: number) => Effect.Effect<void, RpcFailure>
+    readonly resetLayoutSize: (name: LayoutSize) => Effect.Effect<void, RpcFailure>
     readonly checkout: (worktree: WorktreeId, ref: RefId, mode: CheckoutMode) => Effect.Effect<CheckoutResult, RpcFailure>
     /** An empty newBranch checks out base itself; an empty path lets the backend choose. */
     readonly createWorktree: (repo: RepoId, base: RefId, newBranch: string, path: string) => Effect.Effect<Worktree, RpcFailure>
@@ -100,6 +104,10 @@ export class Rpc extends Context.Service<
       invoke("Session.ReorderRepos", Schema.Void, (meta) => Session.ReorderRepos(meta, [...ids])),
     setActiveWorktree: (repo, worktree) =>
       invoke("Session.SetActiveWorktree", Schema.Void, (meta) => Session.SetActiveWorktree(meta, repo, worktree)),
+    setLayoutSize: (name, size) =>
+      invoke("Session.SetLayoutSize", Schema.Void, (meta) => Session.SetLayoutSize(meta, name, size), { "layout.name": name }),
+    resetLayoutSize: (name) =>
+      invoke("Session.ResetLayoutSize", Schema.Void, (meta) => Session.ResetLayoutSize(meta, name), { "layout.name": name }),
     setEmphasizedRef: (repo, ref) =>
       invoke("Session.SetEmphasizedRef", Schema.Void, (meta) => Session.SetEmphasizedRef(meta, repo, ref)),
     checkout: (worktree, ref, mode) =>

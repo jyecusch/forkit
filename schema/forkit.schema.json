@@ -260,8 +260,17 @@
       "properties": {
         "id": { "type": "string" },
         "openRepos": { "type": "array", "items": { "$ref": "#/$defs/OpenRepo" } },
-        "activeRepoId": { "$ref": "#/$defs/RepoId" }
+        "activeRepoId": { "$ref": "#/$defs/RepoId" },
+        "layout": {
+          "type": "object",
+          "additionalProperties": { "type": "number" },
+          "description": "Sizes the user has given panels and columns, by LayoutSize. Widths are in pixels and splits are the first part's fraction; a missing size is chosen automatically."
+        }
       }
+    },
+    "LayoutSize": {
+      "enum": ["sidebar", "details", "staged", "diffSplit", "refsColumn", "graphColumn", "authorColumn", "dateColumn", "commitColumn"],
+      "description": "A panel or column the user can resize."
     },
 
     "Commit": {

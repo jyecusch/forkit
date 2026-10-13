@@ -357,7 +357,24 @@ type Session struct {
 	ID           string     `json:"id"`
 	OpenRepos    []OpenRepo `json:"openRepos,omitempty"`
 	ActiveRepoID RepoID     `json:"activeRepoId,omitempty"`
+	// Sizes the user has given panels and columns, by LayoutSize. Widths are in pixels and splits are the first part's fraction; a missing size is chosen automatically.
+	Layout map[string]float64 `json:"layout,omitempty"`
 }
+
+// A panel or column the user can resize.
+type LayoutSize string
+
+const (
+	LayoutSizeSidebar      LayoutSize = "sidebar"
+	LayoutSizeDetails      LayoutSize = "details"
+	LayoutSizeStaged       LayoutSize = "staged"
+	LayoutSizeDiffSplit    LayoutSize = "diffSplit"
+	LayoutSizeRefsColumn   LayoutSize = "refsColumn"
+	LayoutSizeGraphColumn  LayoutSize = "graphColumn"
+	LayoutSizeAuthorColumn LayoutSize = "authorColumn"
+	LayoutSizeDateColumn   LayoutSize = "dateColumn"
+	LayoutSizeCommitColumn LayoutSize = "commitColumn"
+)
 
 type Commit struct {
 	OID           OID        `json:"oid"`

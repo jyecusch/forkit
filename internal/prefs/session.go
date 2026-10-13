@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"log/slog"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -68,5 +69,6 @@ func (s *SessionStore) Update(ctx context.Context, change func(*model.Session)) 
 
 func cloneSession(session model.Session) model.Session {
 	session.OpenRepos = slices.Clone(session.OpenRepos)
+	session.Layout = maps.Clone(session.Layout)
 	return session
 }

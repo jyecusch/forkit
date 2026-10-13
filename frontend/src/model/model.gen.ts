@@ -265,8 +265,13 @@ export const Session = Schema.Struct({
   id: Schema.String,
   openRepos: Schema.Array(OpenRepo).pipe(Schema.withDecodingDefaultKey(Effect.succeed([]))),
   activeRepoId: Schema.optionalKey(RepoId),
+  layout: Schema.optionalKey(Schema.Record(Schema.String, Schema.Finite)),
 })
 export type Session = typeof Session.Type
+
+/** A panel or column the user can resize. */
+export const LayoutSize = Schema.Literals(["sidebar", "details", "staged", "diffSplit", "refsColumn", "graphColumn", "authorColumn", "dateColumn", "commitColumn"])
+export type LayoutSize = typeof LayoutSize.Type
 
 export const Commit = Schema.Struct({
   oid: Oid,

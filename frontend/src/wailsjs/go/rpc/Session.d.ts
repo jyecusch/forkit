@@ -4,8 +4,12 @@ import {model} from '../models';
 
 export function ReorderRepos(arg1:model.CallMeta,arg2:Array<model.RepoID>):Promise<void>;
 
+export function ResetLayoutSize(arg1:model.CallMeta,arg2:model.LayoutSize):Promise<void>;
+
 export function SetActiveRepo(arg1:model.CallMeta,arg2:model.RepoID):Promise<void>;
 
 export function SetActiveWorktree(arg1:model.CallMeta,arg2:model.RepoID,arg3:model.WorktreeID):Promise<void>;
 
 export function SetEmphasizedRef(arg1:model.CallMeta,arg2:model.RepoID,arg3:model.RefID):Promise<void>;
+
+export function SetLayoutSize(arg1:model.CallMeta,arg2:model.LayoutSize,arg3:number):Promise<void>;

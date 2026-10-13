@@ -1,8 +1,9 @@
 import { useLiveQuery } from "@tanstack/react-db"
 import { Effect } from "effect"
 import { Check, Copy, Minus, Plus } from "lucide-react"
-import { useEffect, useState, type ReactNode } from "react"
+import { useEffect, useRef, useState, type ReactNode } from "react"
 import { useForkedEffect, useRun } from "@/app/hooks"
+import { useLayoutSize } from "@/app/layoutSizes"
 import { useNow } from "@/app/useNow"
 import { fileStatusesCollection } from "@/data/collections"
 import { formatDate, formatFullDate, initials, reflow, shortOid } from "@/lib/format"
@@ -12,6 +13,7 @@ import type { LoadedRow } from "@/services/GraphData"
 import { Rpc } from "@/services/Rpc"
 import { CommitComposer } from "./CommitComposer"
 import { sameDiff, type DiffTarget } from "./DiffView"
+import { ResizeHandle } from "./ResizeHandle"
 
 interface DetailsPanelProps {
   readonly repo: RepoId
@@ -26,17 +28,35 @@ interface DetailsPanelProps {
 }
 
 /** Whatever is selected in the graph: a commit's details, or the active worktree's uncommitted changes. */
-export const DetailsPanel = ({ repo, selected, worktree, showChanges, preferences, openDiff, onOpenDiff }: DetailsPanelProps) => (
-  <aside aria-label="Details" className="flex w-[clamp(260px,26vw,340px)] flex-none flex-col border-l">
-    <div className="min-h-0 flex-1 overflow-y-auto select-text" onKeyDown={moveBetweenFiles}>
-      {showChanges && worktree ? (
-        <ChangesTab worktree={worktree} openDiff={openDiff} onOpenDiff={onOpenDiff} />
-      ) : (
-        <CommitTab repo={repo} selected={selected} preferences={preferences} openDiff={openDiff} onOpenDiff={onOpenDiff} />
-      )}
-    </div>
-  </aside>
-)
+export const DetailsPanel = ({ repo, selected, worktree, showChanges, preferences, openDiff, onOpenDiff }: DetailsPanelProps) => {
+  const ref = useRef<HTMLElement>(null)
+  const width = useLayoutSize("details")
+  return (
+    <aside
+      ref={ref}
+      aria-label="Details"
+      className="relative flex w-[clamp(260px,26vw,340px)] flex-none flex-col border-l"
+      style={width.size === undefined ? undefined : { width: width.size }}
+    >
+      <ResizeHandle
+        label="Resize details"
+        orientation="vertical"
+        grows={-1}
+        measure={() => ref.current?.offsetWidth ?? 0}
+        limits={() => [240, 720]}
+        control={width}
+        className="absolute inset-y-0 -left-1"
+      />
+      <div className="min-h-0 flex-1 overflow-y-auto select-text" onKeyDown={moveBetweenFiles}>
+        {showChanges && worktree ? (
+          <ChangesTab worktree={worktree} openDiff={openDiff} onOpenDiff={onOpenDiff} />
+        ) : (
+          <CommitTab repo={repo} selected={selected} preferences={preferences} openDiff={openDiff} onOpenDiff={onOpenDiff} />
+        )}
+      </div>
+    </aside>
+  )
+}
 
 const Empty = ({ children }: { children: string }) => (
   <p className="flex h-full items-center justify-center p-6 text-center text-subtle-foreground">{children}</p>
@@ -176,6 +196,10 @@ const groups: ReadonlyArray<Group> = [
 
 const ChangesTab = ({ worktree, openDiff, onOpenDiff }: { worktree: WorktreeId } & FileListProps) => {
   const run = useRun()
+  const filesRef = useRef<HTMLDivElement>(null)
+  const stagedRef = useRef<HTMLDivElement>(null)
+  // The staged section's share of the file lists' height.
+  const stagedShare = useLayoutSize("staged")
   const { data: files } = useLiveQuery({ query: (q) => q.from({ file: fileStatusesCollection(worktree) }) })
   const sections = groups.flatMap((group) => {
     const entries = files
@@ -254,7 +278,7 @@ const ChangesTab = ({ worktree, openDiff, onOpenDiff }: { worktree: WorktreeId }
           <Empty>No uncommitted changes</Empty>
         </div>
       ) : (
-        <>
+        <div ref={filesRef} className="flex min-h-0 flex-1 flex-col">
           <div className="min-h-0 flex-1 overflow-y-auto pb-2">
             {unstaged.length > 0 ? (
               unstaged.map(({ group, entries }) => renderSection(group, entries))
@@ -262,11 +286,25 @@ const ChangesTab = ({ worktree, openDiff, onOpenDiff }: { worktree: WorktreeId }
               <p className="px-4 pt-3 text-xs text-subtle-foreground">Everything is staged.</p>
             )}
           </div>
-          <div className="flex max-h-[40%] min-h-24 flex-none flex-col overflow-y-auto border-t pb-2">
+          <ResizeHandle
+            label="Resize staged files"
+            orientation="horizontal"
+            grows={-1}
+            measure={() => stagedRef.current?.offsetHeight ?? 0}
+            limits={() => [96, Math.max((filesRef.current?.offsetHeight ?? 0) - 96, 96)]}
+            toSize={(px) => px / (filesRef.current?.offsetHeight || 1)}
+            control={stagedShare}
+            className="relative -my-1 flex-none"
+          />
+          <div
+            ref={stagedRef}
+            className={cn("flex min-h-24 flex-none flex-col overflow-y-auto border-t pb-2", stagedShare.size === undefined && "max-h-[40%]")}
+            style={stagedShare.size === undefined ? undefined : { height: `${stagedShare.size * 100}%` }}
+          >
             {renderSection(stagedGroup, stagedEntries)}
             {stagedEntries.length === 0 && <p className="px-4 text-xs text-subtle-foreground">Stage files to commit them.</p>}
           </div>
-        </>
+        </div>
       )}
       <CommitComposer worktree={worktree} staged={staged} />
     </div>

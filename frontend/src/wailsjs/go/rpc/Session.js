@@ -6,6 +6,10 @@ export function ReorderRepos(arg1, arg2) {
   return window['go']['rpc']['Session']['ReorderRepos'](arg1, arg2);
 }
 
+export function ResetLayoutSize(arg1, arg2) {
+  return window['go']['rpc']['Session']['ResetLayoutSize'](arg1, arg2);
+}
+
 export function SetActiveRepo(arg1, arg2) {
   return window['go']['rpc']['Session']['SetActiveRepo'](arg1, arg2);
 }
@@ -16,4 +20,8 @@ export function SetActiveWorktree(arg1, arg2, arg3) {
 
 export function SetEmphasizedRef(arg1, arg2, arg3) {
   return window['go']['rpc']['Session']['SetEmphasizedRef'](arg1, arg2, arg3);
+}
+
+export function SetLayoutSize(arg1, arg2, arg3) {
+  return window['go']['rpc']['Session']['SetLayoutSize'](arg1, arg2, arg3);
 }

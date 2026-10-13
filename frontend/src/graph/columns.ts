@@ -19,6 +19,15 @@ const graphShare = 0.25
 /** Lanes the graph keeps before optional columns are dropped for it. */
 const comfortableLanes = 3
 
+/** Widths the user has given columns; any left out are chosen automatically. */
+export interface ColumnSizes {
+  readonly refs?: number | undefined
+  readonly graph?: number | undefined
+  readonly author?: number | undefined
+  readonly date?: number | undefined
+  readonly commit?: number | undefined
+}
+
 export interface Columns {
   /** Width of the branch and tag column, left of the graph. */
   readonly refs: number
@@ -31,6 +40,9 @@ export interface Columns {
   readonly showAuthor: boolean
   readonly showDate: boolean
   readonly showCommit: boolean
+  readonly author: number
+  readonly date: number
+  readonly commit: number
   /** CSS grid-template-columns for the header and every row. */
   readonly template: string
 }
@@ -43,10 +55,13 @@ const graphWidthFor = (widestLane: number) => gutter * 2 + Math.max(widestLane, 
  * tag labels come first, then the graph. The description always keeps at
  * least minDescription, and the graph a few lanes; author, then commit, then
  * date make way for them on narrow panes. The graph then takes what its
- * lanes need, up to a quarter of the pane.
+ * lanes need, up to a quarter of the pane, unless the user has sized it.
  */
-export const layoutColumns = (paneWidth: number, lanes: number): Columns => {
-  const refs = Math.round(Math.min(Math.max(paneWidth * refsShare, minRefs), maxRefs))
+export const layoutColumns = (paneWidth: number, lanes: number, sizes: ColumnSizes = {}): Columns => {
+  const refs = sizes.refs ?? Math.round(Math.min(Math.max(paneWidth * refsShare, minRefs), maxRefs))
+  const author = sizes.author ?? authorWidth
+  const date = sizes.date ?? dateWidth
+  const commit = sizes.commit ?? commitWidth
   const graphNeeds = graphWidthFor(lanes - 1)
   const minGraph = Math.min(graphNeeds, graphWidthFor(comfortableLanes - 1))
   const choices = [
@@ -57,12 +72,14 @@ export const layoutColumns = (paneWidth: number, lanes: number): Columns => {
   ]
   type Choice = (typeof choices)[number]
   const optional = (c: Choice) =>
-    [c.showAuthor && authorWidth, c.showDate && dateWidth, c.showCommit && commitWidth].filter((w): w is number => typeof w === "number")
+    [c.showAuthor && author, c.showDate && date, c.showCommit && commit].filter((w): w is number => typeof w === "number")
   const fixedWidth = (c: Choice) => listInset * 2 + refs + gap + optional(c).reduce((sum, w) => sum + w + gap, gap)
   const choice = choices.find((c) => paneWidth - fixedWidth(c) >= minDescription + minGraph) ?? choices[choices.length - 1]!
   const budget = Math.min(Math.max(maxGraph, Math.round(paneWidth * graphShare)), paneWidth - fixedWidth(choice) - minDescription)
   // A graph narrower than it needs ends on a whole lane.
-  const graph = Math.max(graphWidthFor(1), graphNeeds <= budget ? graphNeeds : graphWidthFor(Math.floor((budget - gutter * 2) / laneWidth)))
+  const automatic = graphNeeds <= budget ? graphNeeds : graphWidthFor(Math.floor((budget - gutter * 2) / laneWidth))
+  const room = paneWidth - fixedWidth(choice) - minDescription
+  const graph = Math.max(graphWidthFor(1), sizes.graph === undefined ? automatic : Math.min(sizes.graph, room))
   const template = [`${refs}px`, `${graph}px`, "minmax(0,1fr)", ...optional(choice).map((w) => `${w}px`)].join(" ")
-  return { refs, graphLeft: listInset + refs + gap, graph, graphNeeds, ...choice, template }
+  return { refs, graphLeft: listInset + refs + gap, graph, graphNeeds, ...choice, author, date, commit, template }
 }

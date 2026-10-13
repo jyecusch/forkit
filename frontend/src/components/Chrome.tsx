@@ -1,7 +1,9 @@
 import { createContext, use, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react"
 import { createPortal } from "react-dom"
+import { useLayoutSize } from "@/app/layoutSizes"
 import { dragRegion, isMac, isWindows } from "@/lib/platform"
 import { cn } from "@/lib/utils"
+import { ResizeHandle } from "./ResizeHandle"
 
 interface ChromeProps {
   /** The tab strip along the top edge, beside the window controls. */
@@ -38,18 +40,34 @@ const Hosts = createContext<{ readonly sidebar: HTMLElement | null; readonly pan
 export const Chrome = ({ tabs, sidebar, children }: ChromeProps) => {
   const [sidebarHost, setSidebarHost] = useState<HTMLElement | null>(null)
   const [panelHost, setPanelHost] = useState<HTMLElement | null>(null)
+  const sidebarRef = useRef<HTMLDivElement>(null)
+  const sidebarWidth = useLayoutSize("sidebar")
   return (
     <div
-      className="grid min-h-0 flex-1 grid-cols-[clamp(208px,20vw,264px)_minmax(0,1fr)] grid-rows-[40px_minmax(0,1fr)] bg-sidebar"
-      style={{ "--panel-radius": `${panelRadius}px` } as CSSProperties}
+      className="grid min-h-0 flex-1 grid-rows-[40px_minmax(0,1fr)] bg-sidebar"
+      style={
+        {
+          "--panel-radius": `${panelRadius}px`,
+          gridTemplateColumns: `${sidebarWidth.size === undefined ? "clamp(208px,20vw,264px)" : `${sidebarWidth.size}px`} minmax(0,1fr)`,
+        } as CSSProperties
+      }
     >
       <div className="col-start-1 row-start-1" style={dragRegion} />
       <div className="col-start-2 row-start-1 flex items-end pl-[calc(var(--panel-radius)+18px)]" style={{ ...dragRegion, paddingRight: inset }}>
         {tabs}
       </div>
-      <div className="relative col-start-1 row-start-2 flex min-h-0 flex-col">
+      <div ref={sidebarRef} className="relative col-start-1 row-start-2 flex min-h-0 flex-col">
         {sidebar}
         <div ref={setSidebarHost} className="contents" />
+        <ResizeHandle
+          label="Resize sidebar"
+          orientation="vertical"
+          grows={1}
+          measure={() => sidebarRef.current?.offsetWidth ?? 0}
+          limits={() => [180, 480]}
+          control={sidebarWidth}
+          className="absolute inset-y-0 -right-1"
+        />
       </div>
       <div className="col-start-2 row-start-2 flex min-h-0 min-w-0 flex-col" style={{ paddingRight: inset, paddingBottom: inset }}>
         <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-[var(--panel-radius)] border bg-background">

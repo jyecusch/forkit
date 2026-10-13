@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"regexp"
 	"slices"
 
@@ -202,6 +203,38 @@ func (x *Session) ReorderRepos(meta model.CallMeta, ids []model.RepoID) error {
 		})
 	})
 }
+
+// SetLayoutSize remembers the size the user gave a panel or column.
+func (x *Session) SetLayoutSize(meta model.CallMeta, name model.LayoutSize, size float64) error {
+	return callNoResult(x.s, meta, "Session.SetLayoutSize", func(ctx context.Context) error {
+		if !slices.Contains(layoutSizes, name) || !(size > 0 && size <= maxLayoutSize) {
+			return apperr.New(model.ErrorCodeInvalidArgument, fmt.Sprintf("%v is not a size for %q", size, name))
+		}
+		return x.s.deps.Session.Update(ctx, func(s *model.Session) {
+			if s.Layout == nil {
+				s.Layout = map[string]float64{}
+			}
+			s.Layout[string(name)] = size
+		})
+	}, attribute.String("layout.name", string(name)))
+}
+
+// ResetLayoutSize forgets a panel or column's size, so it is chosen
+// automatically again.
+func (x *Session) ResetLayoutSize(meta model.CallMeta, name model.LayoutSize) error {
+	return callNoResult(x.s, meta, "Session.ResetLayoutSize", func(ctx context.Context) error {
+		return x.s.deps.Session.Update(ctx, func(s *model.Session) { delete(s.Layout, string(name)) })
+	}, attribute.String("layout.name", string(name)))
+}
+
+var layoutSizes = []model.LayoutSize{
+	model.LayoutSizeSidebar, model.LayoutSizeDetails, model.LayoutSizeStaged, model.LayoutSizeDiffSplit,
+	model.LayoutSizeRefsColumn, model.LayoutSizeGraphColumn, model.LayoutSizeAuthorColumn, model.LayoutSizeDateColumn, model.LayoutSizeCommitColumn,
+}
+
+// maxLayoutSize bounds a remembered size, so a hand-edited file cannot make
+// a panel wider than any screen.
+const maxLayoutSize = 4000
 
 func position(ids []model.RepoID, id model.RepoID) int {
 	if i := slices.Index(ids, id); i >= 0 {
