@@ -12,7 +12,7 @@
     "@codemirror/lang-sql": "^6.10.0",
     "@codemirror/language": "^6.13.1",
     "@codemirror/legacy-modes": "^6.5.5",
-    "@fontsource/ibm-plex-sans": "^5.3.0",
+    "@fontsource-variable/ibm-plex-sans": "^5.3.0",
     "@fontsource/jetbrains-mono": "^5.3.0",
     "@lezer/common": "^1.5.3",
     "@lezer/cpp": "^1.1.6",
