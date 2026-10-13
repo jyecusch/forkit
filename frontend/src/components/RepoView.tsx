@@ -163,6 +163,14 @@ export const RepoView = ({ repo, openRepo, preferences, active }: RepoViewProps)
     selectWorktree,
   })
 
+  // A branch checked out in another worktree is opened there instead, and
+  // one checked out here already is left alone.
+  const openRef = (ref: Ref) => {
+    const holder = ref.checkedOutInWorktreeId ? worktreesById.get(ref.checkedOutInWorktreeId) : undefined
+    if (!holder) checkout(ref, activeWorktree)
+    else if (holder.id !== activeWorktree?.id) selectWorktree(holder)
+  }
+
   const removeWorktree = (worktree: Worktree) => {
     const dirty = changeCount(worktree) > 0
     setPrompt({
@@ -196,7 +204,7 @@ export const RepoView = ({ repo, openRepo, preferences, active }: RepoViewProps)
         branchThreads={view?.branchThreads}
         reveal={reveal}
         onEmphasize={emphasize}
-        onCheckout={(ref) => checkout(ref, activeWorktree)}
+        onOpen={openRef}
         onNewWorktree={(base) => setNewWorktreeBase(base ?? headBranch ?? refs.find((ref) => ref.kind === "localBranch"))}
         onSelectWorktree={selectWorktree}
         onRemoveWorktree={removeWorktree}
@@ -251,6 +259,7 @@ export const RepoView = ({ repo, openRepo, preferences, active }: RepoViewProps)
                 selected={selected}
                 activeHead={activeWorktree?.head.oid}
                 onSelect={selectCommit}
+                onOpenRef={openRef}
                 changes={changes}
                 headRow={headRow}
                 changesSelected={changesSelected}

@@ -22,6 +22,7 @@ interface RefBadgeProps {
   readonly selected: boolean
   /** The row's leading badge, which keeps its full name while others shrink. */
   readonly primary: boolean
+  readonly onDoubleClick?: (() => void) | undefined
 }
 
 /**
@@ -32,7 +33,7 @@ interface RefBadgeProps {
  * branches an outline in the theme's remote colour and tags a tag in its tag
  * colour.
  */
-export const RefBadge = ({ badge, worktree, thread, dim, selected, primary }: RefBadgeProps) => {
+export const RefBadge = ({ badge, worktree, thread, dim, selected, primary, onDoubleClick }: RefBadgeProps) => {
   const { ref, isHead, isEmphasized, inSync, sameOnOtherRemotes } = badge
   // Same-named branches on several remotes read as one, with a count.
   const merged = ref.kind === "remoteBranch" && sameOnOtherRemotes.length > 0
@@ -64,6 +65,7 @@ export const RefBadge = ({ badge, worktree, thread, dim, selected, primary }: Re
         tone,
       )}
       style={{ "--line": laneColor(thread) } as React.CSSProperties}
+      onDoubleClick={onDoubleClick}
     >
       {worktree ? (
         <WorktreeIcon worktree={worktree} className="size-3 flex-none" />

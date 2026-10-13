@@ -36,7 +36,8 @@ interface RepoNavProps {
   /** Refs whose folders stay open, such as the checked-out branch. */
   readonly reveal: ReadonlyArray<RefId>
   readonly onEmphasize: (ref: Ref) => void
-  readonly onCheckout: (ref: Ref) => void
+  /** Checks a ref out, or switches to the worktree that has it. */
+  readonly onOpen: (ref: Ref) => void
   readonly onNewWorktree: (base: Ref | undefined) => void
   readonly onSelectWorktree: (worktree: Worktree) => void
   readonly onRemoveWorktree: (worktree: Worktree) => void
@@ -214,8 +215,7 @@ export const RepoNav = (props: RepoNavProps) => {
       case "ref": {
         const current = row.ref.checkedOutInWorktreeId === activeWorktree && activeWorktree !== undefined
         const elsewhere = current ? undefined : worktrees.find((wt) => wt.id === row.ref.checkedOutInWorktreeId)
-        // A branch checked out in another worktree is opened there instead.
-        const open = () => (elsewhere ? props.onSelectWorktree(elsewhere) : props.onCheckout(row.ref))
+        const open = () => props.onOpen(row.ref)
         const item = (
           <NavButton
             {...treeItem(row, row.depth + 2)}
