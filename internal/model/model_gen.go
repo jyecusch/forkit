@@ -161,6 +161,7 @@ const (
 	OperationKindCheckout       OperationKind = "checkout"
 	OperationKindCreateWorktree OperationKind = "createWorktree"
 	OperationKindRemoveWorktree OperationKind = "removeWorktree"
+	OperationKindDeleteBranches OperationKind = "deleteBranches"
 	OperationKindFetch          OperationKind = "fetch"
 	OperationKindPull           OperationKind = "pull"
 	OperationKindPush           OperationKind = "push"

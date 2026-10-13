@@ -124,7 +124,7 @@ export const FileStatus = Schema.Struct({
 })
 export type FileStatus = typeof FileStatus.Type
 
-export const OperationKind = Schema.Literals(["checkout", "createWorktree", "removeWorktree", "fetch", "pull", "push"])
+export const OperationKind = Schema.Literals(["checkout", "createWorktree", "removeWorktree", "deleteBranches", "fetch", "pull", "push"])
 export type OperationKind = typeof OperationKind.Type
 
 export const OperationState = Schema.Literals(["queued", "running", "done", "failed", "cancelled"])

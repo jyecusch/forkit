@@ -117,7 +117,7 @@
       }
     },
 
-    "OperationKind": { "enum": ["checkout", "createWorktree", "removeWorktree", "fetch", "pull", "push"] },
+    "OperationKind": { "enum": ["checkout", "createWorktree", "removeWorktree", "deleteBranches", "fetch", "pull", "push"] },
     "OperationState": { "enum": ["queued", "running", "done", "failed", "cancelled"] },
     "OperationProgress": {
       "type": "object",

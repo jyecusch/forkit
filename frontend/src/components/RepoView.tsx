@@ -3,6 +3,7 @@ import { Effect, Option } from "effect"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { toggleDetails, useDetailsShown } from "@/app/detailsShown"
 import { useForkedEffect, useRun } from "@/app/hooks"
+import { notify } from "@/app/notifications"
 import {
   graphViewsCollection,
   operationsCollection,
@@ -23,6 +24,7 @@ import { ChromeLayer } from "./Chrome"
 import { SidebarFooter } from "./SidebarFooter"
 import { NewWorktreeDialog } from "./NewWorktreeDialog"
 import { Prompt, type PromptSpec } from "./Prompt"
+import type { RefActions } from "./RefMenu"
 import { RemoteActions } from "./RemoteActions"
 import { useCheckout } from "./useCheckout"
 import { ViewHeader } from "./ViewHeader"
@@ -188,6 +190,36 @@ export const RepoView = ({ repo, openRepo, preferences, active }: RepoViewProps)
     })
   }
 
+  const deleteBranches = (branches: ReadonlyArray<Ref>) => {
+    const names = branches.map((ref) => ref.shortName)
+    const anyLocal = branches.some((ref) => ref.kind === "localBranch")
+    const anyRemote = branches.some((ref) => ref.kind === "remoteBranch")
+    setPrompt({
+      title: branches.length === 1 ? `Delete ${names[0]}?` : `Delete ${branches.length} branches?`,
+      message: [
+        branches.length > 1 && `${names.join(", ")} will be deleted.`,
+        anyLocal && "Commits that are on no other branch will be lost.",
+        anyRemote && "Remote branches are deleted for everyone who uses the remote.",
+      ]
+        .filter(Boolean)
+        .join(" "),
+      actions: [
+        {
+          label: "Delete",
+          tone: "destructive",
+          run: () =>
+            void run(
+              Commands.use((commands) => commands.deleteBranches(id, branches.map((ref) => ref.id))).pipe(
+                Effect.tap(() => Effect.sync(() => notify({ tone: "info", message: `Deleted ${names.join(", ")}` }))),
+              ),
+            ),
+        },
+      ],
+    })
+  }
+
+  const refActions: RefActions = { open: openRef, newWorktree: setNewWorktreeBase, emphasize, deleteBranches }
+
   const headBranch = headRef ? refsById.get(headRef) : undefined
   const emphasizedOther = emphasized && emphasized !== headRef ? refsById.get(emphasized) : undefined
   const reveal = useMemo(() => [headRef, emphasized].filter((ref): ref is NonNullable<typeof ref> => ref !== undefined), [headRef, emphasized])
@@ -203,8 +235,7 @@ export const RepoView = ({ repo, openRepo, preferences, active }: RepoViewProps)
         emphasized={emphasized}
         branchThreads={view?.branchThreads}
         reveal={reveal}
-        onEmphasize={emphasize}
-        onOpen={openRef}
+        refActions={refActions}
         onNewWorktree={(base) => setNewWorktreeBase(base ?? headBranch ?? refs.find((ref) => ref.kind === "localBranch"))}
         onSelectWorktree={selectWorktree}
         onRemoveWorktree={removeWorktree}
@@ -259,7 +290,7 @@ export const RepoView = ({ repo, openRepo, preferences, active }: RepoViewProps)
                 selected={selected}
                 activeHead={activeWorktree?.head.oid}
                 onSelect={selectCommit}
-                onOpenRef={openRef}
+                refActions={refActions}
                 changes={changes}
                 headRow={headRow}
                 changesSelected={changesSelected}
@@ -306,6 +337,7 @@ const operationLabels: Record<OperationKind, string> = {
   checkout: "Checking out",
   createWorktree: "Creating worktree",
   removeWorktree: "Removing worktree",
+  deleteBranches: "Deleting branches",
   fetch: "Fetching",
   pull: "Pulling",
   push: "Pushing",
