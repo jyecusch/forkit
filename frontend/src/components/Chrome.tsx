@@ -66,6 +66,7 @@ export const Chrome = ({ tabs, sidebar, children }: ChromeProps) => {
           measure={() => sidebarRef.current?.offsetWidth ?? 0}
           limits={() => [180, 480]}
           control={sidebarWidth}
+          pointerLine={false}
           className="absolute inset-y-0 -right-1"
         />
       </div>

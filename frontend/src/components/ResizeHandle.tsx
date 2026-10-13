@@ -15,6 +15,8 @@ interface ResizeHandleProps {
   /** Converts between the pixels dragged and the size remembered, such as a fraction of a container. */
   readonly toSize?: (pixels: number) => number
   readonly control: LayoutSizeControl
+  /** Whether a line shows while the pointer is over or dragging the handle; off beside a rounded edge, where a straight line looks wrong. */
+  readonly pointerLine?: boolean
   readonly className?: string
 }
 
@@ -25,7 +27,7 @@ const bigKeyStep = 48
  * A separator that resizes a panel or column by dragging or with the arrow
  * keys. Double-clicking it lets the size be chosen automatically again.
  */
-export const ResizeHandle = ({ label, orientation, grows, measure, limits, toSize = (px) => px, control, className }: ResizeHandleProps) => {
+export const ResizeHandle = ({ label, orientation, grows, measure, limits, toSize = (px) => px, control, pointerLine = true, className }: ResizeHandleProps) => {
   const drag = useRef<{ start: number; from: number; last: number; min: number; max: number }>(undefined)
   const vertical = orientation === "vertical"
   const clamp = (px: number, [min, max]: readonly [number, number]) => Math.round(Math.min(Math.max(px, min), max))
@@ -75,7 +77,8 @@ export const ResizeHandle = ({ label, orientation, grows, measure, limits, toSiz
     >
       <span
         className={cn(
-          "rounded-full bg-ring opacity-0 transition-opacity group-hover/resize:opacity-60 group-focus-visible/resize:opacity-100 group-active/resize:opacity-100",
+          "rounded-full bg-ring opacity-0 transition-opacity group-focus-visible/resize:opacity-100",
+          pointerLine && "group-hover/resize:opacity-60 group-active/resize:opacity-100",
           vertical ? "h-full w-0.5" : "h-0.5 w-full",
         )}
       />
