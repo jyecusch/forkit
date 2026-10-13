@@ -108,6 +108,8 @@ type Ref struct {
 	Ahead                  *int       `json:"ahead,omitempty"`
 	Behind                 *int       `json:"behind,omitempty"`
 	CheckedOutInWorktreeID WorktreeID `json:"checkedOutInWorktreeId,omitempty"`
+	// When an annotated tag was made, or for any other ref, when the commit it points at was committed.
+	Date *UnixMillis `json:"date,omitempty"`
 }
 
 type FetchState string
@@ -338,6 +340,19 @@ const (
 	PullModeRebase PullMode = "rebase"
 )
 
+// How the sidebar orders tags: by version, newest first, with tags that are not versions after them; by date, newest first; or by name.
+type TagOrder string
+
+const (
+	TagOrderVersion TagOrder = "version"
+	TagOrderDate    TagOrder = "date"
+	TagOrderName    TagOrder = "name"
+)
+
+type SidebarPreferences struct {
+	TagOrder TagOrder `json:"tagOrder"`
+}
+
 type BehaviourPreferences struct {
 	DirtyCheckout DirtyCheckout `json:"dirtyCheckout"`
 }
@@ -352,6 +367,7 @@ type Preferences struct {
 	Version    int                   `json:"version"`
 	Appearance AppearancePreferences `json:"appearance"`
 	Graph      GraphPreferences      `json:"graph"`
+	Sidebar    SidebarPreferences    `json:"sidebar"`
 	Diff       DiffPreferences       `json:"diff"`
 	Git        GitPreferences        `json:"git"`
 	Behaviour  BehaviourPreferences  `json:"behaviour"`

@@ -1,5 +1,6 @@
-import type { Ref, RefId, Remote, Worktree } from "@/model/model.gen"
+import type { Ref, RefId, Remote, TagOrder, Worktree } from "@/model/model.gen"
 import { baseName } from "./format"
+import { tagComparator } from "./tagOrder"
 
 /** One line of the sidebar navigator. */
 export type NavRow =
@@ -20,17 +21,22 @@ export interface NavInput {
   /** Node IDs the user opened (true) or closed (false), which beat every default. */
   readonly choices: ReadonlyMap<string, boolean>
   readonly filter: string
+  readonly tagOrder: TagOrder
 }
 
 /** Orders names the way people expect, with fix-9 before fix-10. */
 const byName = (a: string, b: string) => a.localeCompare(b, undefined, { numeric: true })
+
+type Entry = { readonly name: string; readonly ref: Ref }
+
+const entriesByName = (a: Entry, b: Entry) => byName(a.name, b.name)
 
 /**
  * Flattens a repository into navigator rows: worktrees, local branches,
  * remotes (each holding its branches), tags and stashes, with "/"-separated
  * names nested as folders. While filtering, every match is shown.
  */
-export const buildNavRows = ({ refs, remotes, worktrees, revealed, choices, filter }: NavInput): Array<NavRow> => {
+export const buildNavRows = ({ refs, remotes, worktrees, revealed, choices, filter, tagOrder }: NavInput): Array<NavRow> => {
   const query = filter.trim().toLowerCase()
   const matches = (text: string) => query === "" || text.toLowerCase().includes(query)
   const isCollapsed = (id: string, byDefault: boolean) => {
@@ -57,7 +63,7 @@ export const buildNavRows = ({ refs, remotes, worktrees, revealed, choices, filt
   const ofKind = (kind: Ref["kind"]) => refs.filter((ref) => ref.kind === kind && matches(ref.shortName))
   const branches = ofKind("localBranch")
   section("branches", "Branches", branches.length, false, () =>
-    appendTree(rows, "branches", branches.map((ref) => ({ name: ref.shortName, ref })), 0, (id) => isCollapsed(id, false)),
+    appendTree(rows, "branches", branches.map((ref) => ({ name: ref.shortName, ref })), 0, (id) => isCollapsed(id, false), entriesByName),
   )
 
   const remoteBranches = ofKind("remoteBranch")
@@ -71,13 +77,13 @@ export const buildNavRows = ({ refs, remotes, worktrees, revealed, choices, filt
       const entries = branchesOf(remote)
       const collapsed = isCollapsed(id, true)
       rows.push({ type: "remote", id, remote, count: entries.length, collapsed })
-      if (!collapsed) appendTree(rows, id, entries, 1, (folder) => isCollapsed(folder, true))
+      if (!collapsed) appendTree(rows, id, entries, 1, (folder) => isCollapsed(folder, true), entriesByName)
     }
   })
 
   const tags = ofKind("tag")
   section("tags", "Tags", tags.length, true, () =>
-    appendTree(rows, "tags", tags.map((ref) => ({ name: ref.shortName, ref })), 0, (id) => isCollapsed(id, true)),
+    appendTree(rows, "tags", tags.map((ref) => ({ name: ref.shortName, ref })), 0, (id) => isCollapsed(id, true), tagComparator(tagOrder)),
   )
 
   const stashes = ofKind("stash")
@@ -128,12 +134,14 @@ export const revealedNodes = (refs: ReadonlyArray<Ref>, remotes: ReadonlyArray<R
 const appendTree = (
   rows: Array<NavRow>,
   parentId: string,
-  entries: ReadonlyArray<{ readonly name: string; readonly ref: Ref }>,
+  entries: ReadonlyArray<Entry>,
   depth: number,
   isCollapsed: (id: string) => boolean,
+  /** Orders refs within each folder; folders themselves go by name. */
+  compare: (a: Entry, b: Entry) => number,
 ) => {
-  const folders = new Map<string, Array<{ name: string; ref: Ref }>>()
-  const leaves: Array<{ name: string; ref: Ref }> = []
+  const folders = new Map<string, Array<Entry>>()
+  const leaves: Array<Entry> = []
   for (const entry of entries) {
     const slash = entry.name.indexOf("/")
     if (slash < 0) {
@@ -150,10 +158,10 @@ const appendTree = (
     const collapsed = isCollapsed(id)
     rows.push({ type: "folder", id, name, depth, collapsed })
     if (!collapsed) {
-      appendTree(rows, id, children, depth + 1, isCollapsed)
+      appendTree(rows, id, children, depth + 1, isCollapsed, compare)
     }
   }
-  for (const leaf of leaves.sort((a, b) => byName(a.name, b.name))) {
+  for (const leaf of leaves.sort(compare)) {
     rows.push({ type: "ref", id: leaf.ref.id, name: leaf.name, depth, ref: leaf.ref })
   }
 }

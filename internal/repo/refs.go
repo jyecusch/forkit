@@ -15,7 +15,7 @@ import (
 var refFields = []string{
 	"%(refname)", "%(objectname)", "%(*objectname)", "%(upstream)",
 	"%(upstream:track,nobracket)", "%(worktreepath)", "%(symref)",
-	"%(objecttype)", "%(*objecttype)",
+	"%(objecttype)", "%(*objecttype)", "%(creatordate:unix)",
 }
 
 // ListRefs returns local and remote branches, tags and stashes. remotes is
@@ -58,8 +58,8 @@ func parseRefLine(repoID model.RepoID, line string, remotes []model.Remote) (ref
 	if len(fields) != len(refFields) {
 		return model.Ref{}, false, fmt.Errorf("unexpected for-each-ref line %q", line)
 	}
-	fullName, target, peeled, upstream, track, worktreePath, symref, objectType, peeledType :=
-		fields[0], fields[1], fields[2], fields[3], fields[4], fields[5], fields[6], fields[7], fields[8]
+	fullName, target, peeled, upstream, track, worktreePath, symref, objectType, peeledType, created :=
+		fields[0], fields[1], fields[2], fields[3], fields[4], fields[5], fields[6], fields[7], fields[8], fields[9]
 	if symref != "" {
 		return model.Ref{}, false, nil // e.g. refs/remotes/origin/HEAD
 	}
@@ -96,6 +96,10 @@ func parseRefLine(repoID model.RepoID, line string, remotes []model.Remote) (ref
 	}
 	if worktreePath != "" {
 		ref.CheckedOutInWorktreeID = WorktreeIDFor(worktreePath)
+	}
+	if created != "" {
+		date := unixSecondsToMillis(created)
+		ref.Date = &date
 	}
 	return ref, true, nil
 }

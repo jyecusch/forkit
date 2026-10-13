@@ -4,6 +4,7 @@ import (
 	"context"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"go.opentelemetry.io/otel/trace/noop"
 
@@ -218,5 +219,27 @@ func TestStashDetailIncludesUntrackedFilesAndHidesItsOwnCommits(t *testing.T) {
 	diff, err := repo.ReadDiff(ctx, git, loc, loc.WorkDir, model.DiffRequest{Kind: model.DiffKindCommit, OID: untracked.DiffOID, Path: "untracked.txt"})
 	if err != nil || len(diff.Hunks) != 1 || diff.Hunks[0].Lines[0].Text != "new" {
 		t.Errorf("untracked file's diff = %+v, %v", diff, err)
+	}
+}
+
+func TestRefsCarryTheirDate(t *testing.T) {
+	ctx := context.Background()
+	git, fixture, loc := setup(t)
+	committed := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
+	fixture.CommitAt("tagged", committed)
+	fixture.Git("tag", "light")
+	// The fixture dates everything else, the annotated tag included, 2026-01-01.
+	fixture.Git("tag", "-a", "annotated", "-m", "release")
+	tagged := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	refs, err := repo.ListRefs(ctx, git, loc, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]time.Time{"refs/tags/light": committed, "refs/tags/annotated": tagged, "refs/heads/main": committed}
+	for _, ref := range refs {
+		if when, ok := want[ref.FullName]; ok && (ref.Date == nil || int64(*ref.Date) != when.UnixMilli()) {
+			t.Errorf("%s date = %v, want %v", ref.FullName, ref.Date, when.UnixMilli())
+		}
 	}
 }

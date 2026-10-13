@@ -83,6 +83,16 @@ export const SettingsDialog = ({ open, onOpenChange, preferences: p }: SettingsD
             </Row>
           </Group>
 
+          <Group title="Sidebar">
+            <Row label="Order tags" hint="By version puts the newest version first, with other tags after.">
+              <Choice
+                value={p.sidebar.tagOrder}
+                options={{ version: "By version", date: "Newest first", name: "By name" }}
+                onChange={(v) => set("sidebar.tagOrder", v)}
+              />
+            </Row>
+          </Group>
+
           <Group title="Diffs">
             <Row label="Layout">
               <Choice value={p.diff.layout} options={{ unified: "Unified", split: "Side by side" }} onChange={(v) => set("diff.layout", v)} />
