@@ -1,7 +1,7 @@
 import { useVirtualizer } from "@tanstack/react-virtual"
 import { Effect } from "effect"
 import { Asterisk } from "lucide-react"
-import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type KeyboardEvent } from "react"
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type KeyboardEvent } from "react"
 import { useForkedEffect, useResolvedTheme } from "@/app/hooks"
 import { useLayoutSize, type LayoutSizeControl } from "@/app/layoutSizes"
 import { useService } from "@/app/services"
@@ -11,6 +11,7 @@ import { geometry, gutter, laneWidth, laneX, rowHeight, widestLane } from "@/gra
 import { notify } from "@/app/notifications"
 import { useNow } from "@/app/useNow"
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu"
+import { RefMenu, type RefActions } from "./RefMenu"
 import { badgesFor } from "@/lib/badges"
 import { formatDate, formatFullDate, shortOid } from "@/lib/format"
 import { cn } from "@/lib/utils"
@@ -48,8 +49,8 @@ interface GraphPaneProps {
   /** The active worktree's checked-out commit: ringed, and selected until the user picks one. */
   readonly activeHead: string | undefined
   readonly onSelect: (row: LoadedRow) => void
-  /** Checks out a branch or tag whose label was double-clicked. */
-  readonly onOpenRef: (ref: Ref) => void
+  /** What a label's menu does; double-clicking a label opens its ref. */
+  readonly refActions: RefActions
   /** Uncommitted changes in the active worktree; with any, a row for them heads the history. */
   readonly changes: number
   /** The checked-out commit's row, which the uncommitted changes row joins. */
@@ -201,12 +202,21 @@ export const GraphPane = (props: GraphPaneProps) => {
     },
     [selectRow],
   )
-  // Rows are memoized, so they get a stable function that calls the latest one.
-  const latestOpenRef = useRef(props.onOpenRef)
+  // Rows are memoized, so they get stable actions that call the latest ones.
+  const latestRefActions = useRef(props.refActions)
   useLayoutEffect(() => {
-    latestOpenRef.current = props.onOpenRef
+    latestRefActions.current = props.refActions
   })
-  const onOpenRef = useCallback((ref: Ref) => latestOpenRef.current(ref), [])
+  const refActions = useMemo<RefActions>(
+    () => ({
+      open: (ref) => latestRefActions.current.open(ref),
+      newWorktree: (base) => latestRefActions.current.newWorktree(base),
+      emphasize: (ref) => latestRefActions.current.emphasize(ref),
+      deleteBranches: (refs) => latestRefActions.current.deleteBranches(refs),
+    }),
+    [],
+  )
+  const refs = useMemo(() => [...props.refsById.values()], [props.refsById])
   useEffect(() => {
     if (!pendingRow) return
     onSelect(pendingRow)
@@ -402,13 +412,14 @@ export const GraphPane = (props: GraphPaneProps) => {
               selected={!props.changesSelected && selectedOid !== undefined && graphData.peek(repo, item.index)?.row.oid === selectedOid}
               anyEmphasis={emphasized !== undefined}
               refsById={props.refsById}
+              refs={refs}
               worktreesById={props.worktreesById}
               headRef={props.headRef}
               emphasized={emphasized}
               dateFormat={preferences.appearance.dateFormat}
               now={now}
               onSelect={onSelect}
-              onOpenRef={onOpenRef}
+              refActions={refActions}
               onMenuOpenChange={onMenuOpenChange}
             />
           ))}
@@ -606,6 +617,7 @@ interface CommitRowProps {
   readonly selected: boolean
   readonly anyEmphasis: boolean
   readonly refsById: ReadonlyMap<string, Ref>
+  readonly refs: ReadonlyArray<Ref>
   readonly worktreesById: ReadonlyMap<string, Worktree>
   readonly headRef: RefId | undefined
   readonly emphasized: RefId | undefined
@@ -614,7 +626,7 @@ interface CommitRowProps {
   readonly dateFormat: Preferences["appearance"]["dateFormat"]
   readonly now: number
   readonly onSelect: (row: LoadedRow) => void
-  readonly onOpenRef: (ref: Ref) => void
+  readonly refActions: RefActions
   readonly onMenuOpenChange: (open: boolean) => void
 }
 
@@ -627,13 +639,14 @@ const CommitRow = memo(function CommitRow({
   selected,
   anyEmphasis,
   refsById,
+  refs,
   worktreesById,
   headRef,
   emphasized,
   dateFormat,
   now,
   onSelect,
-  onOpenRef,
+  refActions,
   onMenuOpenChange,
 }: CommitRowProps) {
   const style = { top, height: rowHeight, gridTemplateColumns: columns, paddingInline: listInset }
@@ -681,18 +694,32 @@ const CommitRow = memo(function CommitRow({
           <span role="gridcell" className="flex min-w-0 items-center justify-end gap-1 overflow-hidden">
             {badges.length > 0 && (
               <>
-                {badges.slice(0, maxBadges).map((badge, i) => (
-                  <RefBadge
-                    key={badge.ref.id}
-                    badge={badge}
-                    worktree={badge.ref.checkedOutInWorktreeId ? worktreesById.get(badge.ref.checkedOutInWorktreeId) : undefined}
-                    thread={row.threadId}
-                    dim={dim}
-                    selected={selected}
-                    primary={i === 0}
-                    onDoubleClick={badge.ref.kind === "stash" ? undefined : () => onOpenRef(badge.ref)}
-                  />
-                ))}
+                {badges.slice(0, maxBadges).map((badge, i) => {
+                  const worktree = badge.ref.checkedOutInWorktreeId ? worktreesById.get(badge.ref.checkedOutInWorktreeId) : undefined
+                  return (
+                    // The label's own menu opens instead of the row's.
+                    <ContextMenu key={badge.ref.id} onOpenChange={onMenuOpenChange}>
+                      <ContextMenuTrigger asChild>
+                        <RefBadge
+                          badge={badge}
+                          worktree={worktree}
+                          thread={row.threadId}
+                          dim={dim}
+                          selected={selected}
+                          primary={i === 0}
+                          onDoubleClick={badge.ref.kind === "stash" ? undefined : () => refActions.open(badge.ref)}
+                        />
+                      </ContextMenuTrigger>
+                      <RefMenu
+                        target={badge.ref}
+                        refs={refs}
+                        current={badge.isHead}
+                        elsewhere={badge.isHead ? undefined : worktree}
+                        actions={refActions}
+                      />
+                    </ContextMenu>
+                  )
+                })}
                 {badges.length > maxBadges && (
                   <span
                     className="flex h-[18px] flex-none items-center rounded bg-foreground/[0.06] px-1.5 text-[11px] text-secondary-foreground tabular-nums"
@@ -732,6 +759,6 @@ const CommitRow = memo(function CommitRow({
         <ContextMenuItem onSelect={() => copySha(row.oid)}>Copy SHA</ContextMenuItem>
         <ContextMenuItem onSelect={() => void navigator.clipboard.writeText(commit.subject)}>Copy subject</ContextMenuItem>
       </ContextMenuContent>
-    </ContextMenu>
+                    </ContextMenu>
   )
 })

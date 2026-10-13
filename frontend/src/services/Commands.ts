@@ -41,6 +41,8 @@ export class Commands extends Context.Service<
     readonly pull: (worktree: WorktreeId) => Effect.Effect<void, RpcFailure>
     /** Pushes a worktree's branch, publishing it to remote when it has no upstream. */
     readonly push: (worktree: WorktreeId, remote: string, force: boolean) => Effect.Effect<void, RpcFailure>
+    /** Deletes local branches, merged or not, and remote branches from their remotes. */
+    readonly deleteBranches: (repo: RepoId, refs: ReadonlyArray<RefId>) => Effect.Effect<void, RpcFailure>
     readonly cancelOperation: (repo: RepoId, operation: string) => Effect.Effect<void, RpcFailure>
   }
 >()("forkit/Commands") {
@@ -103,6 +105,9 @@ export class Commands extends Context.Service<
         }),
         push: Effect.fn("command.push")(function* (worktree: WorktreeId, remote: string, force: boolean) {
           yield* rpc.push(worktree, remote, force)
+        }),
+        deleteBranches: Effect.fn("command.deleteBranches")(function* (repo: RepoId, refs: ReadonlyArray<RefId>) {
+          yield* rpc.deleteBranches(repo, refs)
         }),
         cancelOperation: Effect.fn("command.cancelOperation")(function* (repo: RepoId, operation: string) {
           yield* rpc.cancelOperation(repo, operation)

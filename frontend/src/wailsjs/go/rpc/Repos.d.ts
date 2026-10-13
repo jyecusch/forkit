@@ -10,6 +10,8 @@ export function Close(arg1:model.CallMeta,arg2:model.RepoID):Promise<void>;
 
 export function CommitDetail(arg1:model.CallMeta,arg2:model.RepoID,arg3:model.OID):Promise<model.CommitDetail>;
 
+export function DeleteBranches(arg1:model.CallMeta,arg2:model.RepoID,arg3:Array<model.RefID>):Promise<void>;
+
 export function Diff(arg1:model.CallMeta,arg2:model.RepoID,arg3:model.DiffRequest):Promise<model.FileDiff>;
 
 export function Fetch(arg1:model.CallMeta,arg2:model.RepoID,arg3:string):Promise<void>;

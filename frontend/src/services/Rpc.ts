@@ -65,6 +65,8 @@ export class Rpc extends Context.Service<
     readonly pull: (worktree: WorktreeId) => Effect.Effect<void, RpcFailure>
     /** Pushes to the branch's upstream, or publishes it to remote when it has none. */
     readonly push: (worktree: WorktreeId, remote: string, force: boolean) => Effect.Effect<void, RpcFailure>
+    /** Deletes local branches, merged or not, and remote branches from their remotes. */
+    readonly deleteBranches: (repo: RepoId, refs: ReadonlyArray<RefId>) => Effect.Effect<void, RpcFailure>
     readonly cancelOperation: (repo: RepoId, operation: string) => Effect.Effect<void, RpcFailure>
     /** An author's Gravatar picture as a data URL, or "" when there is none or Gravatar is turned off. */
     readonly gravatar: (email: string) => Effect.Effect<string, RpcFailure>
@@ -138,6 +140,11 @@ export class Rpc extends Context.Service<
         "push.force": force,
       }),
     gravatar: (email) => invoke("Avatars.Gravatar", Schema.String, (meta) => Avatars.Gravatar(meta, email)),
+    deleteBranches: (repo, refs) =>
+      invoke("Repos.DeleteBranches", Schema.Void, (meta) => Repos.DeleteBranches(meta, repo, [...refs]), {
+        "repo.id": repo,
+        "branches.count": refs.length,
+      }),
     cancelOperation: (repo, operation) =>
       invoke("Repos.CancelOperation", Schema.Void, (meta) => Repos.CancelOperation(meta, repo, operation), { "repo.id": repo }),
     chooseWorktreeParent: () =>

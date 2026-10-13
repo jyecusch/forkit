@@ -42,6 +42,12 @@ func IsWorktreeDirty(err error) bool {
 	return stderrContains(err, "contains modified or untracked files")
 }
 
+// IsRemoteRefMissing reports whether a push could not delete a branch
+// because the remote no longer has it.
+func IsRemoteRefMissing(err error) bool {
+	return stderrContains(err, "remote ref does not exist")
+}
+
 // IsAuthFailed reports whether a remote refused, or could not be given,
 // credentials.
 func IsAuthFailed(err error) bool {

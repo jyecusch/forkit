@@ -145,6 +145,14 @@ func (x *Repos) Fetch(meta model.CallMeta, id model.RepoID, remote string) error
 	}, attribute.String("repo.id", string(id)))
 }
 
+// DeleteBranches deletes local branches and remote branches; see
+// workspace.DeleteBranches.
+func (x *Repos) DeleteBranches(meta model.CallMeta, id model.RepoID, refs []model.RefID) error {
+	return callNoResult(x.s, meta, "Repos.DeleteBranches", func(ctx context.Context) error {
+		return x.s.deps.Workspace.DeleteBranches(ctx, id, refs)
+	}, attribute.String("repo.id", string(id)), attribute.Int("branches.count", len(refs)))
+}
+
 // CancelOperation stops a running operation.
 func (x *Repos) CancelOperation(meta model.CallMeta, id model.RepoID, operation string) error {
 	return callNoResult(x.s, meta, "Repos.CancelOperation", func(context.Context) error {

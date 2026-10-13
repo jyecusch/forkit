@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils"
 import { changeCount, headLabel } from "@/lib/worktree"
 import type { Ref, RefId, Remote, Worktree, WorktreeId } from "@/model/model.gen"
 import { AheadBehind } from "./AheadBehind"
+import { RefMenu, type RefActions } from "./RefMenu"
 import { laneColor } from "./RefBadge"
 import { WorktreeIcon } from "./WorktreeIcon"
 
@@ -35,9 +36,8 @@ interface RepoNavProps {
   readonly branchThreads: Readonly<Record<string, number>> | undefined
   /** Refs whose folders stay open, such as the checked-out branch. */
   readonly reveal: ReadonlyArray<RefId>
-  readonly onEmphasize: (ref: Ref) => void
-  /** Checks a ref out, or switches to the worktree that has it. */
-  readonly onOpen: (ref: Ref) => void
+  readonly refActions: RefActions
+  /** Starts a new worktree, from the checked-out branch unless a base is given. */
   readonly onNewWorktree: (base: Ref | undefined) => void
   readonly onSelectWorktree: (worktree: Worktree) => void
   readonly onRemoveWorktree: (worktree: Worktree) => void
@@ -215,7 +215,7 @@ export const RepoNav = (props: RepoNavProps) => {
       case "ref": {
         const current = row.ref.checkedOutInWorktreeId === activeWorktree && activeWorktree !== undefined
         const elsewhere = current ? undefined : worktrees.find((wt) => wt.id === row.ref.checkedOutInWorktreeId)
-        const open = () => props.onOpen(row.ref)
+        const open = () => props.refActions.open(row.ref)
         const item = (
           <NavButton
             {...treeItem(row, row.depth + 2)}
@@ -223,7 +223,7 @@ export const RepoNav = (props: RepoNavProps) => {
             selected={row.ref.id === emphasized}
             aria-selected={row.ref.id === emphasized}
             title={row.ref.shortName}
-            onClick={() => props.onEmphasize(row.ref)}
+            onClick={() => props.refActions.emphasize(row.ref)}
             onDoubleClick={open}
             onKeyDown={(event) => {
               if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
@@ -255,22 +255,7 @@ export const RepoNav = (props: RepoNavProps) => {
         return (
           <ContextMenu>
             <ContextMenuTrigger asChild>{item}</ContextMenuTrigger>
-            <ContextMenuContent className="w-56">
-              <ContextMenuItem disabled={current} onSelect={open}>
-                {elsewhere
-                  ? `Switch to ${worktreeNames.get(elsewhere.id)}`
-                  : row.ref.kind === "remoteBranch"
-                    ? "Check out as local branch…"
-                    : "Check out"}
-                <span className="ml-auto text-xs text-subtle-foreground">⌘↩</span>
-              </ContextMenuItem>
-              {row.ref.kind !== "stash" && (
-                <ContextMenuItem onSelect={() => props.onNewWorktree(row.ref)}>New worktree from here…</ContextMenuItem>
-              )}
-              <ContextMenuSeparator />
-              <ContextMenuItem onSelect={() => props.onEmphasize(row.ref)}>Emphasize history</ContextMenuItem>
-              <ContextMenuItem onSelect={() => void navigator.clipboard.writeText(row.ref.shortName)}>Copy name</ContextMenuItem>
-            </ContextMenuContent>
+            <RefMenu target={row.ref} refs={refs} current={current} elsewhere={elsewhere} openShortcut="⌘↩" actions={props.refActions} />
           </ContextMenu>
         )
       }

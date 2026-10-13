@@ -12,7 +12,7 @@ export const laneColor = (thread: number) => `var(--lane-${thread % 8})`
 export const emphasizedTint =
   "bg-[color-mix(in_srgb,var(--line)_14%,transparent)] text-(--line) shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--line)_45%,transparent)]"
 
-interface RefBadgeProps {
+interface RefBadgeProps extends Omit<React.ComponentProps<"span">, "title" | "className" | "children"> {
   readonly badge: Badge
   /** The worktree the branch is checked out in, if any. */
   readonly worktree: Worktree | undefined
@@ -22,7 +22,6 @@ interface RefBadgeProps {
   readonly selected: boolean
   /** The row's leading badge, which keeps its full name while others shrink. */
   readonly primary: boolean
-  readonly onDoubleClick?: (() => void) | undefined
 }
 
 /**
@@ -34,7 +33,7 @@ interface RefBadgeProps {
  * branches an outline in the theme's remote colour and tags a tag in its tag
  * colour.
  */
-export const RefBadge = ({ badge, worktree, thread, dim, selected, primary, onDoubleClick }: RefBadgeProps) => {
+export const RefBadge = ({ badge, worktree, thread, dim, selected, primary, style, ...spanProps }: RefBadgeProps) => {
   const { ref, isHead, isEmphasized, inSync, sameOnOtherRemotes } = badge
   // Same-named branches on several remotes read as one, with a count.
   const merged = ref.kind === "remoteBranch" && sameOnOtherRemotes.length > 0
@@ -61,14 +60,14 @@ export const RefBadge = ({ badge, worktree, thread, dim, selected, primary, onDo
       }[ref.kind]
   return (
     <span
+      {...spanProps}
       title={title}
       className={cn(
         "flex h-[18px] max-w-44 items-center gap-1 rounded px-1.5 text-[11px] leading-none font-medium whitespace-nowrap",
         primary ? "min-w-0 flex-[0_1_auto]" : "min-w-12 flex-[0_100_auto]",
         tone,
       )}
-      style={{ "--line": laneColor(thread) } as React.CSSProperties}
-      onDoubleClick={onDoubleClick}
+      style={{ ...style, "--line": laneColor(thread) } as React.CSSProperties}
     >
       {isHead ? (
         <CircleCheck aria-hidden className="size-3 flex-none" />
