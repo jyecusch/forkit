@@ -269,7 +269,7 @@
       }
     },
     "LayoutSize": {
-      "enum": ["sidebar", "details", "staged", "diffSplit", "refsColumn", "graphColumn", "authorColumn"],
+      "enum": ["sidebar", "details", "staged", "diffSplit", "refsColumn", "graphColumn"],
       "description": "A panel or column the user can resize."
     },
 

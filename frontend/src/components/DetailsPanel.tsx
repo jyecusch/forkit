@@ -6,11 +6,12 @@ import { useForkedEffect, useRun } from "@/app/hooks"
 import { useLayoutSize } from "@/app/layoutSizes"
 import { useNow } from "@/app/useNow"
 import { fileStatusesCollection } from "@/data/collections"
-import { formatDate, formatFullDate, initials, reflow, shortOid } from "@/lib/format"
+import { formatDate, formatFullDate, reflow, shortOid } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import type { CommitDetail, DiffKind, FileChangeStatus, FileStatus, Preferences, RepoId, StatusCode, WorktreeId } from "@/model/model.gen"
 import type { LoadedRow } from "@/services/GraphData"
 import { Rpc } from "@/services/Rpc"
+import { Avatar } from "./Avatar"
 import { CommitComposer } from "./CommitComposer"
 import { sameDiff, type DiffTarget } from "./DiffView"
 import { ResizeHandle } from "./ResizeHandle"
@@ -100,13 +101,7 @@ const CommitTab = ({
         <div className="text-[15px] leading-snug font-semibold">{subject}</div>
         {body && <pre className="font-sans text-xs whitespace-pre-wrap text-secondary-foreground">{body}</pre>}
         <div className="flex items-center gap-2.5">
-          <span
-            aria-hidden
-            className="flex size-7 flex-none items-center justify-center rounded-full bg-[color-mix(in_srgb,currentColor_16%,transparent)] text-[11px] font-semibold"
-            style={{ color: authorColor(commit.authorEmail) }}
-          >
-            {initials(commit.authorName)}
-          </span>
+          <Avatar name={commit.authorName} email={commit.authorEmail} size={28} />
           <div className="flex min-w-0 flex-col">
             <span className="truncate">{commit.authorName}</span>
             <span className="text-xs text-subtle-foreground" title={formatFullDate(commit.authorTime)}>
@@ -342,17 +337,6 @@ const moveBetweenFiles = (event: React.KeyboardEvent<HTMLElement>) => {
   const next = files[current + (event.key === "ArrowDown" ? 1 : -1)]
   next?.focus()
   next?.click()
-}
-
-/**
- * A colour for an author that stays the same wherever they appear, from the
- * theme's lanes, leaving out the red that reads as an error.
- */
-const authorColor = (email: string) => {
-  const lanes = [0, 1, 2, 3, 4, 5, 7]
-  let hash = 0
-  for (const char of email.toLowerCase()) hash = (hash * 31 + char.charCodeAt(0)) | 0
-  return `var(--lane-${lanes[Math.abs(hash) % lanes.length]})`
 }
 
 /** A path with its file name first and its directory dimmed after it. */

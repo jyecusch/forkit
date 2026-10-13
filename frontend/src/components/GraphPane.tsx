@@ -5,7 +5,7 @@ import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState, useSyn
 import { useForkedEffect, useResolvedTheme } from "@/app/hooks"
 import { useLayoutSize, type LayoutSizeControl } from "@/app/layoutSizes"
 import { useService } from "@/app/services"
-import { columnGap, layoutColumns, listInset } from "@/graph/columns"
+import { avatarColumn, columnGap, layoutColumns, listInset } from "@/graph/columns"
 import { drawGraph, readPalette, uncommittedLine, type GraphPalette } from "@/graph/draw"
 import { geometry, gutter, laneWidth, laneX, rowHeight, widestLane } from "@/graph/geometry"
 import { notify } from "@/app/notifications"
@@ -16,6 +16,7 @@ import { formatDate, formatFullDate, shortOid } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import type { GraphView, Preferences, Ref, RefId, RepoId, Worktree } from "@/model/model.gen"
 import { GraphData, type LoadedRow } from "@/services/GraphData"
+import { Avatar } from "./Avatar"
 import { focusIsLost } from "./Chrome"
 import { laneColor, RefBadge } from "./RefBadge"
 import { ResizeHandle } from "./ResizeHandle"
@@ -172,11 +173,9 @@ export const GraphPane = (props: GraphPaneProps) => {
   const lanes = useRatchet(viewportWidest < 0 ? 0 : Math.max(viewportWidest + 2, 2), { scrolling, resting, reset: jump.nonce })
   const refsWidth = useLayoutSize("refsColumn")
   const graphWidth = useLayoutSize("graphColumn")
-  const authorWidth = useLayoutSize("authorColumn")
   const columns = layoutColumns(paneWidth, lanes, {
     refs: refsWidth.size,
     graph: graphWidth.size,
-    author: authorWidth.size,
   })
   const maxOffset = Math.max(laneX(viewportWidest) + gutter - columns.graph, 0)
 
@@ -356,16 +355,12 @@ export const GraphPane = (props: GraphPaneProps) => {
         className="grid h-8 flex-none items-center gap-3 overflow-y-hidden border-b text-xs font-medium whitespace-nowrap text-subtle-foreground [scrollbar-gutter:stable]"
         style={{ gridTemplateColumns: columns.template, paddingInline: listInset }}
       >
-        <ColumnHeader name="branch and tag" edge="right" control={refsWidth} width={columns.refs} limits={[80, 400]} className="text-right">
+        <ColumnHeader name="branch and tag" control={refsWidth} width={columns.refs} limits={[80, 400]} className="text-right">
           Branch / Tag
         </ColumnHeader>
-        <ColumnHeader name="graph" edge="right" control={graphWidth} width={columns.graph} limits={[graphMin, 800]} />
+        <ColumnHeader name="graph" control={graphWidth} width={columns.graph} limits={[graphMin, 800]} />
         <span>Description</span>
-        {columns.showAuthor && (
-          <ColumnHeader name="author" edge="left" control={authorWidth} width={columns.author} limits={[56, 320]}>
-            Author
-          </ColumnHeader>
-        )}
+        <span />
       </div>
       <div
         ref={scrollRef}
@@ -396,7 +391,6 @@ export const GraphPane = (props: GraphPaneProps) => {
               loaded={graphData.peek(repo, item.index)}
               columns={columns.template}
               labelsEnd={columns.graphLeft - columnGap}
-              showAuthor={columns.showAuthor}
               selected={!props.changesSelected && selectedOid !== undefined && graphData.peek(repo, item.index)?.row.oid === selectedOid}
               anyEmphasis={emphasized !== undefined}
               refsById={props.refsById}
@@ -443,12 +437,11 @@ export const GraphPane = (props: GraphPaneProps) => {
 const graphMin = gutter * 2 + laneWidth
 
 /**
- * A column's header with a handle to resize it, on the edge away from the
- * description, which takes whatever width is left.
+ * A column's header with a handle on its right edge to resize it. The
+ * description takes whatever width is left.
  */
 const ColumnHeader = ({
   name,
-  edge,
   control,
   width,
   limits,
@@ -457,7 +450,6 @@ const ColumnHeader = ({
 }: {
   /** The column, for the handle's label. */
   name: string
-  edge: "left" | "right"
   control: LayoutSizeControl
   width: number
   limits: readonly [number, number]
@@ -469,12 +461,12 @@ const ColumnHeader = ({
     <ResizeHandle
       label={`Resize the ${name} column`}
       orientation="vertical"
-      grows={edge === "right" ? 1 : -1}
+      grows={1}
       measure={() => width}
       limits={() => limits}
       control={control}
       // Centred in the gap between this column and the next.
-      className={cn("absolute inset-y-0", edge === "right" ? "-right-[10px]" : "-left-[10px]")}
+      className="absolute inset-y-0 -right-[10px]"
     />
   </span>
 )
@@ -602,7 +594,6 @@ interface CommitRowProps {
   readonly top: number
   readonly loaded: LoadedRow | undefined
   readonly columns: string
-  readonly showAuthor: boolean
   readonly selected: boolean
   readonly anyEmphasis: boolean
   readonly refsById: ReadonlyMap<string, Ref>
@@ -623,7 +614,6 @@ const CommitRow = memo(function CommitRow({
   loaded,
   columns,
   labelsEnd,
-  showAuthor,
   selected,
   anyEmphasis,
   refsById,
@@ -642,14 +632,13 @@ const CommitRow = memo(function CommitRow({
         <span />
         <span className="size-2 rounded-full bg-foreground/[0.08]" style={{ marginLeft: gutter - 4 }} />
         <span className="h-2 w-1/2 rounded bg-foreground/[0.06]" />
-        {showAuthor && <span className="h-2 w-3/5 rounded bg-foreground/[0.06]" />}
+        <span className="size-5 rounded-full bg-foreground/[0.06]" />
       </div>
     )
   }
   const { row, commit } = loaded
   const dim = anyEmphasis && !row.onEmphasized
   const badges = badgesFor(row.refIds, refsById, { head: headRef, emphasized })
-  const meta = cn("truncate text-xs", dim && !selected ? "text-subtle-foreground" : "text-secondary-foreground")
   return (
     <ContextMenu onOpenChange={onMenuOpenChange}>
       <ContextMenuTrigger asChild>
@@ -722,11 +711,9 @@ const CommitRow = memo(function CommitRow({
               {formatDate(commit.authorTime, dateFormat, now)} · <span className="font-mono">{shortOid(row.oid)}</span>
             </span>
           </span>
-          {showAuthor && (
-            <span role="gridcell" className={meta} title={commit.authorEmail}>
-              {commit.authorName}
-            </span>
-          )}
+          <span role="gridcell" className="flex" title={`${commit.authorName} <${commit.authorEmail}>`}>
+            <Avatar name={commit.authorName} email={commit.authorEmail} size={avatarColumn} className={cn(dim && !selected && "opacity-60")} />
+          </span>
         </div>
       </ContextMenuTrigger>
       <ContextMenuContent className="w-48">
