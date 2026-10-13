@@ -169,9 +169,10 @@ const Flare = ({ side }: { side: "left" | "right" }) => (
     aria-hidden
     className="pointer-events-none absolute bottom-0"
     style={{
-      // Overlapping the tab's own border by a pixel, so the curve replaces
-      // the border's last stretch instead of running beside it.
-      [side]: -(flare - 1),
+      // Measured from the padding edge, so the curve's outer pixel lands on
+      // the tab's border and replaces its last stretch instead of running
+      // beside it.
+      [side]: -flare,
       width: flare,
       height: flare,
       background: `radial-gradient(circle at ${side === "left" ? "0" : "100%"} 0, transparent ${flare - 1}px, var(--border) ${flare - 1}px ${flare}px, var(--background) ${flare}px)`,
