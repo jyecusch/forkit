@@ -136,15 +136,24 @@ const drawDot = (context: CanvasRenderingContext2D, dot: Dot, color: string, bac
 
   switch (dot.shape) {
     case "stash": {
-      // Square, so it does not read as a commit.
-      const half = dotRadius - 0.5
+      // A square holding an archive box, so it does not read as a commit.
+      const half = stashSize / 2
       context.fillStyle = background
-      context.fillRect(dot.x - half - 1, dot.y - half - 1, half * 2 + 2, half * 2 + 2)
-      context.strokeStyle = color
-      context.lineWidth = 1.5
       context.beginPath()
-      context.roundRect(dot.x - half, dot.y - half, half * 2, half * 2, 1.5)
+      context.roundRect(dot.x - half, dot.y - half, stashSize, stashSize, 3)
+      context.fill()
+      context.strokeStyle = color
+      context.lineWidth = 1
       context.stroke()
+      context.save()
+      const scale = stashIconSize / 24
+      context.translate(dot.x - stashIconSize / 2, dot.y - stashIconSize / 2)
+      context.scale(scale, scale)
+      context.lineWidth = 2.25
+      context.lineCap = "round"
+      context.lineJoin = "round"
+      for (const path of archiveIcon()) context.stroke(path)
+      context.restore()
       break
     }
     case "commit":
@@ -171,6 +180,17 @@ const drawDot = (context: CanvasRenderingContext2D, dot: Dot, color: string, bac
   }
   context.lineWidth = lineWidth
 }
+
+/** A stash's square, and the icon inside it, in CSS pixels. */
+const stashSize = 14
+const stashIconSize = 10
+
+/** Lucide's archive icon, on its 24-unit grid; made when first drawn, as tests run without Path2D. */
+let archivePaths: ReadonlyArray<Path2D> | undefined
+const archiveIcon = () =>
+  (archivePaths ??= ["M3 3h18a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z", "M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8", "M10 12h4"].map(
+    (d) => new Path2D(d),
+  ))
 
 /** Mixes two #rrggbb colours: weight 1 gives a, 0 gives b. */
 export const mixHex = (a: string, b: string, weight: number): string => {

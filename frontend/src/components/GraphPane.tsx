@@ -13,7 +13,7 @@ import { useNow } from "@/app/useNow"
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu"
 import { RefMenu, type RefActions } from "./RefMenu"
 import { badgesFor } from "@/lib/badges"
-import { formatDate, formatFullDate, shortOid } from "@/lib/format"
+import { formatDate, formatFullDate, shortOid, stashTitle } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import type { GraphView, Preferences, Ref, RefId, RepoId, Worktree } from "@/model/model.gen"
 import { GraphData, type LoadedRow } from "@/services/GraphData"
@@ -665,7 +665,8 @@ const CommitRow = memo(function CommitRow({
   const { row, commit } = loaded
   const dim = anyEmphasis && !row.onEmphasized
   const badges = badgesFor(row.refIds, refsById, { head: headRef, emphasized })
-  const stash = row.stash ? badges.find((badge) => badge.ref.kind === "stash")?.ref : undefined
+  const stash = row.stash ? row.refIds.map((id) => refsById.get(id)).find((ref) => ref?.kind === "stash") : undefined
+  const subject = row.stash ? stashTitle(commit.subject) : commit.subject
   return (
     <ContextMenu onOpenChange={onMenuOpenChange}>
       <ContextMenuTrigger asChild>
@@ -710,7 +711,7 @@ const CommitRow = memo(function CommitRow({
                           dim={dim}
                           selected={selected}
                           primary={i === 0}
-                          onDoubleClick={badge.ref.kind === "stash" ? undefined : () => refActions.open(badge.ref)}
+                          onDoubleClick={() => refActions.open(badge.ref)}
                         />
                       </ContextMenuTrigger>
                       <RefMenu
@@ -743,7 +744,7 @@ const CommitRow = memo(function CommitRow({
               className={cn("min-w-0 flex-1 truncate", !dim ? "text-foreground" : selected ? "text-secondary-foreground" : "text-subtle-foreground")}
               title={commit.subject}
             >
-              {commit.subject}
+              {subject}
             </span>
             {/* When and which commit, shown while the row is hovered; the details panel has them too. */}
             <span
