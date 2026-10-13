@@ -12,6 +12,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 
 	"github.com/jyecusch/forkit/internal/apperr"
+	"github.com/jyecusch/forkit/internal/avatars"
 	"github.com/jyecusch/forkit/internal/model"
 	"github.com/jyecusch/forkit/internal/prefs"
 	"github.com/jyecusch/forkit/internal/synchub"
@@ -28,6 +29,7 @@ type Deps struct {
 	Prefs     *prefs.Store
 	Session   *prefs.SessionStore
 	Telemetry *telemetry.Telemetry
+	Gravatar  *avatars.Gravatar
 	Tracer    trace.Tracer
 	// ChooseDirectory shows a native folder picker and returns "" if the
 	// user cancels.
@@ -44,6 +46,7 @@ type Server struct {
 	Preferences *Preferences
 	Session     *Session
 	Worktrees   *Worktrees
+	Avatars     *Avatars
 }
 
 // NewServer creates the services. Call Start before the frontend can call
@@ -56,6 +59,7 @@ func NewServer() *Server {
 	s.Preferences = &Preferences{s}
 	s.Session = &Session{s}
 	s.Worktrees = &Worktrees{s}
+	s.Avatars = &Avatars{s}
 	return s
 }
 
@@ -64,7 +68,7 @@ func (s *Server) Start(deps *Deps) { s.deps = deps }
 
 // Services lists the structs to bind with Wails.
 func (s *Server) Services() []any {
-	return []any{s.Sync, s.Telemetry, s.Repos, s.Preferences, s.Session, s.Worktrees}
+	return []any{s.Sync, s.Telemetry, s.Repos, s.Preferences, s.Session, s.Worktrees, s.Avatars}
 }
 
 // callError is a model.RpcError encoded as JSON, which is how Wails passes

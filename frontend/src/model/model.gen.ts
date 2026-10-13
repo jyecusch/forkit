@@ -197,6 +197,7 @@ export const AppearancePreferences = Schema.Struct({
   darkTheme: DarkTheme,
   fontSize: Schema.Int.pipe(Schema.check(Schema.isBetween({ minimum: 10, maximum: 20 }))),
   dateFormat: DateFormat,
+  gravatars: Schema.Boolean,
 })
 export type AppearancePreferences = typeof AppearancePreferences.Type
 

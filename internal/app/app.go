@@ -12,6 +12,7 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 	"go.opentelemetry.io/otel"
 
+	"github.com/jyecusch/forkit/internal/avatars"
 	"github.com/jyecusch/forkit/internal/gitexec"
 	"github.com/jyecusch/forkit/internal/model"
 	"github.com/jyecusch/forkit/internal/prefs"
@@ -97,6 +98,7 @@ func (a *App) start(wailsCtx context.Context) error {
 		Prefs:     preferences,
 		Session:   session,
 		Telemetry: a.telemetry,
+		Gravatar:  avatars.NewGravatar(filepath.Join(cacheDir, "gravatar"), logger),
 		Tracer:    tracer,
 		ChooseDirectory: func(title string) (string, error) {
 			return runtime.OpenDirectoryDialog(wailsCtx, runtime.OpenDialogOptions{Title: title})

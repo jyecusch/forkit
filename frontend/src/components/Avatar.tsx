@@ -1,5 +1,9 @@
+import { Effect } from "effect"
 import { createHashvatar } from "hashvatar"
 import { useEffect, useState } from "react"
+import { usePreferences } from "@/app/hooks"
+import { appRuntime } from "@/services/runtime"
+import { Rpc } from "@/services/Rpc"
 import { cn } from "@/lib/utils"
 
 interface AvatarProps {
@@ -11,54 +15,47 @@ interface AvatarProps {
 }
 
 /**
- * A commit author's picture: their Gravatar when they have one, otherwise a
- * dithered pattern made from their email, which is drawn at once and stays
- * underneath while the Gravatar loads.
+ * A commit author's picture: their Gravatar when they have one and Gravatar
+ * is turned on, otherwise a dithered pattern made from their email, which is
+ * drawn at once and replaced if a Gravatar arrives.
  */
 export const Avatar = ({ name, email, size, className }: AvatarProps) => {
-  const key = email.trim().toLowerCase() || name
+  const address = email.trim().toLowerCase()
+  const key = address || name
+  const useGravatar = (usePreferences()?.appearance.gravatars ?? false) && address !== ""
   const [gravatar, setGravatar] = useState<string>()
-  const [loaded, setLoaded] = useState(false)
   useEffect(() => {
-    let current = true
     setGravatar(undefined)
-    setLoaded(false)
-    if (!withoutGravatar.has(key)) void gravatarUrl(key).then((url) => current && setGravatar(url))
+    if (!useGravatar) return
+    let current = true
+    void gravatarOf(key).then((picture) => current && setGravatar(picture || undefined))
     return () => {
       current = false
     }
-  }, [key])
+  }, [key, useGravatar])
 
   return (
     <span
       aria-hidden
-      className={cn("relative inline-block flex-none overflow-hidden rounded-full", className)}
-      style={{ width: size, height: size, backgroundImage: `url(${pattern(key, size)})`, backgroundSize: "cover" }}
-    >
-      {gravatar && (
-        <img
-          src={`${gravatar}?s=${Math.ceil(size * Math.max(devicePixelRatio, 2))}&d=404`}
-          alt=""
-          className={cn("absolute inset-0 size-full transition-opacity", loaded ? "opacity-100" : "opacity-0")}
-          onLoad={() => setLoaded(true)}
-          // Gravatar answers 404 for an email it does not know.
-          onError={() => {
-            withoutGravatar.add(key)
-            setGravatar(undefined)
-          }}
-        />
-      )}
-    </span>
+      className={cn("relative inline-block flex-none overflow-hidden rounded-full bg-cover", className)}
+      style={{ width: size, height: size, backgroundImage: `url(${gravatar ?? pattern(key, size)})` }}
+    />
   )
 }
 
-/** Authors Gravatar has said it has no picture for, so it is not asked again. */
-const withoutGravatar = new Set<string>()
+/**
+ * Each author's Gravatar lookup, asked of the backend once per session; the
+ * backend keeps the answers on disk across sessions.
+ */
+const gravatars = new Map<string, Promise<string>>()
 
-const gravatarUrl = async (email: string) => {
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(email))
-  const hex = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("")
-  return `https://gravatar.com/avatar/${hex}`
+const gravatarOf = (email: string) => {
+  let picture = gravatars.get(email)
+  if (!picture) {
+    picture = appRuntime.runPromise(Rpc.use((rpc) => rpc.gravatar(email)).pipe(Effect.orElseSucceed(() => "")))
+    gravatars.set(email, picture)
+  }
+  return picture
 }
 
 const patterns = new Map<string, string>()

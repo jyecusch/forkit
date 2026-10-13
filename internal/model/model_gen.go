@@ -283,6 +283,8 @@ type AppearancePreferences struct {
 	DarkTheme  DarkTheme  `json:"darkTheme"`
 	FontSize   int        `json:"fontSize"`
 	DateFormat DateFormat `json:"dateFormat"`
+	// Show authors' Gravatar pictures, which sends a hash of each author's email to Gravatar.
+	Gravatars bool `json:"gravatars"`
 }
 
 type GraphPreferences struct {
