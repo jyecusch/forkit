@@ -372,8 +372,6 @@ const (
 	LayoutSizeRefsColumn   LayoutSize = "refsColumn"
 	LayoutSizeGraphColumn  LayoutSize = "graphColumn"
 	LayoutSizeAuthorColumn LayoutSize = "authorColumn"
-	LayoutSizeDateColumn   LayoutSize = "dateColumn"
-	LayoutSizeCommitColumn LayoutSize = "commitColumn"
 )
 
 type Commit struct {

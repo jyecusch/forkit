@@ -173,14 +173,10 @@ export const GraphPane = (props: GraphPaneProps) => {
   const refsWidth = useLayoutSize("refsColumn")
   const graphWidth = useLayoutSize("graphColumn")
   const authorWidth = useLayoutSize("authorColumn")
-  const dateWidth = useLayoutSize("dateColumn")
-  const commitWidth = useLayoutSize("commitColumn")
   const columns = layoutColumns(paneWidth, lanes, {
     refs: refsWidth.size,
     graph: graphWidth.size,
     author: authorWidth.size,
-    date: dateWidth.size,
-    commit: commitWidth.size,
   })
   const maxOffset = Math.max(laneX(viewportWidest) + gutter - columns.graph, 0)
 
@@ -370,16 +366,6 @@ export const GraphPane = (props: GraphPaneProps) => {
             Author
           </ColumnHeader>
         )}
-        {columns.showDate && (
-          <ColumnHeader name="date" edge="left" control={dateWidth} width={columns.date} limits={[56, 240]}>
-            Date
-          </ColumnHeader>
-        )}
-        {columns.showCommit && (
-          <ColumnHeader name="SHA" edge="left" control={commitWidth} width={columns.commit} limits={[48, 160]}>
-            SHA
-          </ColumnHeader>
-        )}
       </div>
       <div
         ref={scrollRef}
@@ -411,8 +397,6 @@ export const GraphPane = (props: GraphPaneProps) => {
               columns={columns.template}
               labelsEnd={columns.graphLeft - columnGap}
               showAuthor={columns.showAuthor}
-              showDate={columns.showDate}
-              showCommit={columns.showCommit}
               selected={!props.changesSelected && selectedOid !== undefined && graphData.peek(repo, item.index)?.row.oid === selectedOid}
               anyEmphasis={emphasized !== undefined}
               refsById={props.refsById}
@@ -619,8 +603,6 @@ interface CommitRowProps {
   readonly loaded: LoadedRow | undefined
   readonly columns: string
   readonly showAuthor: boolean
-  readonly showDate: boolean
-  readonly showCommit: boolean
   readonly selected: boolean
   readonly anyEmphasis: boolean
   readonly refsById: ReadonlyMap<string, Ref>
@@ -642,8 +624,6 @@ const CommitRow = memo(function CommitRow({
   columns,
   labelsEnd,
   showAuthor,
-  showDate,
-  showCommit,
   selected,
   anyEmphasis,
   refsById,
@@ -663,8 +643,6 @@ const CommitRow = memo(function CommitRow({
         <span className="size-2 rounded-full bg-foreground/[0.08]" style={{ marginLeft: gutter - 4 }} />
         <span className="h-2 w-1/2 rounded bg-foreground/[0.06]" />
         {showAuthor && <span className="h-2 w-3/5 rounded bg-foreground/[0.06]" />}
-        {showDate && <span className="h-2 w-3/4 rounded bg-foreground/[0.06]" />}
-        {showCommit && <span className="h-2 w-4/5 rounded bg-foreground/[0.06]" />}
       </div>
     )
   }
@@ -679,10 +657,10 @@ const CommitRow = memo(function CommitRow({
           role="row"
           aria-rowindex={index + 1}
           aria-selected={selected}
-          aria-label={`${commit.subject}, ${commit.authorName}, ${shortOid(row.oid)}`}
+          aria-label={`${commit.subject}, ${commit.authorName}, ${formatFullDate(commit.authorTime)}, ${shortOid(row.oid)}`}
           onClick={() => onSelect(loaded)}
           className={cn(
-            "absolute inset-x-0 grid cursor-default items-center gap-3 data-[state=open]:shadow-[inset_0_0_0_1px_var(--ring)]",
+            "group/row absolute inset-x-0 grid cursor-default items-center gap-3 data-[state=open]:shadow-[inset_0_0_0_1px_var(--ring)]",
             selected ? "bg-selection group-focus-visible/grid:shadow-[inset_2px_0_0_var(--ring)]" : "hover:bg-foreground/[0.05]",
           )}
           style={style}
@@ -736,20 +714,17 @@ const CommitRow = memo(function CommitRow({
             >
               {commit.subject}
             </span>
+            {/* When and which commit, shown while the row is hovered; the details panel has them too. */}
+            <span
+              className="hidden flex-none text-xs text-secondary-foreground tabular-nums group-hover/row:inline"
+              title={formatFullDate(commit.authorTime)}
+            >
+              {formatDate(commit.authorTime, dateFormat, now)} · <span className="font-mono">{shortOid(row.oid)}</span>
+            </span>
           </span>
           {showAuthor && (
             <span role="gridcell" className={meta} title={commit.authorEmail}>
               {commit.authorName}
-            </span>
-          )}
-          {showDate && (
-            <span role="gridcell" className={meta} title={formatFullDate(commit.authorTime)}>
-              {formatDate(commit.authorTime, dateFormat, now)}
-            </span>
-          )}
-          {showCommit && (
-            <span role="gridcell" className={cn("font-mono text-xs", dim && !selected ? "text-subtle-foreground" : "text-secondary-foreground")}>
-              {shortOid(row.oid)}
             </span>
           )}
         </div>
