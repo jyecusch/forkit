@@ -82,8 +82,20 @@ func startWatcher(t *testing.T, fixture *gittest.Repo) <-chan watch.Change {
 		t.Fatal(err)
 	}
 	t.Cleanup(w.Close)
-	time.Sleep(100 * time.Millisecond) // let the stream start
+	settle(changes)
 	return changes
+}
+
+// settle waits for the watcher to go quiet, since events from setting up
+// the repository can arrive after it starts.
+func settle(changes <-chan watch.Change) {
+	for {
+		select {
+		case <-changes:
+		case <-time.After(200 * time.Millisecond):
+			return
+		}
+	}
 }
 
 func TestWatcherReportsCommitsAndEdits(t *testing.T) {
