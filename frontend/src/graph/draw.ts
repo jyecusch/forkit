@@ -135,27 +135,9 @@ const drawDot = (context: CanvasRenderingContext2D, dot: Dot, color: string, bac
   }
 
   switch (dot.shape) {
-    case "stash": {
-      // A square holding an archive box, so it does not read as a commit.
-      const half = stashSize / 2
-      context.fillStyle = background
-      context.beginPath()
-      context.roundRect(dot.x - half, dot.y - half, stashSize, stashSize, 3)
-      context.fill()
-      context.strokeStyle = color
-      context.lineWidth = 1
-      context.stroke()
-      context.save()
-      const scale = stashIconSize / 24
-      context.translate(dot.x - stashIconSize / 2, dot.y - stashIconSize / 2)
-      context.scale(scale, scale)
-      context.lineWidth = 2.25
-      context.lineCap = "round"
-      context.lineJoin = "round"
-      for (const path of archiveIcon()) context.stroke(path)
-      context.restore()
+    case "stash":
+      drawStash(context, dot, color, background)
       break
-    }
     case "commit":
       context.fillStyle = color
       circle(dotRadius)
@@ -181,16 +163,37 @@ const drawDot = (context: CanvasRenderingContext2D, dot: Dot, color: string, bac
   context.lineWidth = lineWidth
 }
 
-/** A stash's square, and the icon inside it, in CSS pixels. */
-const stashSize = 14
-const stashIconSize = 10
+/**
+ * The pixels of a stash's mark, a 13-pixel square holding an archive box:
+ * [x, y, width, height] from its top-left corner. Whole pixels, so it stays
+ * sharp on screens of every density, where a scaled vector icon would blur.
+ */
+const stashSize = 13
+const stashPixels: ReadonlyArray<readonly [number, number, number, number]> = [
+  // The square's edges.
+  [0, 0, 13, 1],
+  [0, 12, 13, 1],
+  [0, 1, 1, 11],
+  [12, 1, 1, 11],
+  // The box's lid, its sides and bottom, and its handle.
+  [2, 3, 9, 2],
+  [3, 5, 1, 5],
+  [9, 5, 1, 5],
+  [3, 9, 7, 1],
+  [5, 6, 3, 1],
+]
 
-/** Lucide's archive icon, on its 24-unit grid; made when first drawn, as tests run without Path2D. */
-let archivePaths: ReadonlyArray<Path2D> | undefined
-const archiveIcon = () =>
-  (archivePaths ??= ["M3 3h18a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z", "M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8", "M10 12h4"].map(
-    (d) => new Path2D(d),
-  ))
+/** Draws a stash's mark centred on dot, aligned to the device's pixel grid. */
+const drawStash = (context: CanvasRenderingContext2D, dot: Dot, color: string, background: string) => {
+  const scale = context.getTransform().a || 1
+  const snap = (value: number) => Math.round(value * scale) / scale
+  const left = snap(dot.x - stashSize / 2)
+  const top = snap(dot.y - stashSize / 2)
+  context.fillStyle = background
+  context.fillRect(left, top, stashSize, stashSize)
+  context.fillStyle = color
+  for (const [x, y, width, height] of stashPixels) context.fillRect(left + x, top + y, width, height)
+}
 
 /** Mixes two #rrggbb colours: weight 1 gives a, 0 gives b. */
 export const mixHex = (a: string, b: string, weight: number): string => {
