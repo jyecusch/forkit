@@ -1,4 +1,4 @@
-import { Tag } from "lucide-react"
+import { CircleCheck, Tag } from "lucide-react"
 import { remoteBranchName, type Badge } from "@/lib/badges"
 import { baseName } from "@/lib/format"
 import { cn } from "@/lib/utils"
@@ -26,8 +26,9 @@ interface RefBadgeProps {
 }
 
 /**
- * A ref on a commit row. The emphasized ref is filled with its line's
- * colour; other local branches carry a dot in it, so a label leads to its
+ * A ref on a commit row. The branch checked out in the active worktree is
+ * filled green with a check, whatever else it is. The emphasized ref is
+ * filled with its line's colour; other local branches carry a dot in it, so a label leads to its
  * line. A branch checked out in a worktree carries that worktree's icon
  * instead, local branches how far they are from their upstream, remote
  * branches an outline in the theme's remote colour and tags a tag in its tag
@@ -46,7 +47,9 @@ export const RefBadge = ({ badge, worktree, thread, dim, selected, primary, onDo
   ]
     .filter(Boolean)
     .join(" · ")
-  const tone = isEmphasized
+  const tone = isHead
+    ? "bg-head text-background"
+    : isEmphasized
     ? selected
       ? "bg-(--line) text-background"
       : emphasizedTint
@@ -67,7 +70,9 @@ export const RefBadge = ({ badge, worktree, thread, dim, selected, primary, onDo
       style={{ "--line": laneColor(thread) } as React.CSSProperties}
       onDoubleClick={onDoubleClick}
     >
-      {worktree ? (
+      {isHead ? (
+        <CircleCheck aria-hidden className="size-3 flex-none" />
+      ) : worktree ? (
         <WorktreeIcon worktree={worktree} className="size-3 flex-none" />
       ) : ref.kind === "localBranch" && !isEmphasized ? (
         <span aria-hidden className="size-1.5 flex-none rounded-full" style={{ background: laneColor(thread) }} />
@@ -76,7 +81,7 @@ export const RefBadge = ({ badge, worktree, thread, dim, selected, primary, onDo
       ) : null}
       <span className="truncate">{name}</span>
       {merged && <span className="flex-none text-[10px] opacity-70 tabular-nums">×{sameOnOtherRemotes.length + 1}</span>}
-      {primary && ref.kind === "localBranch" && <AheadBehind ahead={ref.ahead} behind={ref.behind} plain={isEmphasized && selected} />}
+      {primary && ref.kind === "localBranch" && <AheadBehind ahead={ref.ahead} behind={ref.behind} plain={isHead || (isEmphasized && selected)} />}
     </span>
   )
 }
