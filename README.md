@@ -6,6 +6,10 @@
 
 <p align="center">A fast forking git client</p>
 
+<p align="center">
+  <img src="assets/screenshots/main-screen.png" alt="Forkit showing a repository's worktrees and branches, its commit graph, and the selected commit's details">
+</p>
+
 Forkit is a cross-platform git client that treats worktrees as first-class. It stays responsive on repositories with very long histories, thousands of branches and tags, and heavy daily activity: the kind that leave other clients staring at a spinner, reconsidering their forking life choices. History is laid out in Go and the window only ever receives the rows on screen. Every open repository is watched, so the UI keeps up with whatever changes on disk.
 
 ## Features
