@@ -81,7 +81,8 @@
         "upstreamRefId": { "$ref": "#/$defs/RefId" },
         "ahead": { "type": "integer" },
         "behind": { "type": "integer" },
-        "checkedOutInWorktreeId": { "$ref": "#/$defs/WorktreeId" }
+        "checkedOutInWorktreeId": { "$ref": "#/$defs/WorktreeId" },
+        "date": { "$ref": "#/$defs/UnixMillis", "description": "When an annotated tag was made, or for any other ref, when the commit it points at was committed." }
       }
     },
 
@@ -220,6 +221,18 @@
       "enum": ["ffOnly", "merge", "rebase"],
       "description": "How a pull brings in the upstream's commits when the branch has its own: refuse, merge them, or rebase onto them."
     },
+    "TagOrder": {
+      "description": "How the sidebar orders tags: by version, newest first, with tags that are not versions after them; by date, newest first; or by name.",
+      "enum": ["version", "date", "name"]
+    },
+    "SidebarPreferences": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tagOrder"],
+      "properties": {
+        "tagOrder": { "$ref": "#/$defs/TagOrder" }
+      }
+    },
     "BehaviourPreferences": {
       "type": "object",
       "additionalProperties": false,
@@ -240,12 +253,13 @@
     "Preferences": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "version", "appearance", "graph", "diff", "git", "behaviour", "telemetry"],
+      "required": ["id", "version", "appearance", "graph", "sidebar", "diff", "git", "behaviour", "telemetry"],
       "properties": {
         "id": { "type": "string" },
         "version": { "type": "integer" },
         "appearance": { "$ref": "#/$defs/AppearancePreferences" },
         "graph": { "$ref": "#/$defs/GraphPreferences" },
+        "sidebar": { "$ref": "#/$defs/SidebarPreferences" },
         "diff": { "$ref": "#/$defs/DiffPreferences" },
         "git": { "$ref": "#/$defs/GitPreferences" },
         "behaviour": { "$ref": "#/$defs/BehaviourPreferences" },

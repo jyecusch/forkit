@@ -1,6 +1,7 @@
 import { useVirtualizer } from "@tanstack/react-virtual"
 import { Archive, ChevronRight, GitBranch, Plus, Search, Server, Tag, X } from "lucide-react"
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react"
+import { usePreferences } from "@/app/hooks"
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu"
 import { buildNavRows, revealedNodes, type NavRow } from "@/lib/navTree"
 import { cn } from "@/lib/utils"
@@ -71,9 +72,10 @@ export const RepoNav = (props: RepoNavProps) => {
 
   const filterRef = useRef<HTMLInputElement>(null)
   const filtering = filter.trim() !== ""
+  const tagOrder = usePreferences()?.sidebar.tagOrder ?? "version"
   const rows = useMemo(
-    () => buildNavRows({ refs, remotes, worktrees, revealed, choices: filtering ? filterChoices : choices, filter }),
-    [refs, remotes, worktrees, revealed, filtering, filterChoices, choices, filter],
+    () => buildNavRows({ refs, remotes, worktrees, revealed, choices: filtering ? filterChoices : choices, filter, tagOrder }),
+    [refs, remotes, worktrees, revealed, filtering, filterChoices, choices, filter, tagOrder],
   )
   const worktreeNames = useMemo(() => new Map(worktrees.map((wt) => [wt.id, wt.path.split(/[\\/]/).pop() ?? wt.path])), [worktrees])
   const showHosts = new Set(remotes.map((remote) => hostOf(remote.fetchUrl))).size > 1

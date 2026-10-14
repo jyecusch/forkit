@@ -48,6 +48,7 @@ func Defaults() model.Preferences {
 			ShowTags:           true,
 			ShowStashes:        true,
 		},
+		Sidebar:   model.SidebarPreferences{TagOrder: model.TagOrderVersion},
 		Diff:      model.DiffPreferences{Layout: model.DiffLayoutUnified},
 		Git:       model.GitPreferences{MaintainCommitGraph: true, FetchInterval: 10, PruneOnFetch: true, PullMode: model.PullModeFFOnly},
 		Behaviour: model.BehaviourPreferences{DirtyCheckout: model.DirtyCheckoutAsk},

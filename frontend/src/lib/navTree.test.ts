@@ -41,10 +41,17 @@ const input = (overrides: Partial<NavInput> = {}): NavInput => ({
   revealed: new Set(),
   choices: new Map(),
   filter: "",
+  tagOrder: "version",
   ...overrides,
 })
 
 describe("buildNavRows", () => {
+  it("lists tags newest version first, inside folders too", () => {
+    const tags = ["v1.2.0", "v1.10.0", "nightly", "app/v0.9.0", "app/v0.10.0"].map((name) => ref("tag", name))
+    const rows = describeRows(buildNavRows(input({ refs: tags, remotes: [], worktrees: [], choices: new Map([["tags", true], ["tags/app", true]]) })))
+    expect(rows).toEqual(["Tags", "  app/", "    v0.10.0", "    v0.9.0", "  v1.10.0", "  v1.2.0", "  nightly"])
+  })
+
   it("lists worktrees, open local branches, remotes with origin first, and closed tags", () => {
     expect(describeRows(buildNavRows(input()))).toEqual([
       "Worktrees",

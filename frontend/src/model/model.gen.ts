@@ -93,6 +93,7 @@ export const Ref = Schema.Struct({
   ahead: Schema.optionalKey(Schema.Int),
   behind: Schema.optionalKey(Schema.Int),
   checkedOutInWorktreeId: Schema.optionalKey(WorktreeId),
+  date: Schema.optionalKey(UnixMillis),
 })
 export type Ref = typeof Ref.Type
 
@@ -237,6 +238,15 @@ export const GitPreferences = Schema.Struct({
 })
 export type GitPreferences = typeof GitPreferences.Type
 
+/** How the sidebar orders tags: by version, newest first, with tags that are not versions after them; by date, newest first; or by name. */
+export const TagOrder = Schema.Literals(["version", "date", "name"])
+export type TagOrder = typeof TagOrder.Type
+
+export const SidebarPreferences = Schema.Struct({
+  tagOrder: TagOrder,
+})
+export type SidebarPreferences = typeof SidebarPreferences.Type
+
 export const BehaviourPreferences = Schema.Struct({
   dirtyCheckout: DirtyCheckout,
 })
@@ -253,6 +263,7 @@ export const Preferences = Schema.Struct({
   version: Schema.Int,
   appearance: AppearancePreferences,
   graph: GraphPreferences,
+  sidebar: SidebarPreferences,
   diff: DiffPreferences,
   git: GitPreferences,
   behaviour: BehaviourPreferences,
