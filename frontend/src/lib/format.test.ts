@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { baseName, formatDate, reflow } from "./format"
+import { baseName, formatDate, reflow, stashTitle } from "./format"
 
 describe("formatDate", () => {
   const now = Date.UTC(2026, 9, 12, 12, 0, 0)
@@ -32,5 +32,19 @@ describe("reflow", () => {
   it("keeps list items, their wrapped text joined, and code as written", () => {
     const message = ["- first item", "  continues", "- second", "wraps here", "", "```", "a", "b", "```", "    indented", "    code"].join("\n")
     expect(reflow(message)).toBe(["- first item", "  continues", "- second wraps here", "", "```", "a", "b", "```", "    indented", "    code"].join("\n"))
+  })
+})
+
+describe("stashTitle", () => {
+  it("keeps only the message of a named stash", () => {
+    expect(stashTitle('On feat/head-label: Auto stash before checking out "origin/main"')).toBe('Auto stash before checking out "origin/main"')
+  })
+
+  it("names an unnamed stash by its branch", () => {
+    expect(stashTitle("WIP on main: a29376e Add line 4")).toBe("WIP on main")
+  })
+
+  it("leaves other subjects alone", () => {
+    expect(stashTitle("Something else")).toBe("Something else")
   })
 })

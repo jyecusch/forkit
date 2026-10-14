@@ -16,16 +16,21 @@ export interface Segment {
   readonly y2: number
   readonly kind: EdgeKind
   readonly thread: number
-  /** Part of the line from uncommitted changes, drawn dashed in the highlight colour. */
-  readonly uncommitted: boolean
+  /**
+   * What the line belongs to: history in its thread's colour, or the line
+   * from uncommitted changes or a stash to the commit they build on, drawn
+   * lighter and dashed.
+   */
+  readonly line: "history" | "uncommitted" | "stash"
 }
 
 /**
  * How a commit is drawn: ordinary commits are solid and merges are rings.
  * The active worktree's checked-out commit is solid with an outer ring;
- * other worktrees' are solid with a fainter, thinner one.
+ * other worktrees' are solid with a fainter, thinner one. A stash is a
+ * hollow square, as it is not part of history.
  */
-export type DotShape = "commit" | "merge" | "head" | "worktree"
+export type DotShape = "commit" | "merge" | "head" | "worktree" | "stash"
 
 export interface Dot {
   readonly x: number
@@ -74,15 +79,22 @@ export const geometry = (options: {
         y2: centerY(index + 1),
         kind: edge.kind,
         thread: edge.threadId,
-        uncommitted: edge.uncommitted === true,
+        line: edge.uncommitted ? "uncommitted" : edge.stash ? "stash" : "history",
       })
     }
     dots.push({
       x: x(row.lane),
       y: centerY(index),
       thread: row.threadId,
-      shape:
-        row.oid === activeHead ? "head" : headOids.has(row.oid) ? "worktree" : commit.parents.length > 1 ? "merge" : "commit",
+      shape: row.stash
+        ? "stash"
+        : row.oid === activeHead
+          ? "head"
+          : headOids.has(row.oid)
+            ? "worktree"
+            : commit.parents.length > 1
+              ? "merge"
+              : "commit",
     })
   }
   return { segments, dots }

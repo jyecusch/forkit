@@ -231,6 +231,7 @@ func graphOptions(p model.Preferences) graph.Options {
 		Order:          p.Graph.Order,
 		IncludeRemotes: p.Graph.ShowRemoteBranches,
 		IncludeTags:    p.Graph.ShowTags,
+		IncludeStashes: p.Graph.ShowStashes,
 	}
 }
 

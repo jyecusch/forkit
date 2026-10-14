@@ -21,11 +21,17 @@ type lane struct {
 	// uncommitted marks the lane reserved for a worktree's uncommitted
 	// changes, which runs down to the commit they build on.
 	uncommitted bool
+	// stash marks a lane from a stash down to the commit it was made on.
+	stash bool
 }
 
-// uncommittedThread is the thread of the uncommitted changes' lane. It is not
-// numbered with the branches', so their colours stay put as changes come and go.
-const uncommittedThread = -1
+// uncommittedThread and stashThread are the threads of uncommitted changes
+// and stashes. They are not numbered with the branches', so branch colours
+// stay put as changes and stashes come and go.
+const (
+	uncommittedThread = -1
+	stashThread       = -2
+)
 
 // edge is a line from a lane at one row to a lane at the next.
 type edge struct {
@@ -33,6 +39,7 @@ type edge struct {
 	thread           int32
 	kind             edgeKind
 	uncommitted      bool
+	stash            bool
 }
 
 type edgeKind uint8
@@ -83,8 +90,8 @@ func (l *layout) clone() *layout {
 
 // place positions commit id, whose parents are given, on the next row. When
 // edges is non-nil the lines from the previous row down to this one are
-// appended to it.
-func (l *layout) place(id int32, parents []int32, edges *[]edge) placement {
+// appended to it. A stash has one parent, the commit it was made on.
+func (l *layout) place(id int32, parents []int32, stash bool, edges *[]edge) placement {
 	row := l.row + 1
 	target := l.laneFor(id)
 	if edges != nil {
@@ -92,7 +99,10 @@ func (l *layout) place(id int32, parents []int32, edges *[]edge) placement {
 	}
 
 	thread := l.lanes[target].thread
-	if l.lanes[target].expect != id || l.lanes[target].uncommitted {
+	switch {
+	case stash:
+		thread = stashThread
+	case l.lanes[target].expect != id || l.lanes[target].uncommitted || l.lanes[target].stash:
 		thread = l.newThread()
 	}
 	for i := range l.lanes {
@@ -105,6 +115,12 @@ func (l *layout) place(id int32, parents []int32, edges *[]edge) placement {
 	if len(parents) == 0 {
 		l.finishPlacing(row, target)
 		l.rootLane = target
+		return placement{lane: target, thread: thread}
+	}
+	if stash {
+		// Not a first-parent link, so the commit keeps its branch's lane.
+		l.lanes[target] = lane{expect: parents[0], thread: thread, firstParentOf: noRow, forkedAt: noRow, stash: true}
+		l.finishPlacing(row, target)
 		return placement{lane: target, thread: thread}
 	}
 	l.lanes[target] = lane{expect: parents[0], thread: thread, firstParentOf: row, forkedAt: noRow}
@@ -149,7 +165,7 @@ func (l *layout) appendEdgesInto(id, target int32, edges *[]edge) {
 		if to != lane {
 			kind = edgeMerge
 		}
-		*edges = append(*edges, edge{fromLane: lane, toLane: to, thread: ln.thread, kind: kind, uncommitted: ln.uncommitted})
+		*edges = append(*edges, edge{fromLane: lane, toLane: to, thread: ln.thread, kind: kind, uncommitted: ln.uncommitted, stash: ln.stash})
 	}
 	for _, forkLane := range l.forks {
 		to := destination(forkLane)
@@ -163,7 +179,7 @@ func (l *layout) appendTrailingEdges(edges *[]edge) {
 	for i, ln := range l.lanes {
 		if ln.expect >= 0 {
 			lane := int32(i)
-			*edges = append(*edges, edge{fromLane: lane, toLane: lane, thread: ln.thread, kind: edgeStraight, uncommitted: ln.uncommitted})
+			*edges = append(*edges, edge{fromLane: lane, toLane: lane, thread: ln.thread, kind: edgeStraight, uncommitted: ln.uncommitted, stash: ln.stash})
 		}
 	}
 }

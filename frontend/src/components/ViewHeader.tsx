@@ -33,6 +33,7 @@ interface ViewHeaderProps {
  */
 export const ViewHeader = ({ worktree, refsById, headEmphasized, emphasizedOther, onClearEmphasis, view, checkingOut, detailsShown, onToggleDetails, onShowChanges, actions }: ViewHeaderProps) => {
   const changes = worktree ? changeCount(worktree) : 0
+  const commits = view ? view.totalRows - view.stashRows : 0
   const head = worktree?.head.refId ? refsById.get(worktree.head.refId) : undefined
   // A branch's chip takes its graph line's colour; anything else the accent.
   const emphasizedId = headEmphasized ? head?.id : emphasizedOther?.id
@@ -90,7 +91,7 @@ export const ViewHeader = ({ worktree, refsById, headEmphasized, emphasizedOther
         {actions}
         {view && (
           <span className="tabular-nums">
-            {view.totalRows.toLocaleString()} {view.totalRows === 1 ? "commit" : "commits"}
+            {commits.toLocaleString()} {commits === 1 ? "commit" : "commits"}
             {view.complete ? "" : "…"}
           </span>
         )}

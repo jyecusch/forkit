@@ -26,6 +26,10 @@ export function Diff(arg1, arg2, arg3) {
   return window['go']['rpc']['Repos']['Diff'](arg1, arg2, arg3);
 }
 
+export function DropStash(arg1, arg2, arg3) {
+  return window['go']['rpc']['Repos']['DropStash'](arg1, arg2, arg3);
+}
+
 export function Fetch(arg1, arg2, arg3) {
   return window['go']['rpc']['Repos']['Fetch'](arg1, arg2, arg3);
 }

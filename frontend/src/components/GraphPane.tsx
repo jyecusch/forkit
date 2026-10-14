@@ -6,14 +6,14 @@ import { useForkedEffect, useResolvedTheme } from "@/app/hooks"
 import { useLayoutSize, type LayoutSizeControl } from "@/app/layoutSizes"
 import { useService } from "@/app/services"
 import { avatarColumn, columnGap, layoutColumns, listInset } from "@/graph/columns"
-import { drawGraph, readPalette, uncommittedLine, type GraphPalette } from "@/graph/draw"
+import { dashedLine, drawGraph, readPalette, type GraphPalette } from "@/graph/draw"
 import { geometry, gutter, laneWidth, laneX, rowHeight, widestLane } from "@/graph/geometry"
 import { notify } from "@/app/notifications"
 import { useNow } from "@/app/useNow"
-import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu"
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu"
 import { RefMenu, type RefActions } from "./RefMenu"
 import { badgesFor } from "@/lib/badges"
-import { formatDate, formatFullDate, shortOid } from "@/lib/format"
+import { formatDate, formatFullDate, shortOid, stashTitle } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import type { GraphView, Preferences, Ref, RefId, RepoId, Worktree } from "@/model/model.gen"
 import { GraphData, type LoadedRow } from "@/services/GraphData"
@@ -213,6 +213,8 @@ export const GraphPane = (props: GraphPaneProps) => {
       newWorktree: (base) => latestRefActions.current.newWorktree(base),
       emphasize: (ref) => latestRefActions.current.emphasize(ref),
       deleteBranches: (refs) => latestRefActions.current.deleteBranches(refs),
+      popStash: (stash) => latestRefActions.current.popStash(stash),
+      dropStash: (stash) => latestRefActions.current.dropStash(stash),
     }),
     [],
   )
@@ -248,16 +250,24 @@ export const GraphPane = (props: GraphPaneProps) => {
     const context = canvas?.getContext("2d")
     if (!canvas || !context) return
     const dpr = window.devicePixelRatio || 1
-    canvas.width = Math.round(columns.graph * dpr)
-    canvas.height = Math.round(canvasHeight * dpr)
-    context.setTransform(dpr, 0, 0, dpr, 0, 0)
+    // A device pixel to spare on each axis, for the shift that aligns the
+    // canvas, and shown at exactly its pixel size so it is never stretched.
+    canvas.width = Math.ceil(columns.graph * dpr) + 1
+    canvas.height = Math.ceil(canvasHeight * dpr) + 1
+    canvas.style.width = `${canvas.width / dpr}px`
+    canvas.style.height = `${canvas.height / dpr}px`
   }, [columns.graph, canvasHeight])
 
   const canvasTop = wipHeight + first * rowHeight
   useLayoutEffect(() => {
-    const context = canvasRef.current?.getContext("2d")
-    if (!context || !palette || !active) return
-    context.clearRect(0, 0, columns.graph, canvasHeight)
+    const canvas = canvasRef.current
+    const context = canvas?.getContext("2d")
+    if (!canvas || !context || !palette || !active) return
+    const dpr = window.devicePixelRatio || 1
+    const { dx, dy } = alignToDevicePixels(canvas, dpr)
+    context.setTransform(1, 0, 0, 1, 0, 0)
+    context.clearRect(0, 0, canvas.width, canvas.height)
+    context.setTransform(dpr, 0, 0, dpr, dx * dpr, dy * dpr)
     drawGraph(
       context,
       geometry({
@@ -435,7 +445,7 @@ export const GraphPane = (props: GraphPaneProps) => {
             ref={canvasRef}
             aria-hidden
             className="pointer-events-none absolute"
-            style={{ top: canvasTop, left: columns.graphLeft, width: columns.graph, height: canvasHeight }}
+            style={{ top: canvasTop, left: columns.graphLeft }}
           />
           {wip && (
             <ChangesNode
@@ -531,7 +541,7 @@ const ChangesNode = ({ left, x, width, joinsFirstRow }: { left: number; x: numbe
   const end = rowHeight + rowHeight / 2 - (joinsFirstRow ? 7 : 0)
   // Started a whole number of dash patterns above the end, so its dashes run
   // on into the canvas's below.
-  const period = uncommittedLine.dash[0] + uncommittedLine.dash[1]
+  const period = dashedLine.dash[0] + dashedLine.dash[1]
   const start = end - Math.floor((end - nodeY - radius) / period) * period
   return (
     <svg
@@ -540,10 +550,10 @@ const ChangesNode = ({ left, x, width, joinsFirstRow }: { left: number; x: numbe
       style={{ left, width, height: end }}
       fill="none"
       stroke="var(--highlight)"
-      strokeOpacity={uncommittedLine.strength}
-      strokeWidth={uncommittedLine.width}
+      strokeOpacity={dashedLine.strength}
+      strokeWidth={dashedLine.width}
     >
-      <line x1={x} x2={x} y1={start} y2={end} strokeDasharray={uncommittedLine.dash.join(" ")} />
+      <line x1={x} x2={x} y1={start} y2={end} strokeDasharray={dashedLine.dash.join(" ")} />
       <circle cx={x} cy={nodeY} r={radius - 0.5} fill="var(--background)" />
     </svg>
   )
@@ -663,6 +673,8 @@ const CommitRow = memo(function CommitRow({
   const { row, commit } = loaded
   const dim = anyEmphasis && !row.onEmphasized
   const badges = badgesFor(row.refIds, refsById, { head: headRef, emphasized })
+  const stash = row.stash ? row.refIds.map((id) => refsById.get(id)).find((ref) => ref?.kind === "stash") : undefined
+  const subject = row.stash ? stashTitle(commit.subject) : commit.subject
   return (
     <ContextMenu onOpenChange={onMenuOpenChange}>
       <ContextMenuTrigger asChild>
@@ -707,7 +719,7 @@ const CommitRow = memo(function CommitRow({
                           dim={dim}
                           selected={selected}
                           primary={i === 0}
-                          onDoubleClick={badge.ref.kind === "stash" ? undefined : () => refActions.open(badge.ref)}
+                          onDoubleClick={() => refActions.open(badge.ref)}
                         />
                       </ContextMenuTrigger>
                       <RefMenu
@@ -740,7 +752,7 @@ const CommitRow = memo(function CommitRow({
               className={cn("min-w-0 flex-1 truncate", !dim ? "text-foreground" : selected ? "text-secondary-foreground" : "text-subtle-foreground")}
               title={commit.subject}
             >
-              {commit.subject}
+              {subject}
             </span>
             {/* When and which commit, shown while the row is hovered; the details panel has them too. */}
             <span
@@ -756,9 +768,34 @@ const CommitRow = memo(function CommitRow({
         </div>
       </ContextMenuTrigger>
       <ContextMenuContent className="w-48">
+        {stash && (
+          <>
+            <ContextMenuItem onSelect={() => refActions.open(stash)}>Apply stash</ContextMenuItem>
+            <ContextMenuItem onSelect={() => refActions.popStash(stash)}>Pop stash</ContextMenuItem>
+            <ContextMenuItem variant="destructive" onSelect={() => refActions.dropStash(stash)}>
+              Drop stash…
+            </ContextMenuItem>
+            <ContextMenuSeparator />
+          </>
+        )}
         <ContextMenuItem onSelect={() => copySha(row.oid)}>Copy SHA</ContextMenuItem>
         <ContextMenuItem onSelect={() => void navigator.clipboard.writeText(commit.subject)}>Copy subject</ContextMenuItem>
       </ContextMenuContent>
                     </ContextMenu>
   )
 })
+
+/**
+ * Moves the canvas back to the device pixel its corner falls in, and returns
+ * how far, in CSS pixels, for drawing to move forward by. A canvas whose
+ * pixels do not line up with the screen's is resampled, which blurs every
+ * line and mark on it, most visibly at 1x.
+ */
+const alignToDevicePixels = (canvas: HTMLCanvasElement, dpr: number) => {
+  canvas.style.transform = ""
+  const { left, top } = canvas.getBoundingClientRect()
+  const dx = (left * dpr - Math.floor(left * dpr)) / dpr
+  const dy = (top * dpr - Math.floor(top * dpr)) / dpr
+  canvas.style.transform = `translate(${-dx}px, ${-dy}px)`
+  return { dx, dy }
+}

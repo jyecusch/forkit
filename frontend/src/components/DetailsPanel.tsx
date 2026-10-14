@@ -116,7 +116,8 @@ const CommitTab = ({
             <CopyButton text={commit.oid} label="Copy full SHA" />
           </dd>
           <dt className="text-subtle-foreground">Parents</dt>
-          <dd className="font-mono text-secondary-foreground">{commit.parents.map(shortOid).join(", ") || "none (root)"}</dd>
+          {/* A stash's details give only the commit it was made on, not the commits holding its files. */}
+          <dd className="font-mono text-secondary-foreground">{(detail?.parents ?? commit.parents).map(shortOid).join(", ") || "none (root)"}</dd>
           {detail && detail.committerName !== commit.authorName && (
             <>
               <dt className="text-subtle-foreground">Committer</dt>
@@ -135,8 +136,9 @@ const CommitTab = ({
       <ul className="flex flex-col px-2 pb-2">
         {detail?.files.map((file) => {
           const target: DiffTarget = {
-            request: { kind: "commit", oid: detail.oid, path: file.path, ...(file.oldPath && { oldPath: file.oldPath }) },
+            request: { kind: "commit", oid: file.diffOid ?? detail.oid, path: file.path, ...(file.oldPath && { oldPath: file.oldPath }) },
             conflicted: false,
+            ...(file.diffOid && { shownOid: detail.oid }),
           }
           return (
             <li key={file.path}>

@@ -70,3 +70,15 @@ export const reflow = (text: string): string => {
   }
   return lines.join("\n")
 }
+
+/**
+ * A stash's subject without the branch git puts before it: "On main: try
+ * this" becomes "try this". A stash git named itself, "WIP on main: abc1234
+ * subject", becomes "WIP on main", as the rest names the commit it was made
+ * on, which its line already leads to.
+ */
+export const stashTitle = (subject: string): string => {
+  const wip = /^(WIP on .+?): [0-9a-f]+ /.exec(subject)
+  if (wip) return wip[1]!
+  return /^On .+?: (.+)$/.exec(subject)?.[1] ?? subject
+}

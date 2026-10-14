@@ -6,24 +6,27 @@ export interface GraphPalette {
   readonly background: string
   /** The uncommitted changes' line, which has no branch colour of its own. */
   readonly uncommitted: string
+  /** Stashes and their lines, quieter than any branch. */
+  readonly stash: string
 }
 
 export const readPalette = (element: Element): GraphPalette => {
   const style = getComputedStyle(element)
   const lanes = Array.from({ length: 8 }, (_, i) => style.getPropertyValue(`--lane-${i}`).trim())
   const background = style.getPropertyValue("--background").trim()
-  const uncommitted = mixHex(style.getPropertyValue("--highlight").trim(), background, uncommittedLine.strength)
-  return { lanes, background, uncommitted }
+  const uncommitted = mixHex(style.getPropertyValue("--highlight").trim(), background, dashedLine.strength)
+  const stash = style.getPropertyValue("--subtle-foreground").trim()
+  return { lanes, background, uncommitted, stash }
 }
 
 const lineWidth = 2
 
 /**
- * The uncommitted changes' line is lighter than history's: thinner, faded,
- * and dashed. Its pattern divides the row height, so every row's piece
- * continues the dashes of the one above.
+ * The lines from uncommitted changes and stashes are lighter than history's:
+ * thinner, faded, and dashed. The pattern divides the row height, so every
+ * row's piece continues the dashes of the one above.
  */
-export const uncommittedLine = { width: 1.25, dash: [2, 2] as const, strength: 0.85 }
+export const dashedLine = { width: 1.25, dash: [2, 2] as const, strength: 0.85 }
 const dotRadius = 4
 /** Radius of the bend where a line changes lane. */
 const elbowRadius = 8
@@ -51,14 +54,16 @@ const fadeWidth = 16
 export const drawGraph = (context: CanvasRenderingContext2D, geometry: Geometry, palette: GraphPalette, options: DrawOptions) => {
   const { width, height } = options
   const colorOf = (thread: number) => palette.lanes[thread % palette.lanes.length]!
+  const dotColor = (dot: Dot) => (dot.shape === "stash" ? palette.stash : colorOf(dot.thread))
 
   context.lineWidth = lineWidth
   context.lineCap = "butt"
   context.lineJoin = "round"
   for (const segment of geometry.segments) {
-    context.strokeStyle = segment.uncommitted ? palette.uncommitted : colorOf(segment.thread)
-    context.lineWidth = segment.uncommitted ? uncommittedLine.width : lineWidth
-    context.setLineDash(segment.uncommitted ? [...uncommittedLine.dash] : [])
+    const dashed = segment.line !== "history"
+    context.strokeStyle = dashed ? palette[segment.line] : colorOf(segment.thread)
+    context.lineWidth = dashed ? dashedLine.width : lineWidth
+    context.setLineDash(dashed ? [...dashedLine.dash] : [])
     context.beginPath()
     traceSegment(context, segment)
     context.stroke()
@@ -69,7 +74,7 @@ export const drawGraph = (context: CanvasRenderingContext2D, geometry: Geometry,
   const clipped: Array<Dot> = []
   for (const dot of geometry.dots) {
     if (dot.x < 0 || dot.x > width) clipped.push(dot)
-    else drawDot(context, dot, colorOf(dot.thread), palette.background)
+    else drawDot(context, dot, dotColor(dot), palette.background)
   }
 
   context.save()
@@ -89,7 +94,7 @@ export const drawGraph = (context: CanvasRenderingContext2D, geometry: Geometry,
 
   for (const dot of clipped) {
     const edge = dot.x < 0 ? 0 : width
-    context.fillStyle = palette.lanes[dot.thread % palette.lanes.length]!
+    context.fillStyle = dotColor(dot)
     context.beginPath()
     context.arc(edge, dot.y, dotRadius, 0, Math.PI * 2)
     context.fill()
@@ -130,6 +135,9 @@ const drawDot = (context: CanvasRenderingContext2D, dot: Dot, color: string, bac
   }
 
   switch (dot.shape) {
+    case "stash":
+      drawStash(context, dot, color, background)
+      break
     case "commit":
       context.fillStyle = color
       circle(dotRadius)
@@ -153,6 +161,38 @@ const drawDot = (context: CanvasRenderingContext2D, dot: Dot, color: string, bac
       break
   }
   context.lineWidth = lineWidth
+}
+
+/**
+ * The pixels of a stash's mark, a 13-pixel square holding an archive box:
+ * [x, y, width, height] from its top-left corner. Whole pixels, so it stays
+ * sharp on screens of every density, where a scaled vector icon would blur.
+ */
+const stashSize = 13
+const stashPixels: ReadonlyArray<readonly [number, number, number, number]> = [
+  // The square's edges.
+  [0, 0, 13, 1],
+  [0, 12, 13, 1],
+  [0, 1, 1, 11],
+  [12, 1, 1, 11],
+  // The box's lid, its sides and bottom, and its handle.
+  [2, 3, 9, 2],
+  [3, 5, 1, 5],
+  [9, 5, 1, 5],
+  [3, 9, 7, 1],
+  [5, 6, 3, 1],
+]
+
+/** Draws a stash's mark centred on dot, aligned to the device's pixel grid. */
+const drawStash = (context: CanvasRenderingContext2D, dot: Dot, color: string, background: string) => {
+  const { a: scale, e: shiftX, f: shiftY } = context.getTransform()
+  const snap = (value: number, shift: number) => (Math.round(value * scale + shift) - shift) / scale
+  const left = snap(dot.x - stashSize / 2, shiftX)
+  const top = snap(dot.y - stashSize / 2, shiftY)
+  context.fillStyle = background
+  context.fillRect(left, top, stashSize, stashSize)
+  context.fillStyle = color
+  for (const [x, y, width, height] of stashPixels) context.fillRect(left + x, top + y, width, height)
 }
 
 /** Mixes two #rrggbb colours: weight 1 gives a, 0 gives b. */

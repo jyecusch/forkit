@@ -38,6 +38,37 @@ func ReadCommitDetail(ctx context.Context, git *gitexec.Git, loc Location, oid m
 	return detail, err
 }
 
+// ReadStashDetail returns a stash's message and the files it changed
+// relative to the commit it was made on, untracked files included. Its only
+// parent is that commit, as in the graph.
+func ReadStashDetail(ctx context.Context, git *gitexec.Git, loc Location, oid model.OID) (model.CommitDetail, error) {
+	detail, err := ReadCommitDetail(ctx, git, loc, oid)
+	if err != nil || len(detail.Parents) < 2 {
+		return detail, err
+	}
+	parents := detail.Parents
+	detail.Parents = parents[:1]
+	if len(parents) < 3 {
+		return detail, nil
+	}
+	// The third parent, made by --include-untracked, is a root commit
+	// holding only the untracked files.
+	untracked := parents[2]
+	out, err := git.Run(ctx, loc.WorkDir, "diff-tree", "-r", "-z", "--raw", "--numstat", "--no-commit-id", "--root", string(untracked))
+	if err != nil {
+		return model.CommitDetail{}, err
+	}
+	files, err := parseFileChanges(string(out))
+	if err != nil {
+		return model.CommitDetail{}, err
+	}
+	for i := range files {
+		files[i].DiffOID = untracked
+	}
+	detail.Files = append(detail.Files, files...)
+	return detail, nil
+}
+
 func parseCommitDetail(out string) (model.CommitDetail, error) {
 	fields := strings.SplitN(out, "\x00", 9)
 	if len(fields) != 9 {

@@ -9,7 +9,7 @@ import { syntaxStyles, tokenStride } from "@/highlight/styles"
 import { shortOid } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import { wordDiff, type Range } from "@/lib/wordDiff"
-import type { DiffHunk, DiffLayout, DiffLine, DiffRequest, FileDiff, RepoId } from "@/model/model.gen"
+import type { DiffHunk, DiffLayout, DiffLine, DiffRequest, FileDiff, Oid, RepoId } from "@/model/model.gen"
 import { Preferences } from "@/services/Preferences"
 import { Rpc } from "@/services/Rpc"
 import { ResizeHandle } from "./ResizeHandle"
@@ -19,6 +19,8 @@ export interface DiffTarget {
   readonly request: DiffRequest
   /** Conflicted files have no single diff to show until they are resolved. */
   readonly conflicted: boolean
+  /** The commit named in the header, when not the one diffed: a stash, whose untracked files are diffed in a commit of their own. */
+  readonly shownOid?: Oid
 }
 
 export const sameDiff = (a: DiffTarget | undefined, b: DiffTarget | undefined) =>
@@ -279,7 +281,7 @@ export const DiffView = ({ repo, target, revision, active, onClose }: DiffViewPr
         </button>
         <PathLabel path={request.path} oldPath={request.oldPath} />
         <span className="flex-none rounded bg-foreground/[0.06] px-1.5 py-0.5 text-[11px] text-secondary-foreground">
-          {request.kind === "commit" && request.oid ? <span className="font-mono">{shortOid(request.oid)}</span> : kindLabels[request.kind]}
+          {request.kind === "commit" && request.oid ? <span className="font-mono">{shortOid(target.shownOid ?? request.oid)}</span> : kindLabels[request.kind]}
         </span>
         {diff && !diff.binary && (
           <span className="ml-auto flex flex-none items-center gap-3">

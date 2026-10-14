@@ -21,6 +21,7 @@ type History struct {
 	rowID       []int32
 	parentStart []int32 // parents of row r are parentIDs[parentStart[r]:parentStart[r+1]]
 	parentIDs   []int32
+	stashRows   map[int32]bool
 }
 
 func newHistory() *History {
@@ -69,6 +70,9 @@ func (h *History) Prepend(newer *History) (*History, error) {
 			if err := merged.Append(source.oidOf(source.rowID[row]), parentOIDs); err != nil {
 				return nil, err
 			}
+			if source.IsStash(row) {
+				merged.markStash(merged.Len() - 1)
+			}
 		}
 	}
 	return merged, nil
@@ -77,6 +81,19 @@ func (h *History) Prepend(newer *History) (*History, error) {
 // Parents returns the ids of row's parents, first parent first.
 func (h *History) Parents(row int) []int32 {
 	return h.parentIDs[h.parentStart[row]:h.parentStart[row+1]]
+}
+
+// StashCount is the number of rows that are stashes.
+func (h *History) StashCount() int { return len(h.stashRows) }
+
+// IsStash reports whether row is a stash rather than a commit of history.
+func (h *History) IsStash(row int) bool { return h.stashRows[int32(row)] }
+
+func (h *History) markStash(row int) {
+	if h.stashRows == nil {
+		h.stashRows = map[int32]bool{}
+	}
+	h.stashRows[int32(row)] = true
 }
 
 // RowOfID returns the row of a commit id, or -1 if it has not been read.

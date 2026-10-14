@@ -117,7 +117,7 @@
       }
     },
 
-    "OperationKind": { "enum": ["checkout", "createWorktree", "removeWorktree", "deleteBranches", "fetch", "pull", "push"] },
+    "OperationKind": { "enum": ["checkout", "createWorktree", "removeWorktree", "deleteBranches", "fetch", "pull", "push", "stash", "applyStash", "dropStash"] },
     "OperationState": { "enum": ["queued", "running", "done", "failed", "cancelled"] },
     "OperationProgress": {
       "type": "object",
@@ -155,6 +155,13 @@
         "reapplyConflicted": { "type": "boolean", "description": "Stashed changes conflicted when reapplied and were left in the stash." }
       }
     },
+    "ApplyStashResult": {
+      "type": "object",
+      "required": ["conflicted"],
+      "properties": {
+        "conflicted": { "type": "boolean", "description": "The stash conflicted with the worktree's files, which now hold conflict markers; a pop keeps the stash." }
+      }
+    },
 
     "Appearance": { "enum": ["system", "light", "dark"], "description": "Which of the light and dark themes is used; system follows the operating system." },
     "LightTheme": { "enum": ["tokyo-night-day", "catppuccin-latte", "github-light", "one-light", "gruvbox-light", "solarized-light", "rose-pine-dawn"] },
@@ -179,11 +186,12 @@
     "GraphPreferences": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["order", "showRemoteBranches", "showTags"],
+      "required": ["order", "showRemoteBranches", "showTags", "showStashes"],
       "properties": {
         "order": { "$ref": "#/$defs/GraphOrder" },
         "showRemoteBranches": { "type": "boolean" },
-        "showTags": { "type": "boolean" }
+        "showTags": { "type": "boolean" },
+        "showStashes": { "type": "boolean" }
       }
     },
     "DiffLayout": { "enum": ["unified", "split"], "description": "One column of old and new lines, or old and new side by side." },
@@ -297,7 +305,8 @@
         "toLane": { "type": "integer" },
         "threadId": { "type": "integer" },
         "kind": { "$ref": "#/$defs/EdgeKind" },
-        "uncommitted": { "type": "boolean", "description": "Part of the line from the active worktree's uncommitted changes, above the first row, to the commit they build on." }
+        "uncommitted": { "type": "boolean", "description": "Part of the line from the active worktree's uncommitted changes, above the first row, to the commit they build on." },
+        "stash": { "type": "boolean", "description": "Part of the line from a stash to the commit it was made on." }
       }
     },
     "GraphRow": {
@@ -310,16 +319,18 @@
         "threadId": { "type": "integer" },
         "edges": { "type": "array", "items": { "$ref": "#/$defs/GraphEdge" } },
         "refIds": { "type": "array", "items": { "$ref": "#/$defs/RefId" } },
-        "onEmphasized": { "type": "boolean" }
+        "onEmphasized": { "type": "boolean" },
+        "stash": { "type": "boolean", "description": "The row is a stash rather than a commit of history; its threadId is not a branch's." }
       }
     },
     "GraphView": {
       "type": "object",
-      "required": ["id", "version", "totalRows", "laneCount", "complete", "firstChangedRow", "branchThreads"],
+      "required": ["id", "version", "totalRows", "stashRows", "laneCount", "complete", "firstChangedRow", "branchThreads"],
       "properties": {
         "id": { "$ref": "#/$defs/RepoId" },
         "version": { "type": "integer" },
         "totalRows": { "type": "integer" },
+        "stashRows": { "type": "integer", "description": "How many of the rows are stashes rather than commits." },
         "laneCount": { "type": "integer" },
         "complete": { "type": "boolean", "description": "False while history is still streaming in." },
         "firstChangedRow": { "type": "integer", "description": "Rows before this index are unchanged since the previous version." },
@@ -350,7 +361,8 @@
         "status": { "$ref": "#/$defs/FileChangeStatus" },
         "additions": { "type": "integer" },
         "deletions": { "type": "integer" },
-        "binary": { "type": "boolean" }
+        "binary": { "type": "boolean" },
+        "diffOid": { "$ref": "#/$defs/Oid", "description": "The commit whose diff shows this file, when not the one listing it: a stash keeps its untracked files in a commit of their own." }
       }
     },
     "DiffKind": { "enum": ["commit", "staged", "unstaged", "untracked"], "description": "Where a file's changes come from: a commit against its first parent, or a worktree's index or files." },

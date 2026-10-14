@@ -165,6 +165,9 @@ const (
 	OperationKindFetch          OperationKind = "fetch"
 	OperationKindPull           OperationKind = "pull"
 	OperationKindPush           OperationKind = "push"
+	OperationKindStash          OperationKind = "stash"
+	OperationKindApplyStash     OperationKind = "applyStash"
+	OperationKindDropStash      OperationKind = "dropStash"
 )
 
 type OperationState string
@@ -208,6 +211,11 @@ type CheckoutResult struct {
 	Branch RefID `json:"branch,omitempty"`
 	// Stashed changes conflicted when reapplied and were left in the stash.
 	ReapplyConflicted bool `json:"reapplyConflicted"`
+}
+
+type ApplyStashResult struct {
+	// The stash conflicted with the worktree's files, which now hold conflict markers; a pop keeps the stash.
+	Conflicted bool `json:"conflicted"`
 }
 
 // Which of the light and dark themes is used; system follows the operating system.
@@ -292,6 +300,7 @@ type GraphPreferences struct {
 	Order              GraphOrder `json:"order"`
 	ShowRemoteBranches bool       `json:"showRemoteBranches"`
 	ShowTags           bool       `json:"showTags"`
+	ShowStashes        bool       `json:"showStashes"`
 }
 
 // One column of old and new lines, or old and new side by side.
@@ -402,6 +411,8 @@ type GraphEdge struct {
 	Kind     EdgeKind `json:"kind"`
 	// Part of the line from the active worktree's uncommitted changes, above the first row, to the commit they build on.
 	Uncommitted *bool `json:"uncommitted,omitempty"`
+	// Part of the line from a stash to the commit it was made on.
+	Stash *bool `json:"stash,omitempty"`
 }
 
 type GraphRow struct {
@@ -412,13 +423,17 @@ type GraphRow struct {
 	Edges        []GraphEdge `json:"edges,omitempty"`
 	RefIDs       []RefID     `json:"refIds,omitempty"`
 	OnEmphasized bool        `json:"onEmphasized"`
+	// The row is a stash rather than a commit of history; its threadId is not a branch's.
+	Stash *bool `json:"stash,omitempty"`
 }
 
 type GraphView struct {
 	ID        RepoID `json:"id"`
 	Version   int    `json:"version"`
 	TotalRows int    `json:"totalRows"`
-	LaneCount int    `json:"laneCount"`
+	// How many of the rows are stashes rather than commits.
+	StashRows int `json:"stashRows"`
+	LaneCount int `json:"laneCount"`
 	// False while history is still streaming in.
 	Complete bool `json:"complete"`
 	// Rows before this index are unchanged since the previous version.
@@ -452,6 +467,8 @@ type FileChange struct {
 	Additions int              `json:"additions"`
 	Deletions int              `json:"deletions"`
 	Binary    bool             `json:"binary"`
+	// The commit whose diff shows this file, when not the one listing it: a stash keeps its untracked files in a commit of their own.
+	DiffOID OID `json:"diffOid,omitempty"`
 }
 
 // Where a file's changes come from: a commit against its first parent, or a worktree's index or files.

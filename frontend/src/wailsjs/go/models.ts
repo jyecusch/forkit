@@ -1,5 +1,17 @@
 export namespace model {
 	
+	export class ApplyStashResult {
+	    conflicted: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new ApplyStashResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.conflicted = source["conflicted"];
+	    }
+	}
 	export class CallMeta {
 	    traceparent: string;
 	
@@ -57,6 +69,7 @@ export namespace model {
 	    additions: number;
 	    deletions: number;
 	    binary: boolean;
+	    diffOid?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new FileChange(source);
@@ -70,6 +83,7 @@ export namespace model {
 	        this.additions = source["additions"];
 	        this.deletions = source["deletions"];
 	        this.binary = source["binary"];
+	        this.diffOid = source["diffOid"];
 	    }
 	}
 	export class CommitDetail {
@@ -248,6 +262,7 @@ export namespace model {
 	    threadId: number;
 	    kind: string;
 	    uncommitted?: boolean;
+	    stash?: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new GraphEdge(source);
@@ -260,6 +275,7 @@ export namespace model {
 	        this.threadId = source["threadId"];
 	        this.kind = source["kind"];
 	        this.uncommitted = source["uncommitted"];
+	        this.stash = source["stash"];
 	    }
 	}
 	export class GraphRow {
@@ -270,6 +286,7 @@ export namespace model {
 	    edges?: GraphEdge[];
 	    refIds?: string[];
 	    onEmphasized: boolean;
+	    stash?: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new GraphRow(source);
@@ -284,6 +301,7 @@ export namespace model {
 	        this.edges = this.convertValues(source["edges"], GraphEdge);
 	        this.refIds = source["refIds"];
 	        this.onEmphasized = source["onEmphasized"];
+	        this.stash = source["stash"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

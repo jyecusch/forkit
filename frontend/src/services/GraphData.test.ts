@@ -10,6 +10,7 @@ const view = (version: number, firstChangedRow = 0): GraphView => ({
   id: repo,
   version,
   totalRows: blockSize * 4,
+  stashRows: 0,
   laneCount: 1,
   complete: true,
   firstChangedRow,

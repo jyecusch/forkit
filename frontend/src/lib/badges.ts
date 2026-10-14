@@ -28,7 +28,8 @@ export interface BadgeFocus {
 /**
  * Orders a row's refs by importance: the checked-out branch, the emphasized
  * ref, other local branches, remote branches (the checked-out branch's
- * upstream first), tags, then stashes. A local branch and its upstream at
+ * upstream first), then tags. Stashes are rows of their own and get no
+ * badge. A local branch and its upstream at
  * the same commit become one badge, as do same-named branches on several
  * remotes.
  */
@@ -37,7 +38,7 @@ export const badgesFor = (
   refsById: ReadonlyMap<string, Ref>,
   { head: headRef, emphasized }: BadgeFocus,
 ): Array<Badge> => {
-  const refs = refIds.flatMap((id) => refsById.get(id) ?? [])
+  const refs = refIds.flatMap((id) => refsById.get(id) ?? []).filter((ref) => ref.kind !== "stash")
   const absorbed = new Set(refs.flatMap((ref) => (ref.kind === "localBranch" && ref.upstreamRefId ? [ref.upstreamRefId] : [])))
   const headUpstream = headRef ? refsById.get(headRef)?.upstreamRefId : undefined
   const rank = (ref: Ref) =>

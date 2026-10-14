@@ -97,7 +97,7 @@ func (x *Repos) RowOfRef(meta model.CallMeta, id model.RepoID, ref model.RefID) 
 	}, attribute.String("repo.id", string(id)))
 }
 
-// CommitDetail returns a commit's message and changed files.
+// CommitDetail returns a commit's message and changed files, or a stash's.
 func (x *Repos) CommitDetail(meta model.CallMeta, id model.RepoID, oid model.OID) (model.CommitDetail, error) {
 	return call(x.s, meta, "Repos.CommitDetail", func(ctx context.Context) (model.CommitDetail, error) {
 		if !isOID(oid) {
@@ -107,7 +107,17 @@ func (x *Repos) CommitDetail(meta model.CallMeta, id model.RepoID, oid model.OID
 		if err != nil {
 			return model.CommitDetail{}, err
 		}
+		if x.s.deps.Workspace.IsStash(id, oid) {
+			return repo.ReadStashDetail(ctx, x.s.deps.Workspace.Git(), loc, oid)
+		}
 		return repo.ReadCommitDetail(ctx, x.s.deps.Workspace.Git(), loc, oid)
+	}, attribute.String("repo.id", string(id)))
+}
+
+// DropStash deletes a stash.
+func (x *Repos) DropStash(meta model.CallMeta, id model.RepoID, stash model.RefID) error {
+	return callNoResult(x.s, meta, "Repos.DropStash", func(ctx context.Context) error {
+		return x.s.deps.Workspace.DropStash(ctx, id, stash)
 	}, attribute.String("repo.id", string(id)))
 }
 
@@ -349,6 +359,20 @@ func (x *Worktrees) Push(meta model.CallMeta, worktreeID model.WorktreeID, remot
 	return callNoResult(x.s, meta, "Worktrees.Push", func(ctx context.Context) error {
 		return x.s.deps.Workspace.Push(ctx, worktreeID, remote, force)
 	}, attribute.String("worktree.id", string(worktreeID)), attribute.Bool("push.force", force))
+}
+
+// Stash saves a worktree's uncommitted changes as the newest stash.
+func (x *Worktrees) Stash(meta model.CallMeta, worktreeID model.WorktreeID, message string) error {
+	return callNoResult(x.s, meta, "Worktrees.Stash", func(ctx context.Context) error {
+		return x.s.deps.Workspace.Stash(ctx, worktreeID, message)
+	}, attribute.String("worktree.id", string(worktreeID)))
+}
+
+// ApplyStash puts a stash's changes into a worktree, dropping it with pop.
+func (x *Worktrees) ApplyStash(meta model.CallMeta, worktreeID model.WorktreeID, stash model.RefID, pop bool) (model.ApplyStashResult, error) {
+	return call(x.s, meta, "Worktrees.ApplyStash", func(ctx context.Context) (model.ApplyStashResult, error) {
+		return x.s.deps.Workspace.ApplyStash(ctx, worktreeID, stash, pop)
+	}, attribute.String("worktree.id", string(worktreeID)), attribute.Bool("stash.pop", pop))
 }
 
 // ChooseParentDirectory asks the user where to put a new worktree and
