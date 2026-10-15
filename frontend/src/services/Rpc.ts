@@ -6,6 +6,7 @@ import {
   CommitDetail,
   FileDiff,
   GraphWindow,
+  InitRepoResult,
   Oid,
   Repo,
   SyncSnapshot,
@@ -33,6 +34,8 @@ export class Rpc extends Context.Service<
     readonly openRepo: (path: string) => Effect.Effect<Repo, RpcFailure>
     /** Resolves to None when the user cancels the folder picker. */
     readonly chooseAndOpenRepo: () => Effect.Effect<Option.Option<Repo>, RpcFailure>
+    /** Asks for a folder, makes it a new repository and opens it; none when the user cancels. */
+    readonly chooseAndInitRepo: () => Effect.Effect<Option.Option<InitRepoResult>, RpcFailure>
     readonly closeRepo: (id: RepoId) => Effect.Effect<void, RpcFailure>
     readonly graphWindow: (
       id: RepoId,
@@ -46,6 +49,7 @@ export class Rpc extends Context.Service<
     readonly setPreference: (path: string, value: unknown) => Effect.Effect<void, RpcFailure>
     readonly resetPreference: (path: string) => Effect.Effect<void, RpcFailure>
     readonly setActiveRepo: (id: RepoId) => Effect.Effect<void, RpcFailure>
+    readonly showNewTab: () => Effect.Effect<void, RpcFailure>
     readonly reorderRepos: (ids: ReadonlyArray<RepoId>) => Effect.Effect<void, RpcFailure>
     readonly setActiveWorktree: (repo: RepoId, worktree: WorktreeId) => Effect.Effect<void, RpcFailure>
     readonly setEmphasizedRef: (repo: RepoId, ref: RefId) => Effect.Effect<void, RpcFailure>
@@ -91,6 +95,10 @@ export class Rpc extends Context.Service<
       invoke("Repos.ChooseAndOpen", Schema.NullOr(Repo), (meta) => Repos.ChooseAndOpen(meta)).pipe(
         Effect.map(Option.fromNullishOr),
       ),
+    chooseAndInitRepo: () =>
+      invoke("Repos.ChooseAndInit", Schema.NullOr(InitRepoResult), (meta) => Repos.ChooseAndInit(meta)).pipe(
+        Effect.map(Option.fromNullishOr),
+      ),
     closeRepo: (id) => invoke("Repos.Close", Schema.Void, (meta) => Repos.Close(meta, id), { "repo.id": id }),
     graphWindow: (id, start, count, emphasized) =>
       invoke("Repos.GraphWindow", GraphWindow, (meta) => Repos.GraphWindow(meta, id, start, count, emphasized ?? ""), {
@@ -111,6 +119,7 @@ export class Rpc extends Context.Service<
     resetPreference: (path) =>
       invoke("Preferences.Reset", Schema.Void, (meta) => Preferences.Reset(meta, path), { "preference.path": path }),
     setActiveRepo: (id) => invoke("Session.SetActiveRepo", Schema.Void, (meta) => Session.SetActiveRepo(meta, id)),
+    showNewTab: () => invoke("Session.ShowNewTab", Schema.Void, (meta) => Session.ShowNewTab(meta)),
     reorderRepos: (ids) =>
       invoke("Session.ReorderRepos", Schema.Void, (meta) => Session.ReorderRepos(meta, [...ids])),
     setActiveWorktree: (repo, worktree) =>

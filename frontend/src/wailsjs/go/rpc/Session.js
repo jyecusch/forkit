@@ -25,3 +25,7 @@ export function SetEmphasizedRef(arg1, arg2, arg3) {
 export function SetLayoutSize(arg1, arg2, arg3) {
   return window['go']['rpc']['Session']['SetLayoutSize'](arg1, arg2, arg3);
 }
+
+export function ShowNewTab(arg1) {
+  return window['go']['rpc']['Session']['ShowNewTab'](arg1);
+}

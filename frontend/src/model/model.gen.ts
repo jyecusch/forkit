@@ -175,6 +175,12 @@ export const ApplyStashResult = Schema.Struct({
 })
 export type ApplyStashResult = typeof ApplyStashResult.Type
 
+export const InitRepoResult = Schema.Struct({
+  repo: Repo,
+  created: Schema.Boolean,
+})
+export type InitRepoResult = typeof InitRepoResult.Type
+
 /** Which of the light and dark themes is used; system follows the operating system. */
 export const Appearance = Schema.Literals(["system", "light", "dark"])
 export type Appearance = typeof Appearance.Type

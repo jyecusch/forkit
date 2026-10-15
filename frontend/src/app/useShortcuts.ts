@@ -6,7 +6,7 @@ import { toggleDetails } from "./detailsShown"
 import { setPreferencesOpen } from "./preferencesDialog"
 
 /**
- * Window-wide shortcuts: ⌘, preferences, ⌘O open, ⌘W close, ⌘1–9 and
+ * Window-wide shortcuts: ⌘, preferences, ⌘O open, ⌘T new tab, ⌘W close, ⌘1–9 and
  * ⌘⇧[ ⌘⇧] to move between repositories, and ⌘⌥I for the details panel.
  * None apply while a dialog or menu is open.
  */
@@ -32,13 +32,18 @@ export const useShortcuts = (openRepos: ReadonlyArray<RepoId>, active: RepoId | 
           ? () => setPreferencesOpen(true)
           : event.key === "o"
             ? () => void run(Commands.use((commands) => commands.openRepository()))
-            : event.key === "w" && active
-              ? () => void run(Commands.use((commands) => commands.closeRepository(active)))
-              : /^[1-9]$/.test(event.key) && !event.shiftKey
-                ? () => select(event.key === "9" ? openRepos[openRepos.length - 1] : openRepos[Number(event.key) - 1])
-                : event.shiftKey && (event.code === "BracketLeft" || event.code === "BracketRight")
-                  ? () => select(step(event.code === "BracketLeft" ? -1 : 1))
-                  : undefined
+            : event.key === "t"
+              ? () => void run(Commands.use((commands) => commands.newTab()))
+              : event.key === "w" && active
+                ? () => void run(Commands.use((commands) => commands.closeRepository(active)))
+                : // Closing the new tab returns to the last repository.
+                  event.key === "w" && openRepos.length > 0
+                  ? () => select(openRepos[openRepos.length - 1])
+                  : /^[1-9]$/.test(event.key) && !event.shiftKey
+                    ? () => select(event.key === "9" ? openRepos[openRepos.length - 1] : openRepos[Number(event.key) - 1])
+                    : event.shiftKey && (event.code === "BracketLeft" || event.code === "BracketRight")
+                      ? () => select(step(event.code === "BracketLeft" ? -1 : 1))
+                      : undefined
       if (!action) return
       event.preventDefault()
       action()

@@ -220,6 +220,12 @@ type ApplyStashResult struct {
 	Conflicted bool `json:"conflicted"`
 }
 
+type InitRepoResult struct {
+	Repo Repo `json:"repo"`
+	// A new repository was made; false when the folder already held one, which was opened instead.
+	Created bool `json:"created"`
+}
+
 // Which of the light and dark themes is used; system follows the operating system.
 type Appearance string
 

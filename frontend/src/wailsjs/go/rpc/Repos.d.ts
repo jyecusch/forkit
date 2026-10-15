@@ -4,6 +4,8 @@ import {model} from '../models';
 
 export function CancelOperation(arg1:model.CallMeta,arg2:model.RepoID,arg3:string):Promise<void>;
 
+export function ChooseAndInit(arg1:model.CallMeta):Promise<model.InitRepoResult>;
+
 export function ChooseAndOpen(arg1:model.CallMeta):Promise<model.Repo>;
 
 export function Close(arg1:model.CallMeta,arg2:model.RepoID):Promise<void>;

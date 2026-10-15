@@ -1,21 +1,13 @@
-import { createMemoryHistory, createRootRoute, createRoute, createRouter, useParams } from "@tanstack/react-router"
-import { AppShell, RepoRoute } from "@/components/AppShell"
-import { Welcome } from "@/components/Welcome"
-import { RepoId } from "@/model/model.gen"
+import { createMemoryHistory, createRootRoute, createRoute, createRouter } from "@tanstack/react-router"
+import { AppShell, Workspace } from "@/components/AppShell"
 
 const rootRoute = createRootRoute({ component: AppShell })
 
-const indexRoute = createRoute({ getParentRoute: () => rootRoute, path: "/", component: Welcome })
+const indexRoute = createRoute({ getParentRoute: () => rootRoute, path: "/", component: Workspace })
 
-const repoRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: "/repos/$repoId",
-  component: () => <RepoRoute repoId={RepoId.make(useParams({ from: "/repos/$repoId" }).repoId)} />,
-})
-
-/** The window's views. The session decides which is shown; see AppShell. */
+/** The window's view. The session decides what it shows; see Workspace. */
 export const router = createRouter({
-  routeTree: rootRoute.addChildren([indexRoute, repoRoute]),
+  routeTree: rootRoute.addChildren([indexRoute]),
   history: createMemoryHistory({ initialEntries: ["/"] }),
 })
 

@@ -32,6 +32,12 @@ func New(t testing.TB) *Repo {
 	return r
 }
 
+// At is a repository someone else made at dir, for tests of code that
+// creates repositories.
+func At(t testing.TB, dir string) *Repo {
+	return &Repo{t: t, Dir: dir}
+}
+
 // Git runs git in the repository with a fixed identity and clock, failing the
 // test on error, and returns trimmed stdout.
 func (r *Repo) Git(args ...string) string {

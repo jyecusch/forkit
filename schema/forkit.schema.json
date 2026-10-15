@@ -164,6 +164,15 @@
       }
     },
 
+    "InitRepoResult": {
+      "type": "object",
+      "required": ["repo", "created"],
+      "properties": {
+        "repo": { "$ref": "#/$defs/Repo" },
+        "created": { "type": "boolean", "description": "A new repository was made; false when the folder already held one, which was opened instead." }
+      }
+    },
+
     "Appearance": { "enum": ["system", "light", "dark"], "description": "Which of the light and dark themes is used; system follows the operating system." },
     "LightTheme": { "enum": ["tokyo-night-day", "catppuccin-latte", "github-light", "one-light", "gruvbox-light", "solarized-light", "rose-pine-dawn"] },
     "DarkTheme": { "enum": ["tokyo-night", "catppuccin-mocha", "catppuccin-macchiato", "catppuccin-frappe", "dracula", "nord", "one-dark", "github-dark", "gruvbox-dark", "solarized-dark", "rose-pine", "rose-pine-moon"] },
