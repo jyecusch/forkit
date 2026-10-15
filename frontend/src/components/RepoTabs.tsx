@@ -10,8 +10,9 @@ import type { Repo, RepoId } from "@/model/model.gen"
 import { Commands } from "@/services/Commands"
 
 /**
- * One tab per open repository, in session order. The active tab is the
- * panel's colour and flows into it; the rest sit quietly on the chrome.
+ * One tab per open repository, in session order, then a new tab while the
+ * new tab page is showing. The active tab is the panel's colour and flows
+ * into it; the rest sit quietly on the chrome.
  */
 export const RepoTabs = () => {
   const run = useRun()
@@ -22,6 +23,7 @@ export const RepoTabs = () => {
     return repos.filter((repo) => order.includes(repo.id)).sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id))
   }, [repos, session])
   const active = session?.activeRepoId
+  const newTabShown = session !== undefined && active === undefined
   const tabRefs = useRef(new Map<RepoId, HTMLDivElement>())
   // Keyboard focus in the strip follows the active tab, however it changed.
   useEffect(() => {
@@ -31,6 +33,8 @@ export const RepoTabs = () => {
 
   const select = (repo: RepoId) => void run(Commands.use((commands) => commands.selectRepository(repo)))
   const close = (repo: RepoId) => void run(Commands.use((commands) => commands.closeRepository(repo)))
+  const newTab = () => void run(Commands.use((commands) => commands.newTab()))
+  const last = ordered.at(-1)
 
   const [dragging, setDragging] = useState<RepoId>()
   const [dropTarget, setDropTarget] = useState<RepoId>()
@@ -49,11 +53,13 @@ export const RepoTabs = () => {
     setDropTarget(undefined)
   }
 
+  // The new tab, when shown, is the last stop.
+  const stops = ordered.length + (newTabShown ? 1 : 0)
   const onKeyDown = (event: KeyboardEvent, index: number) => {
     const step = { ArrowLeft: -1, ArrowRight: 1 }[event.key]
     if (step === undefined) return
     event.preventDefault()
-    const next = ordered[(index + step + ordered.length) % ordered.length]
+    const next = ordered[(index + step + stops) % stops]
     if (next) {
       tabRefs.current.get(next.id)?.focus()
       select(next.id)
@@ -100,17 +106,7 @@ export const RepoTabs = () => {
             onAuxClick={(event) => event.button === 1 && close(repo.id)}
             onKeyDown={(event) => onKeyDown(event, index)}
             style={noDrag}
-            className={cn(
-              // Tabs share one width, like a browser's, so labels line up and
-              // the close button and status sit in the right padding of every tab.
-              "group relative flex h-8 w-44 min-w-12 shrink cursor-default items-center rounded-t-[10px] border border-b-0 pr-8 pl-3",
-              "focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring",
-              on
-                ? "z-10 -mb-px h-[33px] bg-background text-foreground"
-                : // No top border, so the label centres on whole pixels as the active tab's does.
-                  "isolate border-t-0 border-transparent text-secondary-foreground hover:text-foreground",
-              dragging === repo.id && "opacity-50",
-            )}
+            className={cn(tabClass(on), dragging === repo.id && "opacity-50")}
           >
             {on ? (
               <>
@@ -145,10 +141,34 @@ export const RepoTabs = () => {
           </div>
         )
       })}
+      {newTabShown && (
+        <div
+          role="tab"
+          aria-selected
+          tabIndex={0}
+          onKeyDown={(event) => onKeyDown(event, ordered.length)}
+          style={noDrag}
+          className={tabClass(true)}
+        >
+          <Flare side="left" />
+          <Flare side="right" />
+          <span className="min-w-0 flex-1 truncate">New tab</span>
+          {last && (
+            <button
+              aria-label="Close new tab"
+              tabIndex={-1}
+              onClick={() => select(last.id)}
+              className="absolute top-1/2 right-2 flex size-5 -translate-y-1/2 items-center justify-center rounded text-subtle-foreground opacity-0 group-hover:opacity-100 hover:bg-foreground/10 hover:text-foreground"
+            >
+              <X className="size-3" />
+            </button>
+          )}
+        </div>
+      )}
       <button
-        aria-label="Open repository"
-        title="Open repository"
-        onClick={() => void run(Commands.use((commands) => commands.openRepository()))}
+        aria-label="New tab"
+        title="New tab (⌘T)"
+        onClick={newTab}
         style={noDrag}
         className="mb-1 ml-3 flex size-6 flex-none items-center justify-center rounded-md text-subtle-foreground hover:bg-foreground/[0.05] hover:text-foreground"
       >
@@ -157,6 +177,20 @@ export const RepoTabs = () => {
     </div>
   )
 }
+
+/**
+ * Tabs share one width, like a browser's, so labels line up and the close
+ * button and status sit in the right padding of every tab.
+ */
+const tabClass = (on: boolean) =>
+  cn(
+    "group relative flex h-8 w-44 min-w-12 shrink cursor-default items-center rounded-t-[10px] border border-b-0 pr-8 pl-3",
+    "focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring",
+    on
+      ? "z-10 -mb-px h-[33px] bg-background text-foreground"
+      : // No top border, so the label centres on whole pixels as the active tab's does.
+        "isolate border-t-0 border-transparent text-secondary-foreground hover:text-foreground",
+  )
 
 /** Size of the concave corners joining the active tab to the panel. */
 const flare = 10

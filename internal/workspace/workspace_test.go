@@ -259,3 +259,44 @@ func TestOpeningWhilePreferencesChangeDoesNotDeadlock(t *testing.T) {
 		t.Fatal("deadlocked")
 	}
 }
+
+func TestInitMakesAFolderARepositoryAndOpensIt(t *testing.T) {
+	ctx := context.Background()
+	dir, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "notes.txt"), []byte("hello"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	ws, rec, session := newWorkspace(t)
+
+	result, err := ws.Init(ctx, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !result.Created || session.Get().ActiveRepoID != result.Repo.ID {
+		t.Fatalf("result = %+v, session = %+v", result, session.Get())
+	}
+	scope := string(result.Repo.ID)
+	// A repository with no commits yet still loads, and shows its files.
+	rec.waitFor(t, synchub.EventName("repos", workspace.ReposScope), func(v json.RawMessage) bool {
+		return strings.Contains(string(v), `"state":"ready"`)
+	})
+	rec.waitFor(t, synchub.EventName("worktrees", scope), func(v json.RawMessage) bool {
+		return strings.Contains(string(v), `"untracked":1`)
+	})
+
+	gittest.At(t, dir).Commit("first")
+	rec.waitFor(t, synchub.EventName("graphViews", scope), func(v json.RawMessage) bool {
+		return strings.Contains(string(v), `"totalRows":1`)
+	})
+
+	again, err := ws.Init(ctx, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if again.Created || again.Repo.ID != result.Repo.ID {
+		t.Fatalf("initialising an existing repository = %+v", again)
+	}
+}

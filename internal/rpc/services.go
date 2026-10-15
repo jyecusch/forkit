@@ -68,6 +68,22 @@ func (x *Repos) ChooseAndOpen(meta model.CallMeta) (*model.Repo, error) {
 	})
 }
 
+// ChooseAndInit asks the user for a folder, makes it a new repository and
+// opens it. It returns nil if the user cancels.
+func (x *Repos) ChooseAndInit(meta model.CallMeta) (*model.InitRepoResult, error) {
+	return call(x.s, meta, "Repos.ChooseAndInit", func(ctx context.Context) (*model.InitRepoResult, error) {
+		path, err := x.s.deps.ChooseDirectory("Choose a folder for the new repository")
+		if err != nil || path == "" {
+			return nil, err
+		}
+		result, err := x.s.deps.Workspace.Init(ctx, path)
+		if err != nil {
+			return nil, err
+		}
+		return &result, nil
+	})
+}
+
 // Close closes an open repository.
 func (x *Repos) Close(meta model.CallMeta, id model.RepoID) error {
 	return callNoResult(x.s, meta, "Repos.Close", func(ctx context.Context) error {
@@ -208,6 +224,14 @@ type Session struct{ s *Server }
 func (x *Session) SetActiveRepo(meta model.CallMeta, id model.RepoID) error {
 	return callNoResult(x.s, meta, "Session.SetActiveRepo", func(ctx context.Context) error {
 		return x.s.deps.Session.Update(ctx, func(s *model.Session) { s.ActiveRepoID = id })
+	})
+}
+
+// ShowNewTab shows the new tab page, which is what the window shows whenever
+// no repository is active.
+func (x *Session) ShowNewTab(meta model.CallMeta) error {
+	return callNoResult(x.s, meta, "Session.ShowNewTab", func(ctx context.Context) error {
+		return x.s.deps.Session.Update(ctx, func(s *model.Session) { s.ActiveRepoID = "" })
 	})
 }
 

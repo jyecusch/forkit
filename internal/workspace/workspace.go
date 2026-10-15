@@ -5,9 +5,12 @@ package workspace
 import (
 	"cmp"
 	"context"
+	"fmt"
 	"log/slog"
 	"maps"
+	"path/filepath"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -106,6 +109,31 @@ func (w *Workspace) Open(ctx context.Context, path string) (model.Repo, error) {
 		s.ActiveRepoID = r.loc.ID
 	})
 	return r.repoEntity(), err
+}
+
+// Init makes the folder at path a new repository and opens it. A folder that
+// is already a repository's top level is opened as it is.
+func (w *Workspace) Init(ctx context.Context, path string) (model.InitRepoResult, error) {
+	created := !w.isRepoRoot(ctx, path)
+	if created {
+		if _, err := w.git.Repo(path, path).Mutate(ctx, "init"); err != nil {
+			w.logger.WarnContext(ctx, "could not initialise repository", "error", err)
+			message := fmt.Sprintf("Couldn't make %s a repository. Check that you can write to the folder, then try again.", filepath.Base(path))
+			return model.InitRepoResult{}, apperr.New(model.ErrorCodeGitFailed, message)
+		}
+	}
+	r, err := w.Open(ctx, path)
+	return model.InitRepoResult{Repo: r, Created: created}, err
+}
+
+func (w *Workspace) isRepoRoot(ctx context.Context, path string) bool {
+	out, err := w.git.Run(ctx, path, "rev-parse", "--show-toplevel")
+	if err != nil {
+		return false
+	}
+	top, errTop := filepath.EvalSymlinks(strings.TrimSpace(string(out)))
+	dir, errDir := filepath.EvalSymlinks(path)
+	return errTop == nil && errDir == nil && top == dir
 }
 
 func (w *Workspace) open(ctx context.Context, path string) (*openRepo, error) {

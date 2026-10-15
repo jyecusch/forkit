@@ -51,6 +51,9 @@ const syncedCollection = <S extends Schema.Codec<object, unknown>>(
       gcTime,
       ...(options.onUpdate && { onUpdate: options.onUpdate }),
       sync: {
+        // Updates carry the whole entity, so a field the backend leaves out
+        // was cleared and must not survive from the previous value.
+        rowUpdateMode: "full",
         sync: ({ begin, write, commit, markReady, truncate }) => {
           const fiber = coreRuntime.runFork(
             SyncClient.use((client) =>

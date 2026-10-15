@@ -6,6 +6,10 @@ export function CancelOperation(arg1, arg2, arg3) {
   return window['go']['rpc']['Repos']['CancelOperation'](arg1, arg2, arg3);
 }
 
+export function ChooseAndInit(arg1) {
+  return window['go']['rpc']['Repos']['ChooseAndInit'](arg1);
+}
+
 export function ChooseAndOpen(arg1) {
   return window['go']['rpc']['Repos']['ChooseAndOpen'](arg1);
 }

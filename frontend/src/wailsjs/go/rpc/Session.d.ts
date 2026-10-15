@@ -13,3 +13,5 @@ export function SetActiveWorktree(arg1:model.CallMeta,arg2:model.RepoID,arg3:mod
 export function SetEmphasizedRef(arg1:model.CallMeta,arg2:model.RepoID,arg3:model.RefID):Promise<void>;
 
 export function SetLayoutSize(arg1:model.CallMeta,arg2:model.LayoutSize,arg3:number):Promise<void>;
+
+export function ShowNewTab(arg1:model.CallMeta):Promise<void>;

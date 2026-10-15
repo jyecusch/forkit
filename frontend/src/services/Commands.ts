@@ -1,6 +1,6 @@
 import { Context, Effect, Layer, Option } from "effect"
 import type { RpcFailure } from "@/model/errors"
-import type { ApplyStashResult, CheckoutMode, CheckoutResult, RefId, Repo, RepoId, Worktree, WorktreeId } from "@/model/model.gen"
+import type { ApplyStashResult, CheckoutMode, CheckoutResult, InitRepoResult, RefId, Repo, RepoId, Worktree, WorktreeId } from "@/model/model.gen"
 import { Rpc } from "./Rpc"
 
 /** Actions the user takes. Each runs in its own span. */
@@ -9,8 +9,12 @@ export class Commands extends Context.Service<
   {
     /** Asks for a folder and opens it; None if the user cancels. */
     readonly openRepository: () => Effect.Effect<Option.Option<Repo>, RpcFailure>
+    /** Makes a folder a new repository and opens it; none when the user cancels. */
+    readonly initRepository: () => Effect.Effect<Option.Option<InitRepoResult>, RpcFailure>
     readonly closeRepository: (repo: RepoId) => Effect.Effect<void, RpcFailure>
     readonly selectRepository: (repo: RepoId) => Effect.Effect<void, RpcFailure>
+    /** Shows the new tab page, with ways to start on a repository. */
+    readonly newTab: () => Effect.Effect<void, RpcFailure>
     readonly reorderRepositories: (repos: ReadonlyArray<RepoId>) => Effect.Effect<void, RpcFailure>
     /**
      * Makes a worktree active and emphasizes its branch, returning the row
@@ -65,11 +69,17 @@ export class Commands extends Context.Service<
         openRepository: Effect.fn("command.openRepository")(function* () {
           return yield* rpc.chooseAndOpenRepo()
         }),
+        initRepository: Effect.fn("command.initRepository")(function* () {
+          return yield* rpc.chooseAndInitRepo()
+        }),
         closeRepository: Effect.fn("command.closeRepository")(function* (repo: RepoId) {
           yield* rpc.closeRepo(repo)
         }),
         selectRepository: Effect.fn("command.selectRepository")(function* (repo: RepoId) {
           yield* rpc.setActiveRepo(repo)
+        }),
+        newTab: Effect.fn("command.newTab")(function* () {
+          yield* rpc.showNewTab()
         }),
         reorderRepositories: Effect.fn("command.reorderRepositories")(function* (repos: ReadonlyArray<RepoId>) {
           yield* rpc.reorderRepos(repos)
