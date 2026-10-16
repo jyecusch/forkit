@@ -300,3 +300,56 @@ func TestInitMakesAFolderARepositoryAndOpensIt(t *testing.T) {
 		t.Fatalf("initialising an existing repository = %+v", again)
 	}
 }
+
+func TestCloneCopiesARepositoryAndOpensIt(t *testing.T) {
+	ctx := context.Background()
+	source := gittest.New(t)
+	source.Commit("first")
+	source.Commit("second")
+	parent := tempDir(t)
+	path := filepath.Join(parent, "copy")
+	ws, rec, session := newWorkspace(t)
+
+	cloned, err := ws.Clone(ctx, source.Dir, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := session.Get(); got.ActiveRepoID != cloned.ID || got.CloneDirectory != parent {
+		t.Fatalf("session = %+v", got)
+	}
+	rec.waitFor(t, synchub.EventName("clones", workspace.ClonesScope), func(v json.RawMessage) bool {
+		return strings.Contains(string(v), `"path":"`+path+`"`)
+	})
+	rec.waitFor(t, synchub.EventName("graphViews", string(cloned.ID)), func(v json.RawMessage) bool {
+		return strings.Contains(string(v), `"totalRows":2`)
+	})
+
+	if _, err := ws.Clone(ctx, source.Dir, path); err == nil || !strings.Contains(err.Error(), "already a copy in") {
+		t.Fatalf("cloning over an existing folder: %v", err)
+	}
+}
+
+func TestCloneIntoAMissingFolderIsRefused(t *testing.T) {
+	ws, _, _ := newWorkspace(t)
+	source := gittest.New(t)
+	source.Commit("first")
+
+	_, err := ws.Clone(context.Background(), source.Dir, filepath.Join(tempDir(t), "gone", "copy"))
+	if err == nil || !strings.Contains(err.Error(), "gone isn't there any more") {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestFailedCloneLeavesNoFolder(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(tempDir(t), "copy")
+	ws, _, _ := newWorkspace(t)
+
+	_, err := ws.Clone(ctx, filepath.Join(tempDir(t), "missing"), path)
+	if err == nil || !strings.Contains(err.Error(), "no repository at that URL") {
+		t.Fatalf("err = %v", err)
+	}
+	if _, statErr := os.Stat(path); !os.IsNotExist(statErr) {
+		t.Fatalf("clone folder left behind: %v", statErr)
+	}
+}

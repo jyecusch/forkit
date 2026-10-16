@@ -43,15 +43,10 @@ func (r *openRepo) runOperation(ctx context.Context, kind model.OperationKind, w
 	r.mu.Unlock()
 	r.setOperation(ctx, op)
 
-	var lastReport time.Time
-	err := fn(ctx, func(progress gitexec.Progress) {
-		if progress.Current < progress.Total && time.Since(lastReport) < progressInterval {
-			return
-		}
-		lastReport = time.Now()
-		op.Progress = &model.OperationProgress{Phase: progress.Phase, Current: progress.Current, Total: progress.Total}
+	err := fn(ctx, throttled(func(progress *model.OperationProgress) {
+		op.Progress = progress
 		r.setOperation(ctx, op)
-	})
+	}))
 
 	r.mu.Lock()
 	delete(r.cancels, op.ID)
@@ -69,6 +64,19 @@ func (r *openRepo) runOperation(ctx context.Context, kind model.OperationKind, w
 	r.setOperation(ctx, op)
 	time.AfterFunc(finishedOperationTTL, func() { r.removeOperation(ctx, op.ID) })
 	return err
+}
+
+// throttled passes progress on to report at most every progressInterval,
+// except the end of each phase, which is always passed on.
+func throttled(report func(*model.OperationProgress)) func(gitexec.Progress) {
+	var lastReport time.Time
+	return func(progress gitexec.Progress) {
+		if progress.Current < progress.Total && time.Since(lastReport) < progressInterval {
+			return
+		}
+		lastReport = time.Now()
+		report(&model.OperationProgress{Phase: progress.Phase, Current: progress.Current, Total: progress.Total})
+	}
 }
 
 // cancelOperation ends a running operation, killing its git process. It

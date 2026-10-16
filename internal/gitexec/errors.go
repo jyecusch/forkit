@@ -62,6 +62,31 @@ func IsAuthFailed(err error) bool {
 	)
 }
 
+// IsRepoNotFound reports whether a remote has no repository at the URL
+// given, or will not admit to having one.
+func IsRepoNotFound(err error) bool {
+	return stderrContainsAny(err,
+		"Repository not found",
+		"' not found",
+		"does not appear to be a git repository",
+		"' does not exist",
+		"Could not read from remote repository",
+	)
+}
+
+// IsHostUnreachable reports whether a remote's server could not be found or
+// connected to.
+func IsHostUnreachable(err error) bool {
+	return stderrContainsAny(err,
+		"Could not resolve host",
+		"Could not resolve hostname",
+		"Connection refused",
+		"Connection timed out",
+		"Operation timed out",
+		"Failed to connect",
+	)
+}
+
 // IsPushRejected reports whether a push was refused because the remote
 // branch has commits the pushed one lacks, or, with a lease, moved since it
 // was last fetched.

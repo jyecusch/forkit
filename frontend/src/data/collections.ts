@@ -1,6 +1,7 @@
 import { createCollection, type Collection, type UpdateMutationFn } from "@tanstack/db"
 import { Effect, Fiber, Schedule, Schema } from "effect"
 import {
+  Clone,
   FileStatus,
   GraphView,
   Operation,
@@ -95,6 +96,8 @@ const byId = <A extends { readonly id: string }>(entity: A) => entity.id
 export const userScope = "user"
 
 export const reposCollection = syncedCollection("repos", Repo, { getKey: byId })("all")
+/** Repositories being cloned, by the folder each is cloned into. */
+export const clonesCollection = syncedCollection("clones", Clone, { getKey: (clone) => clone.path })("all")
 export const sessionCollection = syncedCollection("session", Session, { getKey: byId })(userScope)
 
 /** Collections scoped by repository ID. */

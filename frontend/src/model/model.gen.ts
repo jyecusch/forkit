@@ -175,6 +175,14 @@ export const ApplyStashResult = Schema.Struct({
 })
 export type ApplyStashResult = typeof ApplyStashResult.Type
 
+/** A repository being cloned, until the clone finishes. */
+export const Clone = Schema.Struct({
+  path: Schema.String,
+  url: Schema.String,
+  progress: Schema.optionalKey(OperationProgress),
+})
+export type Clone = typeof Clone.Type
+
 export const InitRepoResult = Schema.Struct({
   repo: Repo,
   created: Schema.Boolean,
@@ -289,6 +297,7 @@ export const Session = Schema.Struct({
   id: Schema.String,
   openRepos: Schema.Array(OpenRepo).pipe(Schema.withDecodingDefaultKey(Effect.succeed([]))),
   activeRepoId: Schema.optionalKey(RepoId),
+  cloneDirectory: Schema.optionalKey(Schema.String),
   layout: Schema.optionalKey(Schema.Record(Schema.String, Schema.Finite)),
 })
 export type Session = typeof Session.Type

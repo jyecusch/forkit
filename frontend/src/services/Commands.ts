@@ -11,6 +11,10 @@ export class Commands extends Context.Service<
     readonly openRepository: () => Effect.Effect<Option.Option<Repo>, RpcFailure>
     /** Makes a folder a new repository and opens it; none when the user cancels. */
     readonly initRepository: () => Effect.Effect<Option.Option<InitRepoResult>, RpcFailure>
+    /** Clones url into path, which must not exist yet, and opens it. */
+    readonly cloneRepository: (url: string, path: string) => Effect.Effect<Repo, RpcFailure>
+    readonly cancelClone: (path: string) => Effect.Effect<void, RpcFailure>
+    readonly chooseCloneDirectory: () => Effect.Effect<Option.Option<string>, RpcFailure>
     readonly closeRepository: (repo: RepoId) => Effect.Effect<void, RpcFailure>
     readonly selectRepository: (repo: RepoId) => Effect.Effect<void, RpcFailure>
     /** Shows the new tab page, with ways to start on a repository. */
@@ -71,6 +75,15 @@ export class Commands extends Context.Service<
         }),
         initRepository: Effect.fn("command.initRepository")(function* () {
           return yield* rpc.chooseAndInitRepo()
+        }),
+        cloneRepository: Effect.fn("command.cloneRepository")(function* (url: string, path: string) {
+          return yield* rpc.cloneRepo(url, path)
+        }),
+        cancelClone: Effect.fn("command.cancelClone")(function* (path: string) {
+          yield* rpc.cancelClone(path)
+        }),
+        chooseCloneDirectory: Effect.fn("command.chooseCloneDirectory")(function* () {
+          return yield* rpc.chooseCloneDirectory()
         }),
         closeRepository: Effect.fn("command.closeRepository")(function* (repo: RepoId) {
           yield* rpc.closeRepo(repo)

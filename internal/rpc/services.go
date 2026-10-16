@@ -84,6 +84,30 @@ func (x *Repos) ChooseAndInit(meta model.CallMeta) (*model.InitRepoResult, error
 	})
 }
 
+// Clone copies the repository at url into path, which must not exist yet,
+// and opens it.
+func (x *Repos) Clone(meta model.CallMeta, url, path string) (model.Repo, error) {
+	return call(x.s, meta, "Repos.Clone", func(ctx context.Context) (model.Repo, error) {
+		return x.s.deps.Workspace.Clone(ctx, url, path)
+	})
+}
+
+// CancelClone stops the clone into path.
+func (x *Repos) CancelClone(meta model.CallMeta, path string) error {
+	return callNoResult(x.s, meta, "Repos.CancelClone", func(context.Context) error {
+		x.s.deps.Workspace.CancelClone(path)
+		return nil
+	})
+}
+
+// ChooseCloneDirectory asks the user where to clone a repository, and
+// returns "" if they cancel.
+func (x *Repos) ChooseCloneDirectory(meta model.CallMeta) (string, error) {
+	return call(x.s, meta, "Repos.ChooseCloneDirectory", func(context.Context) (string, error) {
+		return x.s.deps.ChooseDirectory("Choose where to clone the repository")
+	})
+}
+
 // Close closes an open repository.
 func (x *Repos) Close(meta model.CallMeta, id model.RepoID) error {
 	return callNoResult(x.s, meta, "Repos.Close", func(ctx context.Context) error {
