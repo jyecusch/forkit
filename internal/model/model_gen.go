@@ -220,6 +220,14 @@ type ApplyStashResult struct {
 	Conflicted bool `json:"conflicted"`
 }
 
+// A repository being cloned, until the clone finishes.
+type Clone struct {
+	// The folder being cloned into, which identifies the clone.
+	Path     string             `json:"path"`
+	URL      string             `json:"url"`
+	Progress *OperationProgress `json:"progress,omitempty"`
+}
+
 type InitRepoResult struct {
 	Repo Repo `json:"repo"`
 	// A new repository was made; false when the folder already held one, which was opened instead.
@@ -391,6 +399,8 @@ type Session struct {
 	ID           string     `json:"id"`
 	OpenRepos    []OpenRepo `json:"openRepos,omitempty"`
 	ActiveRepoID RepoID     `json:"activeRepoId,omitempty"`
+	// The folder the last repository was cloned into, offered for the next clone.
+	CloneDirectory string `json:"cloneDirectory,omitempty"`
 	// Sizes the user has given panels and columns, by LayoutSize. Widths are in pixels and splits are the first part's fraction; a missing size is chosen automatically.
 	Layout map[string]float64 `json:"layout,omitempty"`
 }

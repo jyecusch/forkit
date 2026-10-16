@@ -34,6 +34,7 @@ type Channels struct {
 	FileStatus synchub.Channel[model.FileStatus]
 	GraphViews synchub.Channel[model.GraphView]
 	Operations synchub.Channel[model.Operation]
+	Clones     synchub.Channel[model.Clone]
 }
 
 // NewChannels registers the workspace's channels on hub.
@@ -46,6 +47,7 @@ func NewChannels(hub *synchub.Hub) Channels {
 		FileStatus: synchub.NewChannel(hub, "fileStatuses", func(e model.FileStatus) string { return e.ID }),
 		GraphViews: synchub.NewChannel(hub, "graphViews", func(e model.GraphView) string { return string(e.ID) }),
 		Operations: synchub.NewChannel(hub, "operations", func(e model.Operation) string { return e.ID }),
+		Clones:     synchub.NewChannel(hub, "clones", func(e model.Clone) string { return e.Path }),
 	}
 }
 
@@ -64,6 +66,7 @@ type Workspace struct {
 
 	mu       sync.Mutex
 	repos    map[model.RepoID]*openRepo
+	clones   map[string]runningClone
 	shutDown bool
 }
 
@@ -77,6 +80,7 @@ func New(git *gitexec.Git, channels Channels, preferences *prefs.Store, session 
 		tracer:   tracer,
 		logger:   logger,
 		repos:    map[model.RepoID]*openRepo{},
+		clones:   map[string]runningClone{},
 	}
 	preferences.OnChange(w.applyPreferences)
 	return w

@@ -164,6 +164,16 @@
       }
     },
 
+    "Clone": {
+      "type": "object",
+      "description": "A repository being cloned, until the clone finishes.",
+      "required": ["path", "url"],
+      "properties": {
+        "path": { "type": "string", "description": "The folder being cloned into, which identifies the clone." },
+        "url": { "type": "string" },
+        "progress": { "$ref": "#/$defs/OperationProgress" }
+      }
+    },
     "InitRepoResult": {
       "type": "object",
       "required": ["repo", "created"],
@@ -293,6 +303,7 @@
         "id": { "type": "string" },
         "openRepos": { "type": "array", "items": { "$ref": "#/$defs/OpenRepo" } },
         "activeRepoId": { "$ref": "#/$defs/RepoId" },
+        "cloneDirectory": { "type": "string", "description": "The folder the last repository was cloned into, offered for the next clone." },
         "layout": {
           "type": "object",
           "additionalProperties": { "type": "number" },

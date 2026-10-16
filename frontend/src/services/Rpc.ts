@@ -37,6 +37,11 @@ export class Rpc extends Context.Service<
     /** Asks for a folder, makes it a new repository and opens it; none when the user cancels. */
     readonly chooseAndInitRepo: () => Effect.Effect<Option.Option<InitRepoResult>, RpcFailure>
     readonly closeRepo: (id: RepoId) => Effect.Effect<void, RpcFailure>
+    /** Clones url into path, which must not exist yet, and opens it. */
+    readonly cloneRepo: (url: string, path: string) => Effect.Effect<Repo, RpcFailure>
+    readonly cancelClone: (path: string) => Effect.Effect<void, RpcFailure>
+    /** Resolves to None when the user cancels the folder picker. */
+    readonly chooseCloneDirectory: () => Effect.Effect<Option.Option<string>, RpcFailure>
     readonly graphWindow: (
       id: RepoId,
       start: number,
@@ -100,6 +105,12 @@ export class Rpc extends Context.Service<
         Effect.map(Option.fromNullishOr),
       ),
     closeRepo: (id) => invoke("Repos.Close", Schema.Void, (meta) => Repos.Close(meta, id), { "repo.id": id }),
+    cloneRepo: (url, path) => invoke("Repos.Clone", Repo, (meta) => Repos.Clone(meta, url, path)),
+    cancelClone: (path) => invoke("Repos.CancelClone", Schema.Void, (meta) => Repos.CancelClone(meta, path)),
+    chooseCloneDirectory: () =>
+      invoke("Repos.ChooseCloneDirectory", Schema.String, (meta) => Repos.ChooseCloneDirectory(meta)).pipe(
+        Effect.map((path) => (path === "" ? Option.none() : Option.some(path))),
+      ),
     graphWindow: (id, start, count, emphasized) =>
       invoke("Repos.GraphWindow", GraphWindow, (meta) => Repos.GraphWindow(meta, id, start, count, emphasized ?? ""), {
         "repo.id": id,

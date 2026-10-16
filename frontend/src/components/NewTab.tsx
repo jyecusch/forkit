@@ -1,14 +1,17 @@
 import { Option } from "effect"
-import { FolderOpen, FolderPlus, type LucideIcon } from "lucide-react"
+import { FolderDown, FolderOpen, FolderPlus, type LucideIcon } from "lucide-react"
+import { useState } from "react"
 import { useRun } from "@/app/hooks"
 import { notify } from "@/app/notifications"
 import { Commands } from "@/services/Commands"
 import { ChromeLayer } from "./Chrome"
+import { CloneDialog } from "./CloneDialog"
 import { SidebarFooter } from "./SidebarFooter"
 
 /** The ways to start on a repository, shown in a new tab and when none is open. */
 export const NewTab = ({ active }: { active: boolean }) => {
   const run = useRun()
+  const [cloning, setCloning] = useState(false)
   const open = () => void run(Commands.use((commands) => commands.openRepository()))
   const init = async () => {
     const result = Option.flatten(await run(Commands.use((commands) => commands.initRepository())))
@@ -30,9 +33,11 @@ export const NewTab = ({ active }: { active: boolean }) => {
       <div className="flex flex-1 flex-col items-center justify-center pb-[8vh]">
         <ul className="flex w-80 flex-col gap-1">
           <Action icon={FolderOpen} label="Open repository…" detail="A repository on this computer" shortcut="⌘O" onSelect={open} />
+          <Action icon={FolderDown} label="Clone repository…" detail="Copy a repository from a URL" onSelect={() => setCloning(true)} />
           <Action icon={FolderPlus} label="Create repository…" detail="Start tracking a folder with git" onSelect={() => void init()} />
         </ul>
       </div>
+      <CloneDialog open={cloning} onClose={() => setCloning(false)} />
     </ChromeLayer>
   )
 }
